@@ -1,0 +1,95 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurostim-safety"
+version = "0.13.0"
+description = "Electrode safety and stimulation modelling for neural interfaces, with primary-source provenance for every constant"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = [
+    "neurostimulation",
+    "electrode",
+    "electrochemistry",
+    "deep brain stimulation",
+    "charge injection",
+    "Shannon criterion",
+    "neural engineering",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+]
+
+[project.optional-dependencies]
+gui = ["PyQt6>=6.5"]
+report = ["reportlab>=4.0"]
+all = ["PyQt6>=6.5", "reportlab>=4.0"]
+dev = ["pytest>=7.4", "PyQt6>=6.5", "reportlab>=4.0", "ruff>=0.6", "mypy>=1.11"]
+
+[project.scripts]
+neurostim-gui = "neurostim.gui.app:main"
+
+[tool.setuptools.packages.find]
+include = ["neurostim*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning:neurostim.*"]
+
+[tool.ruff]
+line-length = 96
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "RUF",
+]
+ignore = [
+    "E501",    # long lines are handled by the formatter, and prose docstrings run long
+    "B008",    # function call in default argument: the tissue-property presets are frozen
+    "RUF012",  # mutable class attrs: dataclass field(default_factory=...) is already used
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+# Figure labels intentionally use typographic en dashes ("Strength-duration" reads as
+# a compound in a caption, "Strength–duration" as the pair of concepts it is).
+"neurostim/viz/plots.py" = ["RUF001"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+exclude = ["build/", "dist/"]
+
+[[tool.mypy.overrides]]
+module = ["neurostim.io.report"]
+# reportlab ships incomplete stubs; this module's behaviour is covered by tests that
+# build a real PDF rather than by the type checker.
+ignore_errors = true

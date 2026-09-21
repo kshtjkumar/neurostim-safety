@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+title: neurostim-safety
+message: >-
+  If you use this software, please cite it. Please also cite the primary
+  sources for whichever limits your work relies on -- every constant in the
+  package carries its own citation, retrievable with
+  neurostim.bibliography().
+type: software
+authors:
+  - name: neurostim-safety contributors
+repository-code: https://github.com/example/neurostim-safety
+abstract: >-
+  Electrode safety and stimulation modelling for neural interfaces. Every
+  literature-derived constant carries its primary source and the conditions
+  under which it was measured; charge-injection limits are pulse-width,
+  polarity, electrolyte and temperature dependent, and the package records
+  those conditions rather than discarding them. Includes the Shannon
+  tissue-damage criterion with its validated envelope enforced, material
+  charge-injection limits, water-window and chronic-degradation checks, the
+  microelectrode charge-per-phase regime, Pennes bioheat modelling validated
+  against a published finite element model, and a suite that reproduces
+  published results from published inputs.
+keywords:
+  - neurostimulation
+  - electrode
+  - electrochemistry
+  - deep brain stimulation
+  - charge injection
+  - Shannon criterion
+  - neural engineering
+license: MIT
+version: 0.13.0

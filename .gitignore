@@ -1,0 +1,25 @@
+# environments
+.venv/
+venv/
+env/
+
+# caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# packaging
+*.egg-info/
+build/
+dist/
+
+# os
+.DS_Store
+
+# large local assets (kept on disk, not in version control)
+papers_stim_calc_ref/
+example_output/

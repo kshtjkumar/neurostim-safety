@@ -1,0 +1,1350 @@
+"""Tests that pin the package to its primary sources.
+
+These are the tests that matter most. Everything else checks that the code does what
+the code intends; these check that what the code intends matches what the papers say.
+If a value in the materials database drifts from its published source, one of these
+fails with the citation in the message.
+"""
+
+from __future__ import annotations
+
+import math
+
+import pytest
+
+from neurostim import get_material
+from neurostim.geometry import CylindricalBandElectrode, DiscElectrode
+from neurostim.models import thermal as thermal_mod
+from neurostim.models.thermal import BRAIN
+from neurostim.safety import shannon
+from neurostim.safety.water_window import DOUBLE_LAYER_CAPACITANCE_uF_cm2, polarisation_V
+
+
+class TestCogan2008Table2:
+    """Cogan (2008) Table 2, 'Charge-injection limits of electrode materials in the CNS'.
+
+    Transcribed row by row. Units in the table are mC/cm^2.
+    """
+
+    @pytest.mark.parametrize(
+        ("key", "low_mC_cm2", "high_mC_cm2"),
+        [
+            ("Pt", 0.05, 0.15),
+            ("PtIr", 0.05, 0.15),
+            # AIROF now carries Beebe & Rose primary values (1.0 CF, 2.1 AF,
+            # 3.5 biased) rather than Cogan's rounded 1-5 row.
+            ("AIROF", 1.0, 3.5),
+            ("SIROF", 1.0, 5.0),
+            ("TIROF", 1.0, 1.0),
+            ("TiN", 1.0, 1.0),
+            # Cogan's Ta2O5 row is "~0.5" with no conditions. The package uses the two
+            # microelectrode designs Rose et al. measured *under pulsing* at 0.1 ms:
+            # 88-140 uC/cm^2 etched, 150 uC/cm^2 sintered. Their best-reported
+            # 260 uC/cm^2 is excluded on purpose -- it equals the DC capacitance times
+            # 0.8 V_f, so it is a slow-charge figure, and pore resistance costs a pulsed
+            # electrode up to 80 % of that.
+            ("Ta2O5", 0.088, 0.15),
+            # Cogan's PEDOT row is a single 15 mC/cm^2 value from a meeting abstract,
+            # 4-6x above every peer-reviewed measurement. The package uses the
+            # peer-reviewed consensus instead: Cui & Zhou 2.3, Luo 2.5, Nyberg 3.6.
+            ("PEDOT", 2.3, 3.6),
+        ],
+    )
+    def test_charge_injection_limits(self, key, low_mC_cm2, high_mC_cm2):
+        material = get_material(key)
+        assert material.cic.units == "mC/cm2"
+        assert material.cic.low == pytest.approx(low_mC_cm2)
+        assert material.cic.high == pytest.approx(high_mC_cm2)
+
+    def test_cogan_headline_pedot_value_is_rejected_as_unreplicated(self):
+        """15 mC/cm^2 is 4-6x above every peer-reviewed PEDOT measurement."""
+        pedot = get_material("PEDOT")
+        assert pedot.cic.high == pytest.approx(3.6)
+        assert "unreplicated" in pedot.note
+        assert 15.0 / pedot.cic.high > 4.0
+
+    @pytest.mark.parametrize(
+        ("key", "pulse_width_us"),
+        [
+            ("Pt", 200.0),
+            ("PtIr", 200.0),
+            ("AIROF", 200.0),
+            ("SIROF", 400.0),
+            ("TiN", 500.0),
+            ("PEDOT", 400.0),
+            # Both read from the primary papers rather than from a review summary.
+            ("Ta2O5", 100.0),
+            ("SS316LVM", 100.0),
+        ],
+    )
+    def test_measurement_pulse_widths(self, key, pulse_width_us):
+        """Charge-injection limits are pulse-width specific; the value must be recorded."""
+        assert get_material(key).cic.pulse_width_us == pytest.approx(pulse_width_us)
+
+    @pytest.mark.parametrize("key", ["TIROF"])
+    def test_materials_without_a_stated_pulse_width(self, key):
+        """TIROF's source is a conference proceedings not held here; do not invent one.
+
+        Ta2O5 and SS316LVM were in this list until their primary papers were read.
+        Closing a gap means moving a key out of it, never inventing a value to fill it.
+        """
+        assert get_material(key).cic.pulse_width_us is None
+
+    def test_pedot_now_rests_on_peer_reviewed_work(self):
+        """0.5.x cited a meeting abstract; Cui & Zhou 2007 replaces it."""
+        pedot = get_material("PEDOT")
+        assert pedot.cic.peer_reviewed
+        assert pedot.cic.reference == "cui_zhou2007"
+        assert "NOT PEER REVIEWED" not in pedot.cic.describe()
+
+    @pytest.mark.parametrize(
+        "key", ["Pt", "PtIr", "AIROF", "SIROF", "TIROF", "TiN", "Ta2O5", "SS316LVM"]
+    )
+    def test_every_other_material_is_peer_reviewed(self, key):
+        assert get_material(key).cic.peer_reviewed
+
+    @pytest.mark.parametrize(
+        ("key", "cathodic_V", "anodic_V"),
+        [
+            ("Pt", -0.6, 0.8),
+            ("PtIr", -0.6, 0.8),
+            ("AIROF", -0.6, 0.8),
+            ("SIROF", -0.6, 0.8),
+            ("TIROF", -0.6, 0.8),
+            ("TiN", -0.9, 0.9),
+            ("PEDOT", -0.9, 0.6),
+        ],
+    )
+    def test_water_windows(self, key, cathodic_V, anodic_V):
+        window = get_material(key).water_window
+        assert window is not None
+        assert window.cathodic_V == pytest.approx(cathodic_V)
+        assert window.anodic_V == pytest.approx(anodic_V)
+
+    def test_tantalum_has_no_published_window(self):
+        """Cogan's Ta2O5 row leaves the potential-limits column blank."""
+        assert get_material("Ta2O5").water_window is None
+
+    def test_pedot_is_comparable_to_iridium_oxide_not_far_above_it(self):
+        """Cui & Zhou describe PEDOT as 'comparable to IrOx'. With the abstract value
+        removed it no longer tops the table."""
+        pedot = get_material("PEDOT").cic.high
+        sirof = get_material("SIROF").cic.high
+        assert 0.5 < pedot / sirof < 2.0
+
+
+class TestMerrill2005:
+    """Merrill, Bikson & Jefferys (2005)."""
+
+    def test_shannon_equation_5_1_identity(self):
+        """Eq. (5.1): log(Q/A) = k - log(Q), i.e. k = log(Q) + log(Q/A)."""
+        for charge_uC, area_cm2 in [(0.016, 2.8e-4), (1.0, 1e-2), (0.5, 6e-3)]:
+            k = shannon.shannon_k(charge_uC, area_cm2)
+            assert math.log10(charge_uC / area_cm2) == pytest.approx(
+                k - math.log10(charge_uC)
+            )
+
+    def test_k_band_is_1_5_to_2_0(self):
+        """Merrill quote 2.0 > k > 1.5 as the family of lines Shannon drew.
+
+        This is NOT a statement that k = 2.0 is safe -- see TestShannon1992.
+        """
+        assert shannon.K_BOUNDS == (1.5, 2.0)
+        assert shannon.k_is_supported(1.5)
+        assert shannon.k_is_supported(2.0)
+        assert not shannon.k_is_supported(1.2)
+        assert not shannon.k_is_supported(2.5)
+
+    def test_figure_8_lowest_curve_is_available(self):
+        """Merrill Fig. 8 draws k = 1.7, 1.85 and 2.0. The lowest is exposed as
+        K_MODERATE, but it is not the package default -- Shannon's own 1.5 is."""
+        assert shannon.K_MODERATE == 1.7
+        assert shannon.K_DEFAULT == shannon.K_SHANNON == 1.5
+
+    def test_footnote_2_double_layer_capacitance(self):
+        """'A 1 V excursion across 20 uF/cm^2 yields 20 uC/cm^2 stored charge'."""
+        assert DOUBLE_LAYER_CAPACITANCE_uF_cm2 == pytest.approx(20.0)
+        assert polarisation_V(20.0, 20.0) == pytest.approx(1.0)
+
+    def test_rose_robblee_platinum_range_is_the_source_of_cogan_pt_row(self):
+        """50-150 uC/cm^2 geometric at 200 us, matching Cogan's 0.05-0.15 mC/cm^2."""
+        pt = get_material("Pt")
+        assert pt.cic.pulse_width_us == pytest.approx(200.0)
+        assert pt.cic.area_basis == "geometric"
+        assert pt.cic_uC_cm2("conservative") == pytest.approx(50.0)
+        assert pt.cic_uC_cm2("optimistic") == pytest.approx(150.0)
+
+
+class TestStainlessSteel:
+    """Riedy & Walter (1996), corroborated by Merrill (2005) Table 2."""
+
+    def test_316lvm_limits(self):
+        """40 uC/cm^2 reported safe; 20 uC/cm^2 available non-faradaically."""
+        ss = get_material("SS316LVM")
+        assert ss.cic_uC_cm2("conservative") == pytest.approx(20.0)
+        assert ss.cic_uC_cm2("optimistic") == pytest.approx(40.0)
+
+    def test_legacy_ss_alias_resolves(self):
+        """The 0.1.0 prototype's 'SS' must still resolve, to 316LVM."""
+        assert get_material("SS").key == "SS316LVM"
+
+    def test_polarisation_limit_is_not_labelled_a_water_window(self):
+        """1.2 V is a reversible-injection limit, not a potential window vs a reference.
+
+        It is stored in a WaterWindow so the polarisation check can run, which makes
+        the ``scale`` field load-bearing: rendering it as "vs Ag|AgCl" would misstate
+        what Riedy & Walter measured.
+        """
+        window = get_material("SS316LVM").water_window
+        assert window is not None
+        assert window.cathodic_V == pytest.approx(-1.2)
+        assert window.anodic_V == pytest.approx(1.2)
+        assert "Ag|AgCl" not in window.describe()
+        assert "polarisation from rest" in window.describe()
+
+    def test_nonfaradaic_limit_is_consistent_with_double_layer_capacitance(self):
+        """20 uC/cm^2 over 1.2 V should land near the 20 uF/cm^2 double-layer value.
+
+        Riedy & Walter say 20 uC/cm^2 is what is "available for nonfaradic charge
+        transfer and double layer charge injection". If that is true, the implied
+        capacitance must be a double-layer capacitance -- an independent check that
+        the two constants were read correctly.
+        """
+        from neurostim.safety.water_window import DOUBLE_LAYER_CAPACITANCE_uF_cm2
+
+        implied = 20.0 / 1.2
+        assert implied == pytest.approx(DOUBLE_LAYER_CAPACITANCE_uF_cm2, rel=0.2)
+
+
+class TestNewman1966:
+    """Disc access resistance R = 1/(4 * kappa * a)."""
+
+    @pytest.mark.parametrize("diameter_um", [50.0, 200.0, 1000.0])
+    @pytest.mark.parametrize("sigma", [0.2, 0.35, 1.0])
+    def test_disc_access_resistance(self, diameter_um, sigma):
+        disc = DiscElectrode(diameter_um)
+        expected = 1.0 / (4.0 * sigma * (diameter_um / 2.0) * 1e-6)
+        assert disc.access_resistance_ohm(sigma) == pytest.approx(expected)
+        assert disc.access_resistance_is_exact
+
+
+class TestCogan2008Table1:
+    """Clinical DBS electrodes 'have large areas (0.06 cm2)' -- Table 1 footnote b."""
+
+    def test_dbs_contact_area(self):
+        """A 1.27 mm x 1.5 mm band contact gives 0.0599 cm^2."""
+        contact = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        assert contact.area_cm2 == pytest.approx(0.06, abs=0.001)
+
+
+class TestElwassif2006:
+    """Tissue property values quoted from the DBS bioheat model."""
+
+    def test_elwassif_thermal_conductivity_preset(self):
+        from neurostim.models.thermal import ELWASSIF_BRAIN
+
+        assert ELWASSIF_BRAIN.thermal_conductivity_W_per_mK == pytest.approx(0.527)
+
+    def test_conductivity_default_matches_paper(self):
+        from neurostim.models.field import BRAIN_CONDUCTIVITY_S_PER_M
+
+        assert pytest.approx(0.35) == BRAIN_CONDUCTIVITY_S_PER_M
+
+
+class TestITISDatabase:
+    """IT'IS Database v4.2, materialparameterdatabasecurrent20250821.xls."""
+
+    @pytest.mark.parametrize(
+        ("field_name", "expected"),
+        [
+            ("thermal_conductivity_W_per_mK", 0.547),
+            ("density_kg_per_m3", 1044.5),
+            ("specific_heat_J_per_kgK", 3695.8),
+            ("blood_density_kg_per_m3", 1049.75),
+            ("blood_specific_heat_J_per_kgK", 3617.0),
+        ],
+    )
+    def test_grey_matter_values(self, field_name, expected):
+        from neurostim.models.thermal import GREY_MATTER
+
+        assert getattr(GREY_MATTER, field_name) == pytest.approx(expected)
+
+    def test_perfusion_unit_conversion(self):
+        """763.667 ml/min/kg at 1044.5 kg/m^3 is 0.013294 1/s."""
+        from neurostim.models.thermal import perfusion_per_s
+
+        assert perfusion_per_s(763.667, 1044.5) == pytest.approx(0.013294, rel=1e-4)
+
+    def test_perfusion_conversion_is_density_scaled(self):
+        """The tissue density factor is what makes this a volumetric rate."""
+        from neurostim.models.thermal import perfusion_per_s
+
+        assert perfusion_per_s(600.0, 2000.0) == pytest.approx(
+            2 * perfusion_per_s(600.0, 1000.0)
+        )
+
+    def test_white_matter_is_less_perfused_than_grey(self):
+        """IT'IS gives 212 vs 764 ml/min/kg, so white matter has a longer thermal reach."""
+        from neurostim.models.thermal import GREY_MATTER, WHITE_MATTER
+
+        assert WHITE_MATTER.perfusion_rate_per_s < GREY_MATTER.perfusion_rate_per_s
+        assert (
+            WHITE_MATTER.thermal_penetration_depth_m
+            > GREY_MATTER.thermal_penetration_depth_m
+        )
+
+    def test_all_defaults_are_now_sourced(self):
+        """The thermal block used to be mostly unsourced textbook values."""
+        assert BRAIN.fully_verified
+        assert BRAIN.source == "itis2025"
+        assert "PROVISIONAL" not in BRAIN.describe()
+
+    def test_uncertainty_is_recorded(self):
+        """Every default carries a standard deviation and sample size."""
+        for name in (
+            "thermal_conductivity_W_per_mK",
+            "density_kg_per_m3",
+            "specific_heat_J_per_kgK",
+            "perfusion_rate_per_s",
+        ):
+            sd, n = BRAIN.uncertainty[name]
+            assert sd > 0 and n >= 1
+
+    def test_conductivity_constants(self):
+        from neurostim.models import field as f
+
+        assert pytest.approx(0.419) == f.GREY_MATTER_CONDUCTIVITY_S_PER_M
+        assert pytest.approx(0.348) == f.WHITE_MATTER_CONDUCTIVITY_S_PER_M
+        assert pytest.approx(0.662) == f.BLOOD_CONDUCTIVITY_S_PER_M
+
+
+class TestProvenanceIsAlwaysPresent:
+    """Every material constant must resolve to a real bibliography entry."""
+
+    def test_every_material_cites_a_known_reference(self):
+        from neurostim import list_materials
+        from neurostim.references import cite
+
+        for material in list_materials():
+            assert cite(material.cic.reference) is not None
+            if material.water_window is not None:
+                assert cite(material.water_window.reference) is not None
+
+    def test_every_material_describes_its_conditions(self):
+        from neurostim import list_materials
+
+        for material in list_materials():
+            text = material.cic.describe()
+            assert material.cic.reference in text
+            assert material.cic.units in text
+
+    def test_unknown_reference_key_raises(self):
+        from neurostim.references import cite
+
+        with pytest.raises(KeyError, match="Unknown reference key"):
+            cite("not_a_real_paper_2099")
+
+    def test_user_measurement_is_never_attributed_to_a_paper(self):
+        """A locally measured limit must not display the material's original citation."""
+        from neurostim import with_measured_cic
+
+        pt = get_material("Pt")
+        assert pt.cic.reference == "rose_robblee1990"
+
+        measured = with_measured_cic(pt, 62.0, pulse_width_us=200, note="my batch")
+        assert measured.cic.reference == "user_measurement"
+        assert not measured.cic.verified
+
+        text = measured.cic.describe()
+        assert "rose_robblee1990" not in text
+        assert "not published literature" in text
+        assert "my batch" in text
+        assert "PROVISIONAL" in text
+
+    def test_user_measurement_rejects_non_positive_values(self):
+        from neurostim import with_measured_cic
+
+        with pytest.raises(ValueError, match="must be finite and > 0"):
+            with_measured_cic(get_material("Pt"), 0.0)
+
+
+class TestShannon1992Primary:
+    """Read from the primary text, not from Merrill's restatement of it."""
+
+    def test_shannon_recommends_1_5(self):
+        """'k = 1.5 is a conservative limit and has been used in all calculations.'"""
+        assert shannon.K_SHANNON == 1.5
+        assert shannon.K_DEFAULT == 1.5
+
+    def test_k_2_is_labelled_as_damage_not_as_a_limit(self):
+        """'When k = 2, the straight line falls in an area where damage was observed.'"""
+        assert shannon.K_DAMAGE_OBSERVED == 2.0
+        warning = shannon.k_warning(2.0)
+        assert "damage was observed" in warning
+        assert "not a safety limit" in warning
+
+    def test_k_above_shannons_value_warns_with_the_charge_factor(self):
+        """Permitted charge scales as 10^(k/2), so 1.7 allows 1.26x of 1.5."""
+        warning = shannon.k_warning(1.7)
+        assert "1.26x" in warning
+
+    def test_shannons_own_value_produces_no_warning(self):
+        assert shannon.k_warning(1.5) == ""
+        assert shannon.k_is_conservative(1.5)
+        assert not shannon.k_is_conservative(1.7)
+
+    def test_fit_conditions_are_recorded(self):
+        """400 us/phase, 50 Hz, 7 h, cat parietal cortex."""
+        assert shannon.FIT_PULSE_WIDTH_US == 400.0
+        assert shannon.FIT_FREQUENCY_HZ == 50.0
+        assert shannon.FIT_DURATION_H == 7.0
+        assert "cat" in shannon.FIT_PREPARATION
+
+    def test_conditions_warning_fires_away_from_the_fit(self):
+        """Shannon: extrapolation to other rates or pulse widths is not established."""
+        assert shannon.conditions_warning(400.0, 50.0) == ""
+        assert "130 Hz" in shannon.conditions_warning(400.0, 130.0)
+        assert "60 us" in shannon.conditions_warning(60.0, 50.0)
+
+
+class TestMcCreery1990Dataset:
+    """Table I, transcribed from the primary paper."""
+
+    def test_dataset_size(self):
+        from neurostim.data import mccreery1990 as m
+
+        assert len(m.TABLE_I) == 12
+        assert m.CONTROL_SITES == 23
+        assert m.TOTAL_SITES_EXAMINED == 64
+
+    def test_conditions_match_shannons_stated_fit_conditions(self):
+        from neurostim.data import mccreery1990 as m
+
+        assert m.PULSE_WIDTH_US == shannon.FIT_PULSE_WIDTH_US
+        assert m.FREQUENCY_HZ == shannon.FIT_FREQUENCY_HZ
+        assert m.DURATION_H == shannon.FIT_DURATION_H
+
+    def test_microelectrodes_at_extreme_density_showed_no_damage(self):
+        """800 and 1600 uC/cm^2 with no damage; this is the synergy argument."""
+        from neurostim.data import mccreery1990 as m
+
+        extreme = [p for p in m.TABLE_I if p.charge_density_uC_cm2 >= 800]
+        assert len(extreme) == 2
+        assert all(p.outcome == "none" for p in extreme)
+
+    def test_lowest_damaging_charge_density(self):
+        """No damage below 12 uC/cm^2 anywhere in the study."""
+        from neurostim.data import mccreery1990 as m
+
+        harmful = [p for p in m.TABLE_I if p.outcome in ("damage", "partial")]
+        assert min(p.charge_density_uC_cm2 for p in harmful) == pytest.approx(12.0)
+
+    def test_area_charge_density_and_charge_are_self_consistent(self):
+        """Q/A must equal the tabulated charge density for every row."""
+        from neurostim.data import mccreery1990 as m
+
+        for p in m.TABLE_I:
+            assert p.charge_per_phase_uC / p.area_cm2 == pytest.approx(
+                p.charge_density_uC_cm2, rel=0.05
+            )
+
+    def test_data_pin_the_boundary_near_k_1_7(self):
+        """Highest safe and lowest damaging surface points both sit at k = 1.699,
+        so Shannon's recommended 1.5 is deliberately below the observed boundary."""
+        from neurostim.data import mccreery1990 as m
+
+        safe, hurt = m.separating_k_range()
+        assert safe == pytest.approx(1.699, abs=0.01)
+        assert hurt == pytest.approx(1.699, abs=0.01)
+        assert safe > shannon.K_SHANNON
+
+    def test_local_charge_density_falls_with_depth(self):
+        """McCreery eq. (1): QD_x = QD_s (1 - x/sqrt(R^2 + x^2))."""
+        from neurostim.data import mccreery1990 as m
+
+        assert m.local_charge_density_uC_cm2(800.0, 0.0, 45.0) == pytest.approx(800.0)
+        assert m.local_charge_density_uC_cm2(800.0, 60.0, 45.0) == pytest.approx(160.0)
+        deeper = m.local_charge_density_uC_cm2(800.0, 200.0, 45.0)
+        assert deeper < m.local_charge_density_uC_cm2(800.0, 60.0, 45.0)
+
+    def test_local_charge_density_validates_inputs(self):
+        from neurostim.data import mccreery1990 as m
+
+        with pytest.raises(ValueError, match="electrode_radius_um"):
+            m.local_charge_density_uC_cm2(800.0, 10.0, 0.0)
+        with pytest.raises(ValueError, match="distance_um"):
+            m.local_charge_density_uC_cm2(800.0, -1.0, 45.0)
+
+
+class TestElwassif2006Validation:
+    """Table I of the FEM paper, used to check this package's analytic scalings."""
+
+    @staticmethod
+    def _contact_radius_m() -> float:
+        import math
+
+        from neurostim.data import elwassif2006 as e
+
+        area = (
+            math.pi
+            * e.LEAD_3389_CONTACT_DIAMETER_UM
+            * 1e-6
+            * e.LEAD_3389_CONTACT_HEIGHT_UM
+            * 1e-6
+        )
+        return math.sqrt(area / math.pi)
+
+    def test_table_has_twelve_rows(self):
+        from neurostim.data import elwassif2006 as e
+
+        assert len(e.TABLE_I) == 12
+
+    def test_peak_rise_matches_the_abstract(self):
+        from neurostim.data import elwassif2006 as e
+
+        assert max(p.rise_K_3389 for p in e.TABLE_I) == pytest.approx(e.PEAK_RISE_K)
+
+    def test_rise_is_linear_in_electrical_conductivity(self):
+        """A voltage-driven source dissipates P proportional to sigma, so dT is too."""
+        from neurostim.data import elwassif2006 as e
+
+        ratios = [p.rise_K_3389 / p.sigma_S_per_m for p in e.conductivity_block()]
+        assert max(ratios) / min(ratios) < 1.02  # 0.7 % spread in the source data
+
+    def test_rise_is_inverse_in_thermal_conductivity(self):
+        """dT = P / (4 pi kappa a), so dT * kappa is constant."""
+        from neurostim.data import elwassif2006 as e
+
+        products = [
+            p.rise_K_3389 * p.thermal_conductivity_W_per_mK
+            for p in e.thermal_conductivity_block()
+        ]
+        assert max(products) / min(products) < 1.02
+
+    def test_perfusion_attenuation_matches_the_analytic_form(self):
+        """Analytic 1/(1 + a/L) reproduces their FEM perfusion sweep within 10 %."""
+        from neurostim.data import elwassif2006 as e
+
+        a = self._contact_radius_m()
+        block = e.perfusion_block()
+        unperfused = block[0]
+        assert unperfused.perfusion_per_s == 0.0
+
+        for point in block[1:]:
+            tissue = thermal_mod.TissueThermalProperties(
+                thermal_conductivity_W_per_mK=point.thermal_conductivity_W_per_mK,
+                perfusion_rate_per_s=point.perfusion_per_s,
+                blood_density_kg_per_m3=e.BLOOD_DENSITY_KG_PER_M3,
+                blood_specific_heat_J_per_kgK=e.BLOOD_SPECIFIC_HEAT_J_PER_KGK,
+                verified_fields=(),
+                uncertainty={},
+            )
+            predicted = 1.0 / (1.0 + a / tissue.thermal_penetration_depth_m)
+            reported = point.rise_K_3389 / unperfused.rise_K_3389
+            assert predicted == pytest.approx(reported, rel=0.10)
+
+    def test_implied_power_is_a_sensible_bipolar_impedance(self):
+        """0.82 K needs about 7.5 mW, i.e. roughly 325 ohm at their 1.56 V RMS."""
+        from neurostim.data import elwassif2006 as e
+
+        power = e.implied_power_W()
+        assert power == pytest.approx(7.5e-3, rel=0.05)
+        assert 200.0 < e.V_RMS**2 / power < 500.0
+
+    def test_the_apparent_gap_is_a_protocol_difference_not_a_physics_one(self):
+        """Their mW-scale continuous bipolar drive vs a uW-scale duty-cycled pulse train.
+
+        Matching the power reproduces their temperature rise; matching the amplitude
+        does not, because the two protocols differ in power by about a hundredfold.
+        """
+        from neurostim import CylindricalBandElectrode, StimProtocol
+        from neurostim.data import elwassif2006 as e
+
+        contact = CylindricalBandElectrode(
+            e.LEAD_3389_CONTACT_DIAMETER_UM, e.LEAD_3389_CONTACT_HEIGHT_UM, "PtIr"
+        )
+        unperfused = thermal_mod.TissueThermalProperties(
+            thermal_conductivity_W_per_mK=0.527,
+            perfusion_rate_per_s=0.0,
+            verified_fields=(),
+            uncertainty={},
+        )
+
+        # Feed the analytic model their power and it lands on their number.
+        at_their_power = thermal_mod.peak_temperature_rise_K(
+            e.implied_power_W(), contact.equivalent_radius_um, unperfused
+        )
+        assert at_their_power == pytest.approx(e.PEAK_RISE_K, rel=0.02)
+
+        # A duty-cycled current-controlled protocol is two orders of magnitude cooler.
+        pulsed = StimProtocol(3000, 60, 130, 1)
+        pulsed_power = thermal_mod.ohmic_power_W(
+            pulsed.rms_current_uA, contact.access_resistance_ohm(0.35)
+        )
+        assert pulsed_power < e.implied_power_W() / 50
+
+    def test_voltage_driven_power_helper(self):
+        from neurostim.data import elwassif2006 as e
+
+        assert thermal_mod.voltage_driven_power_W(e.V_RMS, 325.0) == pytest.approx(
+            e.V_RMS**2 / 325.0
+        )
+        with pytest.raises(ValueError, match="resistance_ohm"):
+            thermal_mod.voltage_driven_power_W(1.56, 0.0)
+
+    def test_their_stated_tissue_values_are_recorded(self):
+        from neurostim.data import elwassif2006 as e
+
+        assert e.TISSUE_DENSITY_KG_PER_M3 == 1040.0
+        assert e.TISSUE_SPECIFIC_HEAT_J_PER_KGK == 3650.0
+        assert e.BLOOD_DENSITY_KG_PER_M3 == 1057.0
+        assert e.BLOOD_SPECIFIC_HEAT_J_PER_KGK == 3600.0
+        assert e.METABOLIC_HEAT_ASSUMED_ZERO
+
+
+class TestRoseRobblee1990Primary:
+    """Read from the primary text rather than through Cogan's restatement."""
+
+    def test_it_is_paper_viii(self):
+        """The title page reads 'Electrical Stimulation with Pt Electrodes. VIII.'"""
+        from neurostim.references import cite
+
+        assert "VIII" in cite("rose_robblee1990").title
+
+    def test_charge_injection_range(self):
+        """AF 50-100, CF 100-150 uC/cm^2 geometric, at 0.2 ms and 50 pps."""
+        pt = get_material("Pt")
+        assert pt.cic_uC_cm2("conservative") == pytest.approx(50.0)
+        assert pt.cic_uC_cm2("optimistic") == pytest.approx(150.0)
+        assert pt.cic.pulse_width_us == pytest.approx(200.0)
+        assert pt.cic.area_basis == "geometric"
+
+    def test_electrolyte_ph_is_7_3_not_7_0(self):
+        assert "7.3" in get_material("Pt").cic.medium
+
+    def test_reference_electrode_discrepancy_is_recorded(self):
+        """Their limits are vs SCE; Cogan restates them vs Ag|AgCl."""
+        note = get_material("Pt").cic.note
+        assert "SCE" in note
+        assert "Ag|AgCl" in note
+
+    def test_pulse_width_and_bias_dependence_are_recorded(self):
+        """1 ms raises the limit to 250; a +0.9 V bias raises it to 600 uC/cm^2."""
+        note = get_material("Pt").cic.note
+        assert "250" in note
+        assert "600" in note
+
+    @pytest.mark.parametrize("key", ["Pt", "PtIr"])
+    def test_dissolution_threshold_is_below_the_injection_limit(self, key):
+        """'Pt dissolution occurs even at charge densities of 20-50 uC/cm^2 geom.'"""
+        material = get_material(key)
+        assert material.chronic_threshold is not None
+        assert material.chronic_threshold.low_uC_cm2 == pytest.approx(20.0)
+        assert material.chronic_threshold.high_uC_cm2 == pytest.approx(50.0)
+        assert material.chronic_threshold.low_uC_cm2 < material.cic_uC_cm2("conservative")
+
+    def test_chronic_check_fires_inside_the_injection_limit(self):
+        """A protocol can pass the CIC check and still be eroding the electrode."""
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        from neurostim.safety.assessment import Status
+
+        # 22 uC/cm^2: comfortably under the 50 uC/cm^2 CIC (2.3x margin, so it
+        # reports PASS rather than a thin-margin CAUTION), but inside the 20-50
+        # dissolution band.
+        area = DiscElectrode(1000.0, "Pt").area_cm2
+        current = 22.0 * area / 200e-6
+        calc = SafetyCalculator(
+            DiscElectrode(1000.0, "Pt"), StimProtocol(current, 200, 50, 1)
+        )
+        checks = {c.name: c for c in calc.assess().checks}
+        assert checks["Charge injection limit"].status is Status.PASS
+        assert checks["Chronic degradation"].status is Status.CAUTION
+
+
+class TestCogan2016:
+    """The FDA-co-authored re-evaluation of stimulation damage thresholds."""
+
+    def test_microelectrode_threshold_is_charge_per_phase(self):
+        from neurostim.data import cogan2016 as c
+
+        assert pytest.approx(4.0) == c.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE
+
+    def test_macro_micro_boundary(self):
+        from neurostim.data import cogan2016 as c
+
+        assert c.MACRO_MICRO_BOUNDARY_AREA_CM2 == (3e-4, 7e-4)
+        assert c.is_microelectrode(1e-5)
+        assert not c.is_microelectrode(0.06)
+        assert c.in_regime_transition(5e-4)
+
+    def test_dbs_approved_limit_and_actual_clinical_use(self):
+        """The 30 uC/cm^2 approval limit is ~4x what DBS actually uses clinically."""
+        from neurostim.data import cogan2016 as c
+
+        assert c.DBS_APPROVED_CHARGE_DENSITY_UC_CM2 == 30.0
+        assert c.DBS_TYPICAL_CLINICAL_CHARGE_DENSITY_UC_CM2 == 8.0
+
+    def test_in_vivo_derating_is_recorded_for_the_main_materials(self):
+        """Saline CIC overstates in vivo capacity by up to 10x for Pt and AIROF."""
+        from neurostim.data import cogan2016 as c
+
+        assert c.derating_for("Pt").worst == pytest.approx(14.0)
+        assert c.derating_for("AIROF").worst == pytest.approx(10.0)
+        assert c.derating_for("SIROF").worst == pytest.approx(4.0)
+        assert c.derating_for("TiN") is None
+
+    def test_porous_platinum_derates_worst(self):
+        from neurostim.data import cogan2016 as c
+
+        assert c.POROUS_PLATINUM_DERATING.worst == pytest.approx(8.0)
+
+    def test_their_k_1_25_worked_example_reproduces(self):
+        """60 uC/cm^2 on 0.005 cm^2 gives k = 1.255, matching their stated 'k ~ 1.25'.
+
+        This is the check that confirms their k formula is the standard one, which in
+        turn is why their separate '1.4' for the 12 uC/cm^2 point looks like a slip.
+        """
+        charge_uC = 60.0 * 0.005
+        assert shannon.shannon_k(charge_uC, 0.005) == pytest.approx(1.25, abs=0.01)
+
+    def test_the_mccreery_point_they_call_k_1_4_is_actually_1_86(self):
+        """Documented discrepancy; the tabulated values give 1.86, not 1.4."""
+        assert shannon.shannon_k(6.0, 0.5) == pytest.approx(1.857, abs=0.01)
+
+
+class TestStoneyTehovnikCurrentDistance:
+    """Current-distance constant, read from Tehovnik et al. (2006) figure 1A."""
+
+    def test_pyramidal_tract_mean(self):
+        from neurostim.models import vta
+
+        assert vta.STONEY_K_uA_PER_MM2 == pytest.approx(1292.0)
+        assert vta.STONEY_K_SE_RANGE_uA_PER_MM2 == (1037.0, 1547.0)
+
+    def test_element_span_is_ninetyfold(self):
+        """300 uA/mm^2 (large myelinated) to 27000 (small unmyelinated)."""
+        from neurostim.models import vta
+
+        low, high = vta.K_RANGE_BY_ELEMENT_uA_PER_MM2
+        assert (low, high) == (300.0, 27000.0)
+        assert high / low == pytest.approx(90.0)
+
+    def test_mt_behavioural_estimate_reproduces(self):
+        """K = 20 uA / (0.1 mm)^2 = 2000 uA/mm^2."""
+        from neurostim.models import vta
+
+        assert pytest.approx(vta.MT_BEHAVIOURAL_K_uA_PER_MM2) == 20.0 / (0.1**2)
+
+    def test_radius_formula_matches_the_review(self):
+        """Tehovnik state the spread as (I/K)^(1/2); 1292 uA at K=1292 gives 1 mm."""
+        from neurostim.models import vta
+
+        model = vta.CurrentDistanceModel()
+        assert model.activation_radius_um(1292.0) == pytest.approx(1000.0)
+        assert model.threshold_uA(1000.0) == pytest.approx(1292.0)
+
+    def test_old_default_was_non_conservative(self):
+        """675 uA/mm^2 overestimated activation radius by about 1.4x."""
+        from neurostim.models import vta
+
+        old = vta.CurrentDistanceModel(k_uA_per_mm2=675.0).activation_radius_um(80.0)
+        new = vta.CurrentDistanceModel().activation_radius_um(80.0)
+        assert old / new == pytest.approx((1292.0 / 675.0) ** 0.5, rel=1e-6)
+
+    def test_axons_have_shorter_chronaxies_than_cell_bodies(self):
+        """Which is why short pulses recruit fibres of passage, not somata."""
+        from neurostim.models import vta
+
+        assert vta.AXON_CHRONAXIE_RANGE_MS[0] < vta.CELL_BODY_CHRONAXIE_RANGE_MS[0]
+
+
+class TestISO14708_3:
+    """The regulatory heat criterion, clause 17.1 and Table 101."""
+
+    def test_surface_limit_and_implied_rise(self):
+        from neurostim.data import iso14708_3 as iso
+
+        assert iso.MAX_OUTER_SURFACE_C == 39.0
+        assert pytest.approx(2.0) == iso.MAX_RISE_K
+
+    def test_table_101_thresholds(self):
+        from neurostim.data import iso14708_3 as iso
+
+        assert iso.threshold_for("brain") == 2.0
+        assert iso.threshold_for("muscle") == 40.0
+        assert iso.threshold_for("peripheral nerve") == 40.0
+        assert iso.threshold_for("skin") == 21.0
+        assert iso.threshold_for("bone") == 16.0
+
+    def test_brain_is_the_most_restrictive_tissue(self):
+        from neurostim.data import iso14708_3 as iso
+
+        assert iso.threshold_for("brain") == min(iso.CEM43_THRESHOLDS.values())
+
+    def test_cem43_quadruples_per_degree_below_43(self):
+        """R = 0.25 below 43 C, so each degree costs a factor of four in time."""
+        from neurostim.data import iso14708_3 as iso
+
+        assert iso.allowed_minutes(40.0) / iso.allowed_minutes(41.0) == pytest.approx(4.0)
+
+    def test_below_39_c_the_formula_does_not_apply(self):
+        from neurostim.data import iso14708_3 as iso
+
+        assert math.isinf(iso.allowed_minutes(38.9))
+        assert iso.cem43_steady(38.0, 10_000.0) == 0.0
+
+    def test_brain_at_43_c_reaches_threshold_in_two_minutes(self):
+        from neurostim.data import iso14708_3 as iso
+
+        assert iso.allowed_minutes(43.0, "brain") == pytest.approx(2.0)
+
+    def test_unknown_tissue_raises(self):
+        from neurostim.data import iso14708_3 as iso
+
+        with pytest.raises(KeyError, match="No CEM43 threshold"):
+            iso.threshold_for("liver")
+
+    def test_thermal_default_limit_now_comes_from_the_standard(self):
+        from neurostim.data import iso14708_3 as iso
+
+        result = thermal_mod.evaluate(100.0, 1000.0, 500.0)
+        assert result.limit_K == pytest.approx(iso.MAX_RISE_K)
+        assert result.satisfies_iso_surface_limit
+
+
+class TestBeebeRose1988Primary:
+    """Activated iridium oxide, read from the primary abstract and methods."""
+
+    def test_cathodic_and_biased_limits(self):
+        """1.0 mC/cm^2 cathodic-first; 3.5 mC/cm^2 biased to +0.8 V vs SCE."""
+        airof = get_material("AIROF")
+        assert airof.cic.low == pytest.approx(1.0)
+        assert airof.cic.high == pytest.approx(3.5)
+
+    def test_conditions(self):
+        airof = get_material("AIROF")
+        assert airof.cic.pulse_width_us == pytest.approx(200.0)
+        assert "7.3" in airof.cic.medium
+        assert "bicarbonate" in airof.cic.medium
+        assert airof.cic.area_basis == "geometric"
+
+    def test_measured_on_a_microelectrode_sized_area(self):
+        """3.7-4.5e-4 cm^2, right at the macro/micro boundary."""
+        from neurostim.data import cogan2016
+
+        airof = get_material("AIROF")
+        assert airof.cic.measured_area_cm2 == pytest.approx(4.1e-4, rel=0.1)
+        assert cogan2016.in_regime_transition(airof.cic.measured_area_cm2)
+
+    def test_reference_electrode_caveat_is_recorded_on_the_window(self):
+        """Both primary sources used SCE; Cogan restates the window vs Ag|AgCl."""
+        note = get_material("AIROF").water_window.note
+        assert "SCE" in note
+        assert "45 mV" in note
+
+
+class TestKuncelGrill2004:
+    """The DBS parameter review, read from the primary text."""
+
+    def test_thirty_uC_cm2_is_described_as_liberal_not_conservative(self):
+        from neurostim.references import cite
+
+        note = cite("kuncel_grill2004_full").note
+        assert "liberal" in note
+
+    def test_fraction_of_contact_above_average_current_density(self):
+        from neurostim.data import current_distribution as cd
+
+        assert pytest.approx(0.256) == cd.DBS_FRACTION_ABOVE_AVERAGE
+        assert pytest.approx(0.0993) == cd.DBS_AVERAGE_CURRENT_DENSITY_A_PER_CM2
+
+    def test_averaging_caveat_applies_unless_recessed(self):
+        from neurostim.data import current_distribution as cd
+
+        assert cd.averaged_density_understates_local_peak(recessed=False)
+        assert not cd.averaged_density_understates_local_peak(recessed=True)
+
+    def test_caveat_is_surfaced_in_the_charge_check(self):
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(DiscElectrode(500.0, "Pt"), StimProtocol(10, 200, 50, 1))
+        detail = next(
+            c for c in calc.assess().checks if c.name == "Charge injection limit"
+        ).detail
+        assert "geometric-average" in detail
+        assert "25.6" in detail
+
+    def test_derivation_of_the_limit_is_reproducible(self):
+        """'the largest charge for a contact area of 0.06 cm^2 that did not result in a
+        charge density in the damaging region' -- 30 uC/cm^2 on 0.06 cm^2 is 1.8 uC/ph,
+        which sits at k = 1.73, matching the k ~ 1.75 Cogan attributes to them."""
+        charge_uC = 30.0 * 0.06
+        assert shannon.shannon_k(charge_uC, 0.06) == pytest.approx(1.75, abs=0.03)
+
+
+class TestHudak2017:
+    """Why charge-storage capacity overestimates injectable charge."""
+
+    def test_reference_records_the_mechanisms(self):
+        from neurostim.references import cite
+
+        note = cite("hudak2017").note
+        assert "overestimates" in note
+        assert "oxygen reduction" in note
+        assert "protein" in note
+
+    def test_package_uses_injection_limits_not_storage_capacities(self):
+        """Pt is stored at the 50-150 uC/cm^2 injection limit, not Brummer's 300-350
+        uC/cm^2 charge-storage capacity, which is exactly the distinction Hudak
+        explains."""
+        pt = get_material("Pt")
+        assert pt.cic_uC_cm2("optimistic") == pytest.approx(150.0)
+        assert "Brummer" in pt.cic.note
+
+
+class TestGabriel1996:
+    """What the dielectric survey does and does not supply."""
+
+    def test_recorded_as_a_survey_without_tabulated_values(self):
+        from neurostim.references import cite
+
+        note = cite("gabriel1996").note
+        assert "graphical" in note
+        assert "Part III" in note
+
+    def test_conductivity_default_is_still_the_dbs_convention(self):
+        """Gabriel I supplies no number to replace 0.35 S/m; IT'IS remains the source
+        for the alternative value."""
+        from neurostim.models import field as f
+
+        assert pytest.approx(0.35) == f.BRAIN_CONDUCTIVITY_S_PER_M
+        assert pytest.approx(0.419) == f.GREY_MATTER_CONDUCTIVITY_S_PER_M
+
+
+class TestButterwick2007:
+    """Current-density damage thresholds, read from the primary text."""
+
+    def test_retina_anchor_points(self):
+        from neurostim.data import butterwick2007 as b
+
+        assert pytest.approx(0.061) == b.RETINA_THRESHOLD_AT_6MS_A_PER_CM2
+        assert pytest.approx(1.3) == b.RETINA_THRESHOLD_AT_6US_A_PER_CM2
+
+    def test_anchor_points_reproduce_from_the_fitted_power_law(self):
+        from neurostim.data import butterwick2007 as b
+
+        assert b.threshold_A_per_cm2(6000.0) == pytest.approx(0.061, rel=1e-6)
+        assert b.threshold_A_per_cm2(6.0) == pytest.approx(1.3, rel=1e-6)
+
+    def test_fitted_exponent_is_close_to_the_quoted_minus_half(self):
+        """They quote t^-0.5 as characteristic of electroporation; their own two
+        anchor points fit -0.44."""
+        from neurostim.data import butterwick2007 as b
+
+        assert pytest.approx(-0.44, abs=0.01) == b.FITTED_DURATION_EXPONENT
+        assert abs(b.FITTED_DURATION_EXPONENT - b.QUOTED_DURATION_EXPONENT) < 0.1
+
+    def test_shorter_pulses_tolerate_higher_current_density(self):
+        from neurostim.data import butterwick2007 as b
+
+        assert b.threshold_A_per_cm2(60.0) > b.threshold_A_per_cm2(600.0)
+
+    def test_small_electrodes_scale_as_inverse_square_of_diameter(self):
+        """Below 200 um the threshold total current is constant, so J_th goes as d^-2."""
+        from neurostim.data import butterwick2007 as b
+
+        at_100 = b.threshold_A_per_cm2(200.0, diameter_um=100.0)
+        at_50 = b.threshold_A_per_cm2(200.0, diameter_um=50.0)
+        assert at_50 / at_100 == pytest.approx(4.0)
+
+    def test_large_electrodes_are_size_independent(self):
+        from neurostim.data import butterwick2007 as b
+
+        assert b.threshold_A_per_cm2(200.0, 400.0) == pytest.approx(
+            b.threshold_A_per_cm2(200.0, 1000.0)
+        )
+
+    def test_size_regimes(self):
+        from neurostim.data import butterwick2007 as b
+
+        assert "d^-2" in b.size_regime(100.0)
+        assert b.size_regime(500.0) == "size-independent"
+        assert "transition" in b.size_regime(250.0)
+
+    def test_single_pulse_tolerates_more_than_a_train(self):
+        """Threshold falls about sevenfold from 1 pulse to saturation on retina."""
+        from neurostim.data import butterwick2007 as b
+
+        single = b.threshold_A_per_cm2(200.0, n_pulses=1)
+        saturated = b.threshold_A_per_cm2(200.0, n_pulses=b.PULSE_COUNT_SATURATION)
+        assert single / saturated == pytest.approx(
+            b.REPEATED_EXPOSURE_FACTOR_RETINA, rel=1e-6
+        )
+
+    def test_check_now_evaluates_instead_of_deferring(self):
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        from neurostim.safety.assessment import Status
+
+        check = next(
+            c
+            for c in SafetyCalculator(
+                DiscElectrode(500.0, "Pt"), StimProtocol(10, 200, 50, 1)
+            ).assess().checks
+            if c.name == "Current density"
+        )
+        assert check.status is not Status.NOT_EVALUATED
+        assert "electroporation threshold" in check.summary
+
+    def test_exceeding_the_threshold_fails(self):
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        from neurostim.safety.assessment import Status
+
+        # 1 mA into a 100 um disc is ~12.7 A/cm^2, far above threshold at 1 ms.
+        check = next(
+            c
+            for c in SafetyCalculator(
+                DiscElectrode(100.0, "SIROF"), StimProtocol(1000, 1000, 50, 1)
+            ).assess().checks
+            if c.name == "Current density"
+        )
+        assert check.status is Status.FAIL
+
+
+class TestMcCreery1995Frequency:
+    """The measured frequency dependence."""
+
+    def test_table_values(self):
+        from neurostim.data import mccreery1995 as m
+
+        at50 = m.point_at(50.0)
+        at100 = m.point_at(100.0)
+        at20 = m.point_at(20.0)
+        assert at50.slope_percent_ead_per_alpha_unit == pytest.approx(0.37)
+        assert at100.slope_percent_ead_per_alpha_unit == pytest.approx(1.1)
+        assert at50.threshold_alpha_units == pytest.approx(1.1)
+        assert at100.threshold_alpha_units == pytest.approx(0.8)
+        assert at20.threshold_alpha_units is None
+
+    def test_doubling_frequency_triples_the_damage_slope(self):
+        from neurostim.data import mccreery1995 as m
+
+        assert pytest.approx(2.97, abs=0.02) == m.SLOPE_RATIO_50_TO_100
+
+    def test_threshold_falls_to_073_at_100_hz(self):
+        from neurostim.data import mccreery1995 as m
+
+        assert pytest.approx(0.727, abs=0.01) == m.THRESHOLD_RATIO_50_TO_100
+
+    def test_twenty_hz_shows_no_amplitude_correlation(self):
+        from neurostim.data import mccreery1995 as m
+
+        assert not m.point_at(20.0).amplitude_correlates
+        assert m.point_at(50.0).amplitude_correlates
+
+    def test_no_interpolation_between_measured_points(self):
+        """Only three frequencies were measured; the module does not invent others."""
+        from neurostim.data import mccreery1995 as m
+
+        assert m.point_at(75.0) is None
+
+    def test_risk_text_refuses_to_supply_a_charge_derating(self):
+        """Amplitude is in recruitment units, so no charge-based factor follows."""
+        from neurostim.data import mccreery1995 as m
+
+        text = m.describe_frequency_risk(130.0)
+        assert "no charge-based derating follows" in text
+        assert "not measured" in text
+
+    def test_low_frequency_message(self):
+        from neurostim.data import mccreery1995 as m
+
+        assert "no correlation" in m.describe_frequency_risk(20.0)
+
+    def test_envelope_cites_the_measured_numbers(self):
+        from neurostim import CylindricalBandElectrode, SafetyCalculator, StimProtocol
+
+        detail = next(
+            c
+            for c in SafetyCalculator(
+                CylindricalBandElectrode(1270, 1500, "PtIr"),
+                StimProtocol(3000, 60, 130, 3600),
+            ).assess().checks
+            if c.name == "Validated envelope"
+        ).detail
+        assert "0.37 -> 1.1" in detail
+        assert "0.73x" in detail
+
+
+class TestGabriel1996PartIII:
+    """Four-Cole-Cole parametric model, Table 1."""
+
+    def test_grey_matter_parameters(self):
+        from neurostim.data import gabriel1996 as g
+
+        gm = g.GREY_MATTER
+        assert gm.eps_inf == 4.0
+        assert gm.sigma_i_S_per_m == pytest.approx(0.0200)
+        assert len(gm.dispersions) == 4
+        assert gm.dispersions[0] == (45.0, 7.96e-12, 0.10)
+        assert gm.dispersions[3] == (4.5e7, 5.305e-3, 0.00)
+
+    def test_blood_low_frequency_conductivity_is_its_ionic_term(self):
+        """Blood has no low-frequency dispersions in Table 1, so sigma -> sigma_i."""
+        from neurostim.data import gabriel1996 as g
+
+        assert g.BLOOD.conductivity_S_per_m(100.0) == pytest.approx(0.700, rel=1e-3)
+
+    def test_conductivity_rises_with_frequency(self):
+        from neurostim.data import gabriel1996 as g
+
+        values = [g.GREY_MATTER.conductivity_S_per_m(f) for f in (100, 1e3, 1e4, 1e6)]
+        assert values == sorted(values)
+
+    def test_permittivity_falls_with_frequency(self):
+        from neurostim.data import gabriel1996 as g
+
+        values = [g.GREY_MATTER.relative_permittivity(f) for f in (100, 1e3, 1e4, 1e6)]
+        assert values == sorted(values, reverse=True)
+
+    def test_grey_matter_exceeds_white_matter(self):
+        from neurostim.data import gabriel1996 as g
+
+        assert g.GREY_MATTER.conductivity_S_per_m(2500.0) > (
+            g.WHITE_MATTER.conductivity_S_per_m(2500.0)
+        )
+
+    def test_effective_frequency_convention(self):
+        from neurostim.data import gabriel1996 as g
+
+        assert g.effective_frequency_hz(200.0) == pytest.approx(2500.0)
+
+    def test_pulse_relevant_conductivity_is_far_below_the_dbs_convention(self):
+        """The finding that matters: ~0.10 S/m vs the 0.35 S/m default."""
+        from neurostim.data import gabriel1996 as g
+        from neurostim.models.field import BRAIN_CONDUCTIVITY_S_PER_M
+
+        sigma = g.conductivity_for_pulse(200.0)
+        assert sigma == pytest.approx(0.104, abs=0.005)
+        assert BRAIN_CONDUCTIVITY_S_PER_M / sigma == pytest.approx(3.4, abs=0.15)
+
+    def test_compliance_check_warns_about_the_discrepancy(self):
+        from neurostim import RingElectrode, SafetyCalculator, StimProtocol
+
+        detail = next(
+            c
+            for c in SafetyCalculator(
+                RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1),
+                compliance_V=10.0,
+            ).assess().checks
+            if c.name == "Compliance voltage"
+        ).detail
+        assert "Gabriel" in detail
+        assert "3.4x" in detail
+
+    def test_measured_impedance_suppresses_the_warning(self):
+        """If you measured it, the modelled conductivity spread is irrelevant."""
+        from neurostim import RingElectrode, SafetyCalculator, StimProtocol
+
+        detail = next(
+            c
+            for c in SafetyCalculator(
+                RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1),
+                compliance_V=10.0, measured_impedance_ohm=8000.0,
+            ).assess().checks
+            if c.name == "Compliance voltage"
+        ).detail
+        assert "Gabriel" not in detail
+
+    def test_unknown_tissue_raises(self):
+        from neurostim.data import gabriel1996 as g
+
+        with pytest.raises(KeyError, match="No Cole-Cole parameters"):
+            g.get("liver")
+
+
+class TestMcCreery2010:
+    """Primary source for the microelectrode charge-per-phase figure."""
+
+    def test_threshold_is_bracketed_not_located(self):
+        """2 nC/phase safe, 4 nC/phase damaging. The usual '4 nC/ph threshold' is the
+        lowest damaging level, not the highest safe one."""
+        from neurostim.data import mccreery2010 as m
+
+        assert m.NO_DAMAGE_NC_PER_PHASE == 2.0
+        assert m.DAMAGE_NC_PER_PHASE == 4.0
+
+    def test_cogan_quotes_the_damaging_level(self):
+        from neurostim.data import cogan2016, mccreery2010
+
+        assert cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE == (
+            mccreery2010.DAMAGE_NC_PER_PHASE
+        )
+
+    def test_halving_duty_cycle_shrank_the_damage_radius(self):
+        from neurostim.data import mccreery2010 as m
+
+        assert m.DAMAGE_RADIUS_CONTINUOUS_UM == 150.0
+        assert m.DAMAGE_RADIUS_HALF_DUTY_UM == 60.0
+        assert pytest.approx(2.5) == m.DUTY_CYCLE_RADIUS_RATIO
+
+    def test_no_interpolation_between_the_two_tested_duty_cycles(self):
+        from neurostim.data import mccreery2010 as m
+
+        assert "not measured" in m.duty_cycle_note(0.75)
+
+    def test_unpulsed_controls_were_also_damaged(self):
+        """Chronic microelectrode loss is not solely a stimulation effect."""
+        from neurostim.data import mccreery2010 as m
+
+        assert m.UNPULSED_CONTROLS_ALSO_DAMAGED
+
+
+class TestPEDOTPeerReviewedConsensus:
+    """Three peer-reviewed measurements against one conference abstract."""
+
+    def test_cui_zhou_and_luo_bracket_the_low_end(self):
+        pedot = get_material("PEDOT")
+        assert pedot.cic.low == pytest.approx(2.3)
+        assert pedot.cic.high == pytest.approx(3.6)
+
+    def test_abstract_value_is_four_to_six_fold_above_all_of_them(self):
+        assert 15.0 / 3.6 > 4.0
+        assert 15.0 / 2.3 > 6.0
+
+    def test_pedot_no_longer_a_provenance_gap(self):
+        from neurostim import list_materials
+
+        assert all(m.cic.peer_reviewed for m in list_materials())
+
+
+class TestInVivoDeratingSources:
+    """Per-material derating now traced to its own measurement."""
+
+    def test_platinum_from_leung(self):
+        from neurostim.data import cogan2016 as c
+
+        d = c.derating_for("Pt")
+        assert "Leung" in d.evidence
+        assert d.factor_low == pytest.approx(2.0)
+        assert d.factor_high == pytest.approx(14.0)
+
+    def test_airof_from_hu(self):
+        from neurostim.data import cogan2016 as c
+
+        assert "Hu" in c.derating_for("AIROF").evidence
+
+    def test_sirof_from_kane(self):
+        from neurostim.data import cogan2016 as c
+
+        assert "Kane" in c.derating_for("SIROF").evidence
+
+    def test_derated_platinum_overlaps_leungs_measured_in_vivo_range(self):
+        """Cross-check: derating the saline limit should land on what Leung actually
+        measured in vivo, 3.84-16.6 uC/cm^2.
+
+        The conservative point estimate comes out at 3.57, marginally below their
+        lowest measurement -- the derating is applied to Cogan's 50 uC/cm^2 saline
+        floor rather than Leung's own 34, so it errs slightly safe. The interval is
+        the meaningful comparison and it overlaps their range well.
+        """
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        from neurostim.uncertainty import Interval
+
+        result = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(10, 200, 50, 1, anodic_first=True),
+            medium="in_vivo",
+        ).assess().charge
+        leung = Interval(3.84, 16.6)
+        assert result.limit_interval_uC_cm2.overlaps(leung)
+        assert result.cic_limit_uC_cm2 <= leung.high
+
+
+class TestPolarityResolvedLimits:
+    """Rose & Robblee and Beebe & Rose both resolved polarity; use it."""
+
+    def test_platinum_sub_ranges(self):
+        pt = get_material("Pt")
+        assert pt.cic.bounds(anodic_first=True) == (0.05, 0.10)
+        assert pt.cic.bounds(anodic_first=False) == (0.10, 0.15)
+        assert pt.cic.bounds(anodic_first=None) == (0.05, 0.15)
+
+    def test_airof_sub_ranges(self):
+        """Beebe & Rose: 2.1 mC/cm^2 anodic-first, 1.0 cathodic-first."""
+        airof = get_material("AIROF")
+        assert airof.cic.bounds(anodic_first=True) == (2.1, 2.1)
+        assert airof.cic.bounds(anodic_first=False) == (1.0, 1.0)
+
+    def test_polarity_changes_the_limit_twofold_for_platinum(self):
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        limits = {}
+        for anodic in (True, False):
+            limits[anodic] = SafetyCalculator(
+                DiscElectrode(500.0, "Pt"),
+                StimProtocol(10, 200, 50, 1, anodic_first=anodic),
+            ).assess().charge.cic_limit_uC_cm2
+        assert limits[False] / limits[True] == pytest.approx(2.0)
+
+    def test_material_without_sub_ranges_is_unaffected(self):
+        tin = get_material("TiN")
+        assert tin.cic.bounds(True) == tin.cic.bounds(False) == tin.cic.bounds(None)
+
+    def test_polarity_is_reported(self):
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        detail = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(10, 200, 50, 1, anodic_first=True),
+        ).assess().charge.describe()
+        assert "anodic-first" in detail
+
+
+class TestDormantFieldsNowUsed:
+    """Two pieces of information the package collected but never read."""
+
+    def test_interphase_gap_reaches_the_report(self):
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        from neurostim.safety.assessment import Status
+
+        check = next(
+            c
+            for c in SafetyCalculator(
+                DiscElectrode(500.0, "Pt"),
+                StimProtocol(10, 200, 50, 1, interphase_gap_us=100.0),
+            ).assess().checks
+            if c.name == "Charge balance"
+        )
+        assert check.status is Status.PASS
+        assert "100 us interphase gap" in check.summary
+        assert "efficiency" in check.detail
+
+    def test_zero_gap_explains_the_tradeoff_too(self):
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        detail = next(
+            c
+            for c in SafetyCalculator(
+                DiscElectrode(500.0, "Pt"), StimProtocol(10, 200, 50, 1)
+            ).assess().checks
+            if c.name == "Charge balance"
+        ).detail
+        assert "No interphase gap" in detail
+
+    def test_temperature_gain_is_recorded(self):
+        """Cogan: AIROF 1.67 -> 2.0 mC/cm^2 from 20 C to 37 C."""
+        from neurostim.materials import AIROF_TEMPERATURE_GAIN
+
+        assert pytest.approx(2.0 / 1.67) == AIROF_TEMPERATURE_GAIN
+        assert AIROF_TEMPERATURE_GAIN > 1.19
+
+    def test_sub_body_temperature_measurements_are_flagged(self):
+        from neurostim.materials import MeasuredRange
+
+        cold = MeasuredRange(1.0, 1.0, "mC/cm2", "cogan2008", temperature_C=20.0)
+        warm = MeasuredRange(1.0, 1.0, "mC/cm2", "cogan2008", temperature_C=37.0)
+        unknown = MeasuredRange(1.0, 1.0, "mC/cm2", "cogan2008")
+        assert cold.measured_below_body_temperature
+        assert not warm.measured_below_body_temperature
+        assert not unknown.measured_below_body_temperature
+        assert "below body temperature" in cold.describe()

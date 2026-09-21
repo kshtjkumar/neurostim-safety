@@ -1,0 +1,109 @@
+"""Report the provenance state of every constant in the package.
+
+Run standalone or from CI::
+
+    python scripts/provenance_audit.py [--strict]
+
+Without ``--strict`` this always exits 0: it is a status report, and the gaps it lists
+are known and documented rather than defects. With ``--strict`` it exits non-zero if any
+gap is found, which is the mode to use once you intend the package to be gap-free.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+from neurostim import REFERENCES, list_materials
+from neurostim.models.thermal import BRAIN
+from neurostim.models.vta import CurrentDistanceModel
+
+
+def audit() -> list[str]:
+    """Return one line per outstanding provenance gap."""
+    gaps: list[str] = []
+
+    for material in list_materials():
+        cic = material.cic
+        if not cic.verified:
+            gaps.append(f"{material.key}: charge-injection limit not primary-sourced")
+        if not cic.peer_reviewed:
+            gaps.append(
+                f"{material.key}: limit rests on a non-peer-reviewed source "
+                f"({cic.reference})"
+            )
+        if cic.pulse_width_us is None:
+            gaps.append(
+                f"{material.key}: no pulse width recorded for its limit, so its "
+                f"applicability at any given pulse width is unknown"
+            )
+        if material.water_window is None:
+            gaps.append(f"{material.key}: no water window on record")
+
+    if not BRAIN.fully_verified:
+        missing = [
+            name
+            for name in (
+                "thermal_conductivity_W_per_mK",
+                "density_kg_per_m3",
+                "specific_heat_J_per_kgK",
+                "perfusion_rate_per_s",
+            )
+            if name not in BRAIN.verified_fields
+        ]
+        gaps.append(f"tissue thermal properties unsourced: {', '.join(missing)}")
+
+    if not CurrentDistanceModel().verified:
+        gaps.append(
+            "current-distance constant k is not confirmed against a primary source"
+        )
+
+    for key, ref in sorted(REFERENCES.items()):
+        if key == "user_measurement":
+            continue
+        if ref.source_type in ("standard", "abstract"):
+            continue  # ISO standards and meeting abstracts are not assigned DOIs
+        if not ref.doi and ref.year > 1990:
+            gaps.append(f"{key}: post-1990 reference without a DOI")
+
+    return gaps
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit non-zero when any provenance gap remains",
+    )
+    args = parser.parse_args(argv)
+
+    with_doi = sum(1 for r in REFERENCES.values() if r.doi)
+    materials = list_materials()
+    print(f"references         {len(REFERENCES)} ({with_doi} with DOI)")
+    print(
+        f"materials          {len(materials)} "
+        f"({sum(1 for m in materials if m.cic.peer_reviewed)} peer-reviewed, "
+        f"{sum(1 for m in materials if m.cic.pulse_width_us is not None)} "
+        f"with a stated pulse width)"
+    )
+    print(f"tissue properties  {'fully sourced' if BRAIN.fully_verified else 'INCOMPLETE'}")
+
+    gaps = audit()
+    if not gaps:
+        print("\nNo outstanding provenance gaps.")
+        return 0
+
+    print(f"\n{len(gaps)} known provenance gap(s):")
+    for gap in gaps:
+        print(f"  - {gap}")
+
+    if args.strict:
+        print("\n--strict: failing because gaps remain.")
+        return 1
+    print("\nThese are documented limitations, not regressions. Run with --strict to fail on them.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
