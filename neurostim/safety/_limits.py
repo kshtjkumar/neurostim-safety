@@ -56,6 +56,16 @@ silently returning a value from the middle of that walk would hide it.
 """
 
 
+CLIMB_TOLERANCE = 1e-9
+"""How far above a back-solved limit the true boundary may be, relative to the value.
+
+Bounds the *upward* search, where a step count does not: see
+:func:`_climb_to_boundary`. Generous against a plateau -- a few floats is ~1e-15 of the
+value -- and tight against a back-solve that does not invert its forward comparison, which
+would be wrong by a relative amount set by the physics rather than by the float grid.
+"""
+
+
 class LimitDidNotSettle(ArithmeticError):
     """A back-solved limit could not be walked onto its own check's boundary.
 
@@ -73,6 +83,7 @@ def floor_to_pass(
     *,
     name: str,
     max_steps: int = STEP_BUDGET,
+    rel_tolerance: float = CLIMB_TOLERANCE,
 ) -> float:
     """The largest float near ``value`` at which ``passes`` is still true.
 
@@ -80,6 +91,9 @@ def floor_to_pass(
     result is asserted to *be* that boundary -- it passes and its successor does not -- so
     a predicate that violates the precondition raises :class:`LimitDidNotSettle` instead of
     yielding a plausible number from the middle of a non-monotone band.
+
+    The two directions are bounded differently and deliberately: ``max_steps`` floats
+    down, ``rel_tolerance`` of the value up. See :func:`_climb_to_boundary` for why.
 
     ``name`` is the check the limit belongs to, and appears in the error. Non-finite and
     non-positive values are returned unchanged: ``inf`` means "no ceiling", ``0.0`` means
@@ -102,18 +116,68 @@ def floor_to_pass(
         settled = math.nextafter(settled, -math.inf)
         steps += 1
 
-    steps = 0
-    while passes(math.nextafter(settled, math.inf)):
-        if steps >= max_steps:
+    if passes(math.nextafter(settled, math.inf)):
+        settled = _climb_to_boundary(
+            settled, passes, name=name, rel_tolerance=rel_tolerance
+        )
+    return settled
+
+
+def _climb_to_boundary(
+    value: float,
+    passes: Callable[[float], bool],
+    *,
+    name: str,
+    rel_tolerance: float,
+) -> float:
+    """The largest float at or above ``value`` that still passes.
+
+    Not budgeted in steps, which is the difference between this direction and the walk
+    down, and the difference is not arbitrary. Walking *down* corrects a one-ulp
+    disagreement between a back-solve and its forward comparison, and needing five steps
+    means they are not inverses (ledger 9). Walking *up* crosses a plateau of the check's
+    own making, and the plateau's length says nothing about the back-solve.
+
+    The water window is the case that forced it. Its predicate is
+    ``cathodic <= resting + excursion <= anodic``; with ``resting = -0.55 V`` on platinum
+    the excursion at the boundary is 0.05 V, so the sum is two numbers of very different
+    size and its ulp is an order of magnitude larger than the excursion's. A run of
+    consecutive amplitudes then maps to the same peak float, all passing, and the seed
+    sits more than four floats below the top of the run. Measured: 7 of 216 valid
+    (material, resting potential, polarity, diameter) configurations, all near a window
+    edge.
+
+    So the bound is *relative*, not a step count: an exponential bracket in ulps, then a
+    bisection. A seed further than ``rel_tolerance`` below the boundary is a wrong
+    back-solve rather than a plateau, and still raises.
+    """
+    low = value
+    offset = math.ulp(value)
+    budget = abs(value) * rel_tolerance
+    while True:
+        # `max` guarantees progress: `low + offset` can round back to `low`.
+        high = max(low + offset, math.nextafter(low, math.inf))
+        if not passes(high):
+            break
+        low = high
+        offset *= 2.0
+        if offset > budget:
             raise LimitDidNotSettle(
                 f"{name}: the back-solved limit {value!r} still passes its own check "
-                f"{max_steps} steps above {settled!r}, so it is not the boundary and the "
-                f"reported limit would be lower than the limit."
+                f"more than {rel_tolerance:g} of its own size above it, at {low!r}. A "
+                f"plateau in the check's own arithmetic is a few floats wide; this is a "
+                f"back-solve that does not invert its forward comparison, and the "
+                f"reported limit would be materially lower than the limit."
             )
-        settled = math.nextafter(settled, math.inf)
-        steps += 1
 
-    return settled
+    while True:
+        middle = low + (high - low) / 2.0
+        if middle <= low or middle >= high:
+            return low
+        if passes(middle):
+            low = middle
+        else:
+            high = middle
 
 
 def format_limit(value: float, sig: int = 4) -> str:

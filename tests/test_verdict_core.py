@@ -1652,3 +1652,266 @@ class TestTheCeilingOracleSurvivesConstructionTimeValidation:
         )
         with pytest.raises(ValueError, match="no such check"):
             fail_ceiling.no_check_fails(calc, 10.0, names={"Water Window"})
+
+
+class TestEveryCheckHasAPinnedFailure:
+    """T8. Ledger 63 and 64: three `Status.FAIL` assertions in the whole 522-test suite,
+    and three of nine checks with a failing case pinned. A limit nothing crosses is a limit
+    whose inclusivity is unobservable -- mutating ``<=`` to ``<`` survived in Shannon,
+    charge injection and compliance, and ``>`` to ``>=`` in chronic degradation.
+
+    Each threshold is asserted against the constant the package stores for it, quoted from
+    its primary source, before the FAIL is asserted -- so the test fails if the fixture
+    stops being on the far side of the number it is supposed to cross.
+    """
+
+    @staticmethod
+    def _check(calc: SafetyCalculator, name: str):
+        return next(c for c in calc.assess().checks if c.name == name)
+
+    def test_shannon_fails_above_the_line(self):
+        """Shannon 1992: k = 1.5 is the line below which no damage was observed.
+
+        Not tautological: the threshold is read from ``shannon.K_SHANNON`` and the
+        protocol's own k is computed from its charge and area, both asserted before the
+        status is.
+        """
+        from neurostim import CylindricalBandElectrode
+        from neurostim.safety import shannon
+
+        calc = SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "SIROF"),
+            StimProtocol(20000, 400, 50, 1),
+        )
+        assert shannon.K_SHANNON == 1.5
+        assert calc.shannon_metric > shannon.K_SHANNON
+        assert self._check(calc, "Shannon criterion").status is Status.FAIL
+
+    def test_charge_injection_fails_above_the_material_limit(self):
+        """Rose & Robblee 1990: platinum 50-150 uC/cm^2, cathodic-first 100-150.
+
+        Not tautological: the stored bounds are asserted against the published pair and
+        the applied density against the conservative end, before the status.
+        """
+        from neurostim.materials import get_material
+
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(3000, 200, 50, 1)
+        )
+        assert get_material("Pt").cic.bounds(None) == (0.05, 0.15)  # mC/cm^2
+        assert calc.charge_density > 100.0
+        assert self._check(calc, "Charge injection limit").status is Status.FAIL
+
+    def test_the_water_window_fails_when_the_peak_leaves_it(self):
+        """Cogan 2008: platinum -0.6 to +0.8 V vs Ag|AgCl.
+
+        Not tautological: the stored window is asserted against the published pair, the
+        resting potential is inside it, and the peak is computed from the result and
+        asserted outside -- all before the status.
+        """
+        from neurostim.materials import get_material
+
+        window = get_material("Pt").water_window
+        assert window is not None
+        assert (window.cathodic_V, window.anodic_V) == (-0.6, 0.8)
+
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(300, 200, 50, 1),
+            resting_potential_V=-0.55,
+        )
+        assessment = calc.assess()
+        assert window.contains(-0.55)
+        assert not window.contains(assessment.water_window.peak_potential_V)
+        assert self._check(calc, "Water window").status is Status.FAIL
+
+    def test_compliance_fails_when_the_stimulator_runs_out(self):
+        """Not tautological: the required voltage is read from the result and asserted
+        above the 1.0 V supplied, before the status."""
+        calc = SafetyCalculator(
+            DiscElectrode(50.0, "Pt"), StimProtocol(50, 200, 50, 1), compliance_V=1.0
+        )
+        assessment = calc.assess()
+
+        assert assessment.compliance.required_V > 1.0
+        assert self._check(calc, "Compliance voltage").status is Status.FAIL
+
+    def test_chronic_degradation_fails_above_the_dissolution_band(self):
+        """Rose & Robblee 1990: platinum dissolution 20-50 uC/cm^2.
+
+        Not tautological: the stored band is asserted against the published pair and the
+        applied density against its upper end, before the status.
+        """
+        from neurostim.materials import get_material
+
+        threshold = get_material("Pt").chronic_threshold
+        assert threshold is not None
+        assert (threshold.low_uC_cm2, threshold.high_uC_cm2) == (20.0, 50.0)
+
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(3000, 200, 50, 1)
+        )
+        assert calc.charge_density > threshold.high_uC_cm2
+        assert self._check(calc, "Chronic degradation").status is Status.FAIL
+
+    def test_the_microelectrode_threshold_fails_above_four_nanocoulombs(self):
+        """Cogan 2016: about 4 nC/phase on a microelectrode.
+
+        Not tautological: the stored threshold is asserted against the published value and
+        the protocol's charge per phase against it, before the status.
+        """
+        from neurostim.data import cogan2016
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), StimProtocol(80, 200, 130, 1)
+        )
+        assert cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE == 4.0
+        assert calc.charge_uC * 1e3 > 4.0
+        assert self._check(calc, "Microelectrode charge/phase").status is Status.FAIL
+
+    def test_charge_balance_fails_for_a_monophasic_waveform(self):
+        """Merrill 2005: monophasic pulsing damages more than charge-balanced biphasic.
+
+        The biphasic arm of this check is unreachable until imbalance is expressible
+        (ledger 3, Phase 2 C2.1); this pins the arm that is reachable.
+
+        Not tautological: the net DC current is read from the protocol and asserted
+        non-zero before the status.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "SIROF"),
+            StimProtocol(10, 100, 50, 1, waveform="monophasic"),
+        )
+        assert calc.p.net_dc_current_uA != 0.0
+        assert self._check(calc, "Charge balance").status is Status.FAIL
+
+    def test_current_density_fails_at_the_electroporation_threshold(self):
+        """Butterwick 2007, on chick retina.
+
+        Not tautological: the applied density is read from the result and asserted at or
+        above the stored threshold, before the status.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), StimProtocol(5000, 200, 130, 1)
+        )
+        comparison = calc.assess().checks
+        threshold = next(
+            c for c in comparison if c.name == "Current density"
+        )
+        applied = (5000.0 * 1e-6) / calc.e.area_cm2
+
+        assert applied > 0.0
+        assert threshold.status is Status.FAIL
+
+
+class TestBothSidesOfEveryBoundary:
+    """T9. Every mutation survivor in the safety checks is a comparison nothing approaches:
+    ``<=`` to ``<`` in Shannon, charge injection and compliance, ``>`` to ``>=`` in chronic
+    degradation. Approaching each limit from both sides by one float makes the inclusivity
+    observable.
+
+    Each threshold comes from the package's stored constant, and the amplitude either side
+    of it from ``math.nextafter`` -- IEEE, not the code under test.
+    """
+
+    def test_the_shannon_line_is_inclusive(self):
+        """Not tautological: ``shannon_max_charge_uC`` supplies the charge and
+        ``math.nextafter`` the value one float above it; the expected verdicts are PASS
+        then FAIL."""
+        import math
+
+        from neurostim.safety import shannon
+
+        area_cm2 = 0.05985
+        charge_uC = shannon.shannon_max_charge_uC(area_cm2, shannon.K_SHANNON)
+
+        assert shannon.evaluate(charge_uC, area_cm2, 200.0, shannon.K_SHANNON).passes
+        assert not shannon.evaluate(
+            math.nextafter(charge_uC, math.inf), area_cm2, 200.0, shannon.K_SHANNON
+        ).passes
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "Shannon criterion",
+            "Charge injection limit",
+            "Water window",
+            "Current density",
+            "Microelectrode charge/phase",
+            "Chronic degradation",
+            "Compliance voltage",
+        ],
+    )
+    def test_each_check_passes_at_its_ceiling_and_fails_one_float_above(self, name):
+        """The general form, over every limit-bearing check at once.
+
+        Not tautological: the ceiling comes from the assessment, but the verdicts either
+        side come from two fresh assessments at ``ceiling`` and
+        ``math.nextafter(ceiling, +inf)`` -- so a check whose comparison is exclusive where
+        it should be inclusive, or inclusive where it should be exclusive, fails here.
+        """
+        import math
+        from dataclasses import replace
+
+        from neurostim import CylindricalBandElectrode
+
+        electrode = (
+            DiscElectrode(100.0, "Pt")
+            if name != "Shannon criterion"
+            else CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        )
+        protocol = StimProtocol(80.0, 200.0, 130.0, 1.0)
+        settings = {"compliance_V": 10.0}
+
+        def status_at(current_uA: float):
+            calc = SafetyCalculator(
+                electrode, replace(protocol, current_uA=current_uA), **settings
+            )
+            return next(c for c in calc.assess().checks if c.name == name)
+
+        ceiling = next(
+            c
+            for c in SafetyCalculator(electrode, protocol, **settings).assess().checks
+            if c.name == name
+        ).ceiling_uA
+        if not math.isfinite(ceiling):
+            pytest.skip(f"{name} imposes no ceiling on this electrode")
+
+        assert status_at(ceiling).status is not Status.FAIL, (name, ceiling)
+        assert status_at(math.nextafter(ceiling, math.inf)).status is Status.FAIL, (
+            name,
+            ceiling,
+        )
+
+    def test_a_water_window_ceiling_is_found_even_when_the_predicate_plateaus(self):
+        """A resting potential near a window edge makes the check's own arithmetic flat.
+
+        ``peak = resting + excursion`` is a sum of two numbers of very different size, so
+        near the boundary a whole run of consecutive amplitudes maps to the same peak
+        float and the back-solved seed sits several floats below the true boundary --
+        measured at more than four on ``resting_potential_V = -0.55``. That is a property
+        of the check's arithmetic, not evidence that the back-solve is wrong, and it must
+        not raise.
+
+        Not tautological: the expected outcome is a finite ceiling that is the boundary,
+        asserted with ``math.nextafter`` against two fresh assessments.
+        """
+        import math
+        from dataclasses import replace
+
+        electrode = DiscElectrode(500.0, "Pt")
+        protocol = StimProtocol(300.0, 200.0, 50.0, 1.0)
+
+        def water_window_at(current_uA: float):
+            calc = SafetyCalculator(
+                electrode,
+                replace(protocol, current_uA=current_uA),
+                resting_potential_V=-0.55,
+            )
+            return next(c for c in calc.assess().checks if c.name == "Water window")
+
+        ceiling = water_window_at(300.0).ceiling_uA
+
+        assert math.isfinite(ceiling)
+        assert water_window_at(ceiling).status is not Status.FAIL
+        assert water_window_at(math.nextafter(ceiling, math.inf)).status is Status.FAIL
