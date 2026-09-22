@@ -3,6 +3,13 @@
 Running record of every defect found and what was done about it.
 Read this before writing code in this repo. Append new entries; never delete.
 
+**Merge policy (required by the CI ledger gate).** The `Commit` column records the hash as
+made, and `scripts/ledger_check.py` asserts every recorded hash exists in the repository
+(CI checks out with `fetch-depth: 0`). Do not squash-merge or rebase a branch whose commits
+are recorded here onto the default branch: the recorded objects become unreachable, are not
+fetched, and the gate then fails permanently on a ledger that was correct when written.
+Merge commits and direct-to-branch work are both fine.
+
 Severity: CRITICAL (wrong number reaches a user-facing safety verdict) /
 HIGH (wrong provenance, silent failure, unsound uncertainty) /
 MEDIUM (doc drift, weak test) / LOW (cosmetic).
