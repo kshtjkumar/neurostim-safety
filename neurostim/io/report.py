@@ -239,11 +239,13 @@ def build_report(
             f"({assessment.limiting_mechanism})"
         )
     )
+    incomplete = assessment.limits_incomplete_note()
     story.append(
         Paragraph(
             f"Overall assessment: {verdict}"
             + (f" {not_evaluated}" if not_evaluated else "")
-            + f" &middot; {headline}",
+            + f" &middot; {headline}"
+            + (f" &middot; {incomplete}" if incomplete and not refusal else ""),
             styles["body"],
         )
     )

@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### The limiting current was 7.07x too high, and is corrected
+
+**Anyone who used a reported limiting current from an earlier version should recompute
+it.** The headline was a minimum over three checks — Shannon, charge injection and
+compliance — while the assessment ran nine. Four checks computed a ceiling that could not
+reach it: the microelectrode charge-per-phase threshold, chronic dissolution, current
+density and the water window. On the package's own worked example — a 330/270 µm Pt ring
+at 80 µA, 200 µs, 130 Hz, 10 V compliance — it reported **141.4 µA** while Microelectrode
+charge/phase (ceiling 20.0 µA) and Chronic degradation (70.69 µA) were both in a FAIL
+state at 80 µA. The correct figure is **20.00 µA**, confirmed independently by binary
+search over the assessment's own verdicts and by Cogan et al. (2016)'s 4 nC/phase over a
+200 µs pulse.
+
+It reports 20.00 µA now, and names the check that binds — `Microelectrode charge/phase`,
+a check name, where it used to compose a phrase that could name a check that never ran.
+
+Three things qualify the number, each its own field because each says something
+different:
+
+- `unsafe_at_any_amplitude` — a check outside the limit-bearing set is FAILing, so *no*
+  amplitude is safe and no number is printed at all. A monophasic protocol is the case on
+  record; the package used to print 15.3 mA for one.
+- `limits_incomplete` — a limit-bearing check did not run, so the true limit may be lower
+  than the one reported.
+- `limiting_current_by_kind` — which of tissue, electrode-acute, electrode-chronic or
+  instrument binds, since a user can change one and not the others.
+
+Every reported limit also **floors** now instead of rounding to nearest. `141.37167 µA`
+printed as "141.4 µA", and programming 141.4 µA FAILed the check whose maximum it claimed
+to be.
+
 ## 0.15.0 — a permissive setting could improve the verdict
 
 Reading a generated report surfaced a defect no test was watching for. On 316LVM,

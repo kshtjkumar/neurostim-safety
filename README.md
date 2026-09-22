@@ -39,8 +39,10 @@ print(calc.describe())
 
 ```
 Overall: FAIL (1 check not evaluated: Shannon criterion)
-Limiting current: 141.3 uA (Pt charge-injection limit)
+Limiting current: 20.00 uA (Microelectrode charge/phase)
   across published ranges: 141.3-212.0 uA (Shannon k 1.5-2.0, full material range)
+  by kind: tissue 20.00 uA, electrode-acute 141.3 uA, electrode-chronic 70.68 uA, instrument 965.3 uA
+  INCOMPLETE: 1 limit-bearing check did not run (Shannon criterion), so the true limit may be lower
 
 [NOT_EVALUATED] Shannon criterion: not applicable: 0.000283 cm^2 is below the macro/micro boundary (k would read -0.04)
 [      CAUTION] Charge injection limit: 56.59 uC/cm^2 of 100 uC/cm^2 (57 % used)
@@ -144,7 +146,7 @@ Published limits are ranges, not numbers. Cogan gives platinum as a factor of th
 Rather than hide that behind the `policy` setting, the assessment reports both:
 
 ```
-Limiting current: 141.3 uA (Pt charge-injection limit)
+Limiting current: 20.00 uA (Microelectrode charge/phase)
   across published ranges: 141.3-212.0 uA (Shannon k 1.5-2.0, full material range)
 ```
 

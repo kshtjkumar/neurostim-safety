@@ -624,15 +624,23 @@ class TestEveryRenderSiteFloors:
         )
 
     def test_describe_floors_the_headline(self):
-        """Not tautological: "141.4" is what ``:.4g`` prints today and is asserted absent;
-        "141.3" is the floored value, computed by hand from 141.37166941154072."""
-        line = next(
-            row
-            for row in self._worked_example().describe().splitlines()
-            if row.startswith("Limiting current:")
+        """Not tautological: "141.4" is what ``:.4g`` prints and is asserted absent;
+        "141.3" is the floored value, computed by hand from 141.37166941154072.
+
+        The charge-injection ceiling moved off the headline at C1.6 -- the binding check
+        on this electrode is Microelectrode charge/phase at 20 uA -- so the flooring is
+        asserted where that number is still printed, on the per-kind line, and the
+        headline is checked for the four significant digits flooring promises.
+        """
+        lines = self._worked_example().describe().splitlines()
+        headline = next(
+            row for row in lines if row.startswith("Limiting current:")
         )
-        assert "141.3" in line
-        assert "141.4" not in line
+        by_kind = next(row for row in lines if row.strip().startswith("by kind:"))
+
+        assert "20.00 uA" in headline
+        assert "141.3" in by_kind
+        assert "141.4" not in by_kind
 
     def test_describe_floors_both_ends_of_the_published_range(self):
         """Not tautological: 141.37166941154072 and 212.05750411731108 floor by hand to
@@ -1072,12 +1080,306 @@ class TestUnsafeAtAnyAmplitude:
         """The refusal must fire only where it belongs.
 
         Not tautological: the worked example's witness is empty (asserted above), and the
-        expected rendering is the floored 141.3 from C1.3.
+        expected rendering is the floored 20.00 -- Cogan 2016's 4 nC/phase over 200 us.
         """
         line = next(
             row
             for row in self._worked_example().describe().splitlines()
             if row.startswith("Limiting current:")
         )
-        assert "141.3" in line
+        assert "20.00" in line
         assert "no amplitude is safe" not in line.lower()
+
+
+class TestLimitingCurrentIsTheMinimumOverLimitBearingChecks:
+    """T1 and T2b. Ledger 1 and 66: the headline was a minimum over three candidates while
+    nine checks ran, so four computed limits could not reach it.
+
+    On the worked example the package reported 141.37 uA while Microelectrode charge/phase
+    (ceiling 20.0) and Chronic degradation (ceiling 70.69) were both in a FAIL state at
+    80 uA -- a 7.07x overstatement of the maximum safe current.
+    """
+
+    @staticmethod
+    def _worked_example() -> SafetyCalculator:
+        from neurostim import RingElectrode
+
+        return SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+
+    def test_the_worked_example_limit_is_twenty_microamps(self):
+        """T1. Pinned twice: to an independent binary search, and to the published
+        constant behind the binding check.
+
+        Not tautological: the oracle bisects over ``assess().failed`` restricted to the
+        seven limit-bearing names and reads no package-computed number; and 20.0 is
+        Cogan 2016's 4 nC/phase divided by the 200 us pulse -- ``4e-9 C / 200e-6 s =
+        2e-5 A``, arithmetic that does not involve the package at all.
+
+        The precondition is **asserted, not assumed**: without it T1 is unsatisfiable for
+        any protocol with an amplitude-independent failure, and silently narrowing the
+        parametrisation would hide exactly the case C1.5 exists to fix.
+        """
+        from oracles.fail_ceiling import fail_ceiling_uA
+
+        from neurostim.data import cogan2016
+        from neurostim.safety import LIMIT_BEARING
+
+        calc = self._worked_example()
+        assessment = calc.assess()
+
+        assert not assessment.unsafe_at_any_amplitude
+
+        expected = fail_ceiling_uA(calc, names=LIMIT_BEARING)
+        assert assessment.limiting_current_uA == pytest.approx(expected, rel=1e-9)
+        assert assessment.limiting_current_uA > 0
+        assert assessment.limiting_current_uA == pytest.approx(20.0)
+        assert (
+            cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE * 1e-9 / 200e-6 * 1e6
+        ) == 20.0
+
+    def test_the_mechanism_names_the_check_that_binds(self):
+        """Not tautological: the expected name is written out and is a check name, where
+        today's answer is a hand-made string ("Pt charge-injection limit") naming a check
+        that is not the binding one."""
+        assessment = self._worked_example().assess()
+
+        assert assessment.limiting_mechanism == "Microelectrode charge/phase"
+
+    def test_the_named_mechanism_is_always_a_check_that_ran(self):
+        """T3, ledger 1 §9b.1. ``DiscElectrode(40, "PEDOT")`` at 200 us reported
+        99.6724 uA "(Shannon tissue-damage criterion)" while Shannon is NOT_EVALUATED.
+
+        Not tautological: the status of the named check is looked up in the assessment and
+        asserted to be something other than NOT_EVALUATED, across several configurations
+        chosen to make different checks bind.
+        """
+        from neurostim import CylindricalBandElectrode, RingElectrode
+
+        cases = [
+            self._worked_example(),
+            SafetyCalculator(DiscElectrode(40.0, "PEDOT"), StimProtocol(80, 200, 130, 1)),
+            SafetyCalculator(
+                CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+                StimProtocol(3000.0, 60.0, 130.0, 1.0),
+                compliance_V=10.0,
+            ),
+            SafetyCalculator(
+                RingElectrode(330.0, 270.0, "Pt"),
+                StimProtocol(1.0, 20.0, 130.0, 1.0),
+                compliance_V=1.0,
+            ),
+        ]
+        for calc in cases:
+            assessment = calc.assess()
+            named = {c.name: c for c in assessment.checks}
+            mechanism = assessment.limiting_mechanism
+
+            assert mechanism in named, (calc.e, mechanism)
+            assert named[mechanism].status is not Status.NOT_EVALUATED, (
+                calc.e,
+                mechanism,
+            )
+
+    def test_the_pedef_case_moves_to_the_check_that_actually_binds(self):
+        """The value half of T3, not just the label.
+
+        Not tautological: 99.67240473569454 is the number the package printed and is
+        asserted absent; 20.0 is the independently pinned microelectrode ceiling.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(40.0, "PEDOT"), StimProtocol(80, 200, 130, 1)
+        )
+        assessment = calc.assess()
+
+        assert assessment.limiting_current_uA == pytest.approx(20.0)
+        assert assessment.limiting_mechanism == "Microelectrode charge/phase"
+
+    def test_reassessing_at_the_reported_limit_fails_nothing(self):
+        """T2b. The promise the headline makes, over 9 materials x 3 policies x 2
+        polarities.
+
+        Not tautological: it programmes the package's own reported number back in and asks
+        the assessment -- a different object, built from a different protocol -- whether
+        anything FAILs. A limit that is one ulp high, or that omits a candidate, fails
+        here.
+        """
+        from dataclasses import replace
+
+        from neurostim.materials import MATERIALS
+
+        electrode = DiscElectrode(100.0, "Pt")
+        base = StimProtocol(80.0, 200.0, 130.0, 1.0)
+        for material in MATERIALS:
+            for policy in ("conservative", "nominal", "optimistic"):
+                for anodic_first in (False, True):
+                    protocol = replace(base, anodic_first=anodic_first)
+                    calc = SafetyCalculator(
+                        electrode,
+                        protocol,
+                        material=material,
+                        policy=policy,  # type: ignore[arg-type]
+                        compliance_V=10.0,
+                    )
+                    assessment = calc.assess()
+                    assert not assessment.unsafe_at_any_amplitude
+                    limit = assessment.limiting_current_uA
+                    assert limit > 0, (material, policy)
+
+                    at_limit = SafetyCalculator(
+                        electrode,
+                        replace(protocol, current_uA=limit),
+                        material=material,
+                        policy=policy,  # type: ignore[arg-type]
+                        compliance_V=10.0,
+                    ).assess()
+                    assert not at_limit.failed, (
+                        material,
+                        policy,
+                        anodic_first,
+                        limit,
+                        [c.name for c in at_limit.failed],
+                    )
+
+    def test_the_restriction_to_limit_bearing_checks_is_load_bearing(self):
+        """The monophasic companion, where the two oracle forms diverge.
+
+        Not tautological: the two expected values are the oracle's own two answers, and
+        they differ by fifteen orders of magnitude -- the restricted one is what the
+        package's attribute must equal, the unrestricted one is what
+        ``unsafe_at_any_amplitude`` is about. A test written against the unrestricted form
+        would demand 0.0 here and would still pass on the worked-example ring, where both
+        forms answer 20.0.
+        """
+        from oracles.fail_ceiling import fail_ceiling_uA
+
+        from neurostim import CylindricalBandElectrode
+        from neurostim.safety import LIMIT_BEARING
+
+        calc = SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+            compliance_V=10.0,
+        )
+
+        assert fail_ceiling_uA(calc) == 0.0
+        restricted = fail_ceiling_uA(calc, names=LIMIT_BEARING)
+        assert restricted == pytest.approx(15285.50941588086, rel=1e-12)
+        assert calc.assess().limiting_current_uA == pytest.approx(restricted, rel=1e-9)
+
+        # ...and it is still not presented as a number anywhere (C1.5).
+        assert calc.report()["limiting_current_uA"] is None
+
+
+class TestLimitsIncompleteAndByKind:
+    """A limit over a knowingly-incomplete candidate set is ledger 1 in a new place, and a
+    single scalar hides which of four different things binds (fix plan D3)."""
+
+    @staticmethod
+    def _worked_example() -> SafetyCalculator:
+        from neurostim import RingElectrode
+
+        return SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+
+    def test_limits_incomplete_is_set_when_a_limit_bearing_check_did_not_run(self):
+        """Not tautological: the premise -- Shannon is NOT_EVALUATED here and Shannon is
+        limit-bearing -- is asserted from the assessment and from ``LIMIT_BEARING``
+        separately, and the flag is checked against their conjunction."""
+        from neurostim.safety import LIMIT_BEARING
+
+        assessment = self._worked_example().assess()
+        skipped = {c.name for c in assessment.not_evaluated}
+
+        assert "Shannon criterion" in skipped
+        assert "Shannon criterion" in LIMIT_BEARING
+        assert assessment.limits_incomplete is True
+
+    def test_limits_incomplete_is_clear_when_every_limit_bearing_check_ran(self):
+        """The flag must discriminate.
+
+        Not tautological: the fixture is a 250 um Pt disc in the transition band with a
+        compliance voltage, where all nine checks run, and the expected value is the
+        opposite of the test above.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(250.0, "Pt"),
+            StimProtocol(5, 200, 130, 1),
+            compliance_V=10.0,
+        )
+        assessment = calc.assess()
+
+        assert assessment.not_evaluated == ()
+        assert assessment.limits_incomplete is False
+
+    def test_the_headline_is_the_minimum_of_the_per_kind_limits(self):
+        """Not tautological: the four per-kind values are compared against a minimum
+        recomputed here from the checks' own ceilings grouped by kind, and the headline
+        against the minimum of those four."""
+        from neurostim.safety import LIMIT_BEARING
+
+        assessment = self._worked_example().assess()
+        expected: dict[str, float] = {}
+        for check in assessment.checks:
+            if check.name in LIMIT_BEARING:
+                expected[check.kind] = min(
+                    expected.get(check.kind, float("inf")), check.ceiling_uA
+                )
+
+        assert assessment.limiting_current_by_kind == expected
+        assert assessment.limiting_current_uA == min(expected.values())
+
+    def test_the_per_kind_limits_disagree_where_it_matters(self):
+        """The decomposition earns its place only if the four numbers differ.
+
+        Not tautological: the expected values are the per-check ceilings pinned in
+        ``tests/test_oracles.py`` -- 20.0 tissue, 141.37 electrode-acute, 70.69
+        electrode-chronic -- written out here.
+        """
+        by_kind = self._worked_example().assess().limiting_current_by_kind
+
+        assert by_kind["tissue"] == pytest.approx(20.0)
+        assert by_kind["electrode-acute"] == pytest.approx(141.37166941154072)
+        assert by_kind["electrode-chronic"] == pytest.approx(70.68583470577036)
+        assert by_kind["instrument"] == pytest.approx(965.3764143567779)
+
+    def test_describe_states_both(self):
+        """Not tautological: two literal substrings, one naming the check that did not
+        run and one carrying a per-kind number, against a rendering that has neither."""
+        text = self._worked_example().describe()
+
+        assert "20.00 uA (Microelectrode charge/phase)" in text
+        assert "Shannon criterion" in text
+        assert "INCOMPLETE" in text
+        assert "electrode-chronic 70.68 uA" in text
+
+    def test_the_json_carries_both(self):
+        """Not tautological: the expected keys and one expected value are written out."""
+        import json
+
+        from neurostim.io import report_to_json
+
+        payload = json.loads(report_to_json(self._worked_example()))
+
+        assert payload["limits_incomplete"] is True
+        assert payload["limiting_current_by_kind"]["tissue"] == pytest.approx(20.0)
+        assert payload["results"]["limiting_current_uA"] == pytest.approx(20.0)
+
+    def test_the_pdf_and_the_gui_headline_say_the_limit_may_be_lower(self, tmp_path):
+        """Not tautological: both surfaces are rendered and searched for the literal
+        marker, which neither carries today."""
+        pytest.importorskip("PyQt6")
+        from neurostim.gui.app import headline_text
+
+        calc = self._worked_example()
+        text = pdf_text(calc, tmp_path / "incomplete.pdf")
+
+        assert "20.00" in text
+        assert "incomplete" in text.lower()
+        assert "incomplete" in headline_text(calc.assess()).lower()

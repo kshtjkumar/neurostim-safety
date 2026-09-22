@@ -298,19 +298,85 @@ class SafetyAssessment:
         return f"no amplitude is safe: {names} {verb} at every amplitude"
 
     @property
-    def limiting_current_uA(self) -> float:
-        """Lowest current limit across every check that produces one.
+    def _limit_bearing(self) -> tuple[Check, ...]:
+        """The checks whose verdict moves with amplitude, in emission order."""
+        return tuple(c for c in self.checks if c.name in LIMIT_BEARING)
 
-        This is the number to programme against: it is the binding constraint, whichever
-        physical mechanism happens to impose it.
+    @property
+    def limiting_current_uA(self) -> float:
+        """Highest amplitude at which no limit-bearing check FAILs.
+
+        The minimum over all seven of :data:`LIMIT_BEARING`, not over the three it used to
+        be. Shannon, charge injection and compliance were the whole candidate set while
+        nine checks ran, so four computed ceilings could not reach the headline: on the
+        worked example that reported 141.37 uA while Microelectrode charge/phase (ceiling
+        20.0) and Chronic degradation (70.69) were both FAILing at 80 uA -- a 7.07x
+        overstatement, independently confirmed by binary search (ledger 1, 66).
+
+        **This is not the same as "safe", and it is not the number to programme against
+        without reading the rest.** Three things qualify it, each with its own field
+        because each carries a different instruction:
+
+        * :attr:`unsafe_at_any_amplitude` -- there is no safe amplitude at all, and this
+          number must not be presented;
+        * :attr:`limits_incomplete` -- a limit-bearing check did not run, so the true
+          limit may be lower than this;
+        * :attr:`limiting_current_by_kind` -- which of tissue, electrode or stimulator
+          actually binds, since a user can change one and not the others.
+
+        A check that did not run contributes ``inf``, so it cannot bind; that is what
+        makes :attr:`limiting_mechanism` always name a check that ran.
         """
-        candidates = [
-            self.shannon.max_current_uA,
-            self.charge.max_current_uA,
-        ]
-        if self.compliance.evaluated:
-            candidates.append(self.compliance.max_current_uA)
-        return min(candidates)
+        return min(c.ceiling_uA for c in self._limit_bearing)
+
+    @property
+    def limits_incomplete(self) -> bool:
+        """Whether a limit-bearing check did not run, so the limit may be too high.
+
+        Distinct from :attr:`unsafe_at_any_amplitude`, which says there is no number at
+        all. This one says the number is real but computed over a candidate set known to
+        be missing a member -- which is the same defect as ledger 1, arrived at by a
+        different route, and so has to be visible rather than inferred.
+        """
+        return bool(self._limit_bearing_not_evaluated)
+
+    @property
+    def _limit_bearing_not_evaluated(self) -> tuple[str, ...]:
+        return tuple(
+            c.name for c in self.not_evaluated if c.name in LIMIT_BEARING
+        )
+
+    def limits_incomplete_note(self) -> str:
+        """Sentence naming the limit-bearing checks that did not run; empty when all did.
+
+        One renderer for :meth:`describe`, the JSON, the PDF header and the GUI headline.
+        """
+        missing = self._limit_bearing_not_evaluated
+        if not missing:
+            return ""
+        noun = "check" if len(missing) == 1 else "checks"
+        return (
+            f"INCOMPLETE: {len(missing)} limit-bearing {noun} did not run "
+            f"({', '.join(missing)}), so the true limit may be lower"
+        )
+
+    @property
+    def limiting_current_by_kind(self) -> dict[str, float]:
+        """The binding amplitude within each :data:`CheckKind`, separately.
+
+        The scalar headline stays a single minimum -- programming above the compliance
+        limit means the protocol is not delivered as specified, which invalidates every
+        other margin -- but a single number cannot say *what to change*. A user who can
+        fit a different stimulator, a user choosing a chronic electrode and a user
+        choosing an amplitude for one acute session are constrained by different rows of
+        this mapping (physics M1a, M1c).
+        """
+        by_kind: dict[str, float] = {}
+        for check in self._limit_bearing:
+            by_kind[check.kind] = min(
+                by_kind.get(check.kind, math.inf), check.ceiling_uA
+            )
+        return by_kind
 
     @property
     def limiting_current_interval_uA(self) -> Interval:
@@ -339,14 +405,33 @@ class SafetyAssessment:
 
     @property
     def limiting_mechanism(self) -> str:
-        """Which check imposes :attr:`limiting_current_uA`."""
-        options = {
-            "Shannon tissue-damage criterion": self.shannon.max_current_uA,
-            f"{self.material.key} charge-injection limit": self.charge.max_current_uA,
-        }
-        if self.compliance.evaluated:
-            options["stimulator compliance voltage"] = self.compliance.max_current_uA
-        return min(options, key=lambda key: options[key])
+        """The name of the check that imposes :attr:`limiting_current_uA`.
+
+        A check name, not a hand-written phrase. It used to be the minimum over three
+        strings built here -- "Shannon tissue-damage criterion", "Pt charge-injection
+        limit", "stimulator compliance voltage" -- which could and did name a check that
+        never ran: ``DiscElectrode(40, "PEDOT")`` at 200 us reported 99.6724 uA
+        "(Shannon tissue-damage criterion)" while the Shannon check was NOT_EVALUATED,
+        because the criterion does not apply below the macro/micro boundary (ledger 1,
+        §9b.1). A check that did not run now carries a ceiling of ``inf``, so it cannot
+        be the minimum, and the name is looked up rather than composed.
+        """
+        return min(self._limit_bearing, key=lambda c: c.ceiling_uA).name
+
+    def _by_kind_line(self) -> str:
+        """The per-kind limits in a fixed order, so the line is stable run to run."""
+        order = ("tissue", "electrode-acute", "electrode-chronic", "instrument")
+        by_kind = self.limiting_current_by_kind
+        return ", ".join(
+            f"{kind} "
+            + (
+                "no limit"
+                if math.isinf(by_kind[kind])
+                else f"{format_limit(by_kind[kind])} uA"
+            )
+            for kind in order
+            if kind in by_kind
+        )
 
     def describe(self) -> str:
         """Full multi-line report."""
@@ -373,7 +458,11 @@ class SafetyAssessment:
                 f"  across published ranges: "
                 f"{self.limiting_current_interval_uA.describe('uA', floor=True)} "
                 f"(Shannon k {K_BOUNDS[0]}-{K_BOUNDS[1]}, full material range)",
+                f"  by kind: {self._by_kind_line()}",
             ]
+            incomplete = self.limits_incomplete_note()
+            if incomplete:
+                lines.append(f"  {incomplete}")
         lines += [
             "",
         ]

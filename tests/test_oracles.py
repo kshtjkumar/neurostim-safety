@@ -204,12 +204,27 @@ class TestFailCeiling:
         assert ceiling > 0.0
         assert fail_ceiling.brackets_the_ceiling(worked_example, ceiling)
 
-    def test_the_package_headline_is_seven_times_the_ceiling(self, worked_example) -> None:
-        """Records today's defect, so the oracle is demonstrably not restating the code."""
+    def test_the_package_headline_now_agrees_with_the_ceiling(self, worked_example) -> None:
+        """What this recorded, and what it records now.
+
+        Written in Phase 0 to record the defect while it stood: the package reported
+        141.37166941154072 uA against a ceiling of 20.0, a factor of 7.0686, while
+        Microelectrode charge/phase and Chronic degradation were both FAILing at 80 uA.
+        Keeping that assertion after C1.6 fixed it would have pinned the defect in place.
+
+        It still earns its keep, and for the same reason it did then: the oracle is
+        written from ``assess().failed`` alone and reads no package-computed limit, so an
+        agreement between the two is evidence about the package rather than a restatement
+        of it. The 7.0686 is kept as the *historical* ratio, asserted against the
+        superseded value rather than against anything live.
+        """
         assessment = worked_example.assess()
         ceiling = fail_ceiling.fail_ceiling_uA(worked_example)
-        assert assessment.limiting_current_uA == pytest.approx(141.37166941154072)
-        assert assessment.limiting_current_uA / ceiling == pytest.approx(7.0686, rel=1e-4)
+
+        assert ceiling == 20.0
+        assert assessment.limiting_current_uA == pytest.approx(ceiling, rel=1e-12)
+        assert 141.37166941154072 / ceiling == pytest.approx(7.0686, rel=1e-4)
+        # The two checks that were FAILing at 80 uA while the headline said 141 uA.
         assert {check.name for check in assessment.failed} == {
             "Microelectrode charge/phase",
             "Chronic degradation",

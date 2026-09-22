@@ -203,6 +203,13 @@ def report_to_json(
         "unsafe_at_any_amplitude": [
             c.name for c in assessment.unsafe_at_any_amplitude
         ],
+        # True means the limit was computed over a candidate set known to be missing a
+        # member, so the true limit may be lower than ``results.limiting_current_uA``.
+        "limits_incomplete": assessment.limits_incomplete,
+        "limiting_current_by_kind": {
+            kind: None if value == float("inf") else value
+            for kind, value in assessment.limiting_current_by_kind.items()
+        },
         "checks": [
             {
                 "name": c.name,

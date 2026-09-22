@@ -260,15 +260,28 @@ class TestLiveRecompute:
         high = window.detail.toPlainText()
         assert low != high
 
+    @staticmethod
+    def _ceiling(window, name: str) -> float:
+        """One named check's own ceiling, from the window's live calculator.
+
+        The headline stopped being the right probe for "is this widget wired through" at
+        C1.6: it is a minimum over seven checks, so a widget that moves exactly one of
+        them is invisible there whenever another binds. Reading the check the widget
+        actually controls is stronger evidence of wiring, not weaker.
+        """
+        return next(
+            c for c in window._calc.assess().checks if c.name == name
+        ).ceiling_uA
+
     def test_k_changes_the_shannon_verdict(self, window):
         """k is the single most consequential setting; it must be live."""
         window.shape_combo.setCurrentText("Disc")
         window._dimension_widgets["diameter_um"].setValue(1000.0)
         window.current.setValue(2000.0)
         window.k_value.setValue(shannon.K_SHANNON)
-        strict = window._calc.assess().limiting_current_uA
+        strict = self._ceiling(window, "Shannon criterion")
         window.k_value.setValue(shannon.K_DAMAGE_OBSERVED)
-        permissive = window._calc.assess().limiting_current_uA
+        permissive = self._ceiling(window, "Shannon criterion")
         assert permissive > strict
 
     def test_policy_changes_the_charge_injection_limit(self, window):
@@ -291,9 +304,9 @@ class TestLiveRecompute:
         self_key = window.material_combo.findData("Pt")
         window.material_combo.setCurrentIndex(self_key)
         window.anodic_first.setChecked(False)
-        cathodic = window._calc.assess().limiting_current_uA
+        cathodic = self._ceiling(window, "Charge injection limit")
         window.anodic_first.setChecked(True)
-        anodic = window._calc.assess().limiting_current_uA
+        anodic = self._ceiling(window, "Charge injection limit")
         assert anodic != cathodic
 
 

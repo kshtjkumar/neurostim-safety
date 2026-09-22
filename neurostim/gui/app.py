@@ -138,10 +138,12 @@ def headline_text(assessment: SafetyAssessment) -> str:
             f"({assessment.limiting_mechanism})"
         )
     )
+    incomplete = assessment.limits_incomplete_note()
     return (
         f"{assessment.status.value}"
         + (f" {not_evaluated}" if not_evaluated else "")
         + f" - {limit}"
+        + (f" - {incomplete}" if incomplete and not refusal else "")
     )
 
 

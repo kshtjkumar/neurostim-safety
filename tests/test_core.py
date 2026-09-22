@@ -303,19 +303,26 @@ class TestAssessment:
         assert balance.status is Status.FAIL
 
     def test_limiting_mechanism_matches_limiting_current(self):
+        """The named mechanism is the check whose own ceiling is the reported limit.
+
+        Rewritten at C1.6. The previous version recomputed ``min()`` over the same three
+        candidates the code used, so it was structurally incapable of noticing the four
+        limits the code omitted -- ledger 66 records it as the tautology that let a 7.07x
+        overstatement stand. This version looks the named check up in the assessment
+        instead, which a wrong name breaks even when the number is right. The
+        non-tautological pin on the value itself is in ``tests/test_verdict_core.py``,
+        against an independent binary search.
+        """
         calc = SafetyCalculator(
             RingElectrode(330, 270, "Pt"),
             StimProtocol(80, 200, 130, 1),
             compliance_V=10.0,
         )
         assessment = calc.assess()
-        assert assessment.limiting_current_uA == pytest.approx(
-            min(
-                assessment.shannon.max_current_uA,
-                assessment.charge.max_current_uA,
-                assessment.compliance.max_current_uA,
-            )
-        )
+        named = {c.name: c for c in assessment.checks}[assessment.limiting_mechanism]
+
+        assert named.ceiling_uA == assessment.limiting_current_uA
+        assert named.status is not Status.NOT_EVALUATED
 
     def test_compliance_not_evaluated_without_a_voltage(self):
         calc = SafetyCalculator(DiscElectrode(500.0, "SIROF"), StimProtocol(5, 100, 50, 1))
@@ -738,12 +745,23 @@ class TestSensitivity:
         assert not by_name["Shannon k"].dominates
 
     def test_charge_limited_case_makes_the_material_matter(self):
-        """Flip the binding constraint and the CIC policy should start to dominate."""
+        """Flip the binding constraint and the CIC policy should start to dominate.
+
+        Fixture changed at C1.6. The old one -- a 500 um Pt disc at 200 us -- stopped
+        being charge-limited when the candidate set widened from three checks to seven:
+        platinum's dissolution threshold binds at 490.87 uA, below the charge-injection
+        ceiling at every policy, so the policy no longer moves the headline. That is the
+        fix working, not a regression. Ta2O5 has no dissolution threshold on record and a
+        low charge-injection capacity, so at 1 ms the CIC is genuinely what binds --
+        asserted here before the fold is read.
+        """
         from neurostim import sensitivity
 
         calc = SafetyCalculator(
-            DiscElectrode(500.0, "Pt"), StimProtocol(500, 200, 50, 1)
+            DiscElectrode(500.0, "Ta2O5"), StimProtocol(50.0, 1000.0, 50.0, 1.0)
         )
+        assert calc.assess().limiting_mechanism == "Charge injection limit"
+
         by_name = {r.parameter: r for r in sensitivity.analyse(calc)}
         assert by_name["CIC policy"].fold > 1.0
 
