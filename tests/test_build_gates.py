@@ -203,7 +203,12 @@ def test_ci_fetches_the_full_history_for_the_ledger_gate() -> None:
     """
     lint = _ci_job("lint")
     assert "ledger_check.py" in lint, "this test guards the job that runs the gate"
-    assert "fetch-depth: 0" in lint
+    executable = [
+        line for line in lint.splitlines() if not line.lstrip().startswith("#")
+    ]
+    assert any("fetch-depth: 0" in line for line in executable), (
+        "a commented-out setting is not a setting"
+    )
 
 
 # --- the generated README transcript -------------------------------------------------
@@ -568,6 +573,75 @@ class TestLedgerGate:
         )
         assert result.returncode == 1, result.stdout + result.stderr
         assert "0000000" in result.stderr
+
+    def test_a_copy_sitting_inside_someone_elses_checkout_is_not_that_checkout(
+        self, tmp_path: Path
+    ) -> None:
+        """``git`` walks upward, so the probe must ask WHICH repository it found.
+
+        An sdist unpacked into a working directory, a vendored copy, a monorepo subtree:
+        the gate is then not at a repository root but git answers about the enclosing one,
+        and the ledger's ids get resolved against a history that was never going to
+        contain them. Every recorded id fails, which is the confusing failure this
+        degradation exists to remove.
+        """
+        outer = tmp_path / "outer"
+        (outer / "vendored").mkdir(parents=True)
+        for command in (
+            ["git", "init", "-q", "."],
+            ["git", "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-q",
+             "--allow-empty", "-m", "x"],
+        ):
+            subprocess.run(command, cwd=outer, check=True, capture_output=True)
+        transplanted = _transplant_ledger_check(outer / "vendored")
+
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | done | "
+            "0000000000000000000000000000000000000000 |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = subprocess.run(
+            [sys.executable, str(transplanted), "--ledger", str(ledger), "--plan", str(plan)],
+            capture_output=True,
+            text=True,
+            cwd=outer / "vendored",
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "not itself a git checkout" in result.stderr
+
+    def test_a_shallow_clone_still_checks_the_ids_it_does_have(self, tmp_path: Path) -> None:
+        """Skipping the assertion wholesale turns the gate off for present ids too."""
+        transplanted = _transplant_ledger_check(tmp_path)
+        for command in (
+            ["git", "init", "-q", "."],
+            ["git", "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-q",
+             "--allow-empty", "-m", "x"],
+        ):
+            subprocess.run(command, cwd=tmp_path, check=True, capture_output=True)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True,
+            check=True,
+        ).stdout.strip()
+        (tmp_path / ".git" / "shallow").touch()
+
+        rows = (
+            f"| 1 | 2026-09-22 | HIGH | a.py:1 | ok | done | {head} |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | done | "
+            "0000000000000000000000000000000000000000 |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = subprocess.run(
+            [sys.executable, str(transplanted), "--ledger", str(ledger), "--plan", str(plan)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        # One of the two could not be resolved, not both: the present id was checked.
+        assert "1 of 2 recorded commit id" in result.stderr
 
     def test_a_duplicated_entry_number_is_caught(self, tmp_path: Path) -> None:
         rows = (

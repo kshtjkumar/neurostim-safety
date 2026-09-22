@@ -20,9 +20,17 @@ What this gate asserts
    a commit that was never made is worse than one claiming nothing. This one assertion
    needs the repository's history, which is not always there: ``actions/checkout@v4``
    defaults to ``fetch-depth: 1`` and an unpacked sdist has no ``.git`` at all. Where the
-   history is unavailable the assertion is **skipped with a message naming how many ids
+   history is unavailable the assertion is **downgraded to a message naming how many ids
    went unchecked and why**, rather than failing every recorded hash on a ledger that is
-   correct. The CI workflow asks for the full history so the gate is never skipped there.
+   correct. The CI workflow asks for the full history so nothing is downgraded there.
+
+   Downgraded as narrowly as the situation allows. In a shallow clone the ids that *do*
+   resolve are still asserted and only the unresolved ones are reported, so a fabricated
+   hash alongside a real one is still caught. And the probe asks *which* repository git
+   found: ``git`` walks upward from the working directory, so a copy of this tree sitting
+   inside somebody else's checkout -- an sdist unpacked into a working directory, a
+   vendored copy, a monorepo subtree -- would otherwise have the ledger's ids resolved
+   against a history that was never going to contain them, and fail every one of them.
 
 Usage
 -----
@@ -151,30 +159,46 @@ def commit_exists(sha: str) -> bool:
     return result.returncode == 0
 
 
-def unavailable_history() -> str | None:
-    """Why recorded commit ids cannot be checked here, or ``None`` when they can.
+FULL, SHALLOW, ABSENT = "full", "shallow", "absent"
+"""How much of this repository's history is here to resolve a recorded id against."""
+
+
+def _git(*arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *arguments], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+    )
+
+
+def history_scope() -> tuple[str, str]:
+    """How much history is available, and the sentence to print when it is not all of it.
 
     ``git cat-file -e`` cannot tell "this commit was never made" from "this checkout does
     not have it", and the second is the common case: a shallow clone holds one commit and
     an unpacked sdist holds none. Asking first is what keeps a missing history from being
     reported as a ledger full of fabricated hashes.
+
+    ``--show-toplevel`` rather than a bare "is this a repository", because git searches
+    upward: the question is not whether SOME repository is above this directory but
+    whether it is this tree's own.
     """
-    probe = subprocess.run(
-        ["git", "rev-parse", "--is-shallow-repository"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if probe.returncode != 0:
-        return f"{REPO_ROOT} is not a git checkout"
-    if probe.stdout.strip() == "true":
-        return (
-            f"{REPO_ROOT} is a shallow clone -- git clone --depth, or "
-            f"actions/checkout's default fetch-depth: 1 -- so no historical object is "
-            f"present to look an id up in"
+    toplevel = _git("rev-parse", "--show-toplevel")
+    if toplevel.returncode != 0:
+        return ABSENT, f"{REPO_ROOT} is not a git checkout"
+    found = Path(toplevel.stdout.strip()).resolve()
+    if found != REPO_ROOT.resolve():
+        return ABSENT, (
+            f"{REPO_ROOT} is not itself a git checkout -- it sits inside {found}, whose "
+            f"history is a different repository's and was never going to contain these ids"
         )
-    return None
+
+    shallow = _git("rev-parse", "--is-shallow-repository")
+    if shallow.returncode == 0 and shallow.stdout.strip() == "true":
+        return SHALLOW, (
+            f"{REPO_ROOT} is a shallow clone -- git clone --depth, or actions/checkout's "
+            f"default fetch-depth: 1 -- so an id outside the fetched depth has no object "
+            f"here to be looked up in"
+        )
+    return FULL, ""
 
 
 @dataclass(frozen=True)
@@ -224,20 +248,30 @@ def check(ledger_text: str, plan_text: str) -> Outcome:
         )
 
     recorded = [row for row in table.entries if _HASH.match(row.commit)]
-    reason = unavailable_history()
-    if reason is not None:
-        notices.append(
-            f"{len(recorded)} recorded commit id(s) were NOT checked: {reason}. Every "
-            f"other assertion was made."
-        )
-    else:
-        for row in recorded:
-            if not commit_exists(row.commit):
-                failures.append(
-                    f"entry {row.number} records commit {row.commit}, which does not "
-                    f"exist in this repository"
-                )
+    scope, reason = history_scope()
+    if scope == ABSENT:
+        if recorded:
+            notices.append(
+                f"{len(recorded)} recorded commit id(s) were NOT checked: {reason}. "
+                f"Every other assertion was made."
+            )
+        return Outcome(failures, notices)
 
+    unresolved = [row for row in recorded if not commit_exists(row.commit)]
+    if scope == SHALLOW:
+        if unresolved:
+            notices.append(
+                f"{len(unresolved)} of {len(recorded)} recorded commit id(s) could not "
+                f"be resolved and were NOT treated as failures: {reason}. The rest were "
+                f"checked. Entries: {[row.number for row in unresolved]}"
+            )
+        return Outcome(failures, notices)
+
+    for row in unresolved:
+        failures.append(
+            f"entry {row.number} records commit {row.commit}, which does not exist in "
+            f"this repository"
+        )
     return Outcome(failures, notices)
 
 
