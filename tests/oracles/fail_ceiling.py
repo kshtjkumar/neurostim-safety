@@ -393,3 +393,44 @@ def _assert_each_check_fails_upwards(
             f"bisecting it would return the edge of whichever one the search landed in. "
             f"There is no ceiling to report."
         )
+
+
+def check_fail_ceiling_uA(
+    calculator: Any,
+    check_name: str,
+    *,
+    lower_uA: float = _DEFAULT_LOWER_uA,
+    upper_uA: float = _DEFAULT_UPPER_uA,
+) -> float:
+    """Largest amplitude at which one named check is not in a FAIL state.
+
+    A one-line restriction of :func:`fail_ceiling_uA`, not a second bisection. The
+    per-check form needs the same probe ladder, the same per-check suffix invariant and
+    the same ``NonMonotonePredicate`` handling as the whole-assessment form; writing it
+    again would mean two copies of one invariant, and the copy that is not exercised by
+    the ``0.0``-means-amplitude-independent tests is the one that drifts.
+
+    Semantics carry over unchanged: ``0.0`` when the check FAILs everywhere in the
+    bracket, ``inf`` when it never FAILs -- so a NOT_EVALUATED check gives ``inf``, which
+    is what a ``margin`` of ``inf`` means. A misspelled name is a ``ValueError`` from
+    :func:`failing_checks` rather than an empty restriction that would answer ``inf``.
+
+    This is the expected value for a limit-bearing check's ``margin``:
+    ``margin * current_uA`` is that check's own ceiling. A finiteness assertion is explicitly not enough -- the naive
+    ``headroom / excursion`` reading of the water-window margin is **negative** on the
+    plan's own case (-21.095 uA against a true 58.905) and finite.
+    """
+    return fail_ceiling_uA(
+        calculator, lower_uA=lower_uA, upper_uA=upper_uA, names={check_name}
+    )
+
+
+def brackets_the_check_ceiling(
+    calculator: Any, check_name: str, ceiling_uA: float
+) -> bool:
+    """Whether ``ceiling_uA`` is the boundary for one named check.
+
+    :func:`brackets_the_ceiling` restricted the same way, and total on every float for the
+    same reason: ``0.0`` and ``inf`` are answers, not boundaries.
+    """
+    return brackets_the_ceiling(calculator, ceiling_uA, names={check_name})

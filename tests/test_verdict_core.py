@@ -682,3 +682,256 @@ class TestEveryRenderSiteFloors:
         binding = [text for text in texts if "binding limit" in text]
         assert binding, texts
         assert "141.3" in binding[0]
+
+
+class TestEveryLimitBearingCheckHasAMargin:
+    """C1.4. Four of nine checks expose a margin today, so a minimum over them cannot see
+    the other three (fix plan D3, ledger 1).
+
+    ``margin`` is defined as **the ratio of the FAIL ceiling to the applied current** --
+    not the CAUTION ceiling, and not ``headroom / excursion``. The difference is not
+    cosmetic: the naive headroom reading of the water-window margin is **negative** at
+    ``resting_potential_V = 0`` (-21.095 uA against a true 58.905), which a finiteness
+    test and a one-sided ``<= 20.0`` both admit.
+    """
+
+    @staticmethod
+    def _cases():
+        from neurostim import CylindricalBandElectrode, RingElectrode
+
+        yield SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+        yield SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        yield SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        yield SafetyCalculator(
+            DiscElectrode(2000.0, "SIROF"),
+            StimProtocol(20, 400, 50, 3600),
+            compliance_V=20.0,
+        )
+
+    def test_every_limit_bearing_margin_is_its_own_fail_ceiling(self):
+        """The pin. ``margin * current`` must equal the independent per-check bisection.
+
+        Not tautological: the expected value comes from ``tests/oracles``, which reads one
+        bit per probe -- whether that named check is in ``assess().failed`` -- and never
+        reads a margin, a maximum or a limiting current.
+        """
+        from oracles.fail_ceiling import check_fail_ceiling_uA
+
+        from neurostim.safety import LIMIT_BEARING
+
+        for calc in self._cases():
+            assessment = calc.assess()
+            named = {c.name for c in assessment.checks}
+            assert named >= LIMIT_BEARING, LIMIT_BEARING - named
+            for check in assessment.checks:
+                if check.name not in LIMIT_BEARING:
+                    continue
+                expected = check_fail_ceiling_uA(calc, check.name)
+                assert check.margin * calc.p.current_uA == pytest.approx(
+                    expected, rel=1e-9
+                ), (calc.e, check.name)
+
+    def test_the_water_window_margin_is_positive_where_the_naive_reading_is_negative(
+        self,
+    ):
+        """Execution B4's case, stated as a value rather than as finiteness.
+
+        Not tautological: 58.90486225480862 uA is derived in the oracle pins from Pt's own
+        150 uC/cm^2 over its own 0.6 V cathodic limit, and -21.095 is asserted absent.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        water = next(c for c in calc.assess().checks if c.name == "Water window")
+
+        assert water.margin > 0.0
+        assert water.margin * 80.0 == pytest.approx(58.90486225480862, rel=1e-12)
+
+    def test_the_two_checks_that_had_no_margin_now_have_one(self):
+        """§6: ``assessment.json`` records ``null`` for 5 of 9 margins today.
+
+        Not tautological: the two names are written out and the assertion is finiteness
+        *plus* the ceiling identity above, which finiteness alone would not give.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        checks = {c.name: c for c in calc.assess().checks}
+        import math
+
+        assert math.isfinite(checks["Water window"].margin)
+        assert math.isfinite(checks["Chronic degradation"].margin)
+
+    def test_a_check_that_did_not_run_has_an_infinite_margin(self):
+        """NOT_EVALUATED must not contribute a ceiling to the minimum C1.6 takes.
+
+        Not tautological: the oracle answers ``inf`` for a check that never FAILs across
+        the whole bracket, and that is what is compared against.
+        """
+        import math
+
+        from oracles.fail_ceiling import check_fail_ceiling_uA
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        shannon = next(c for c in calc.assess().checks if c.name == "Shannon criterion")
+
+        assert shannon.status is Status.NOT_EVALUATED
+        assert shannon.margin == math.inf
+        assert check_fail_ceiling_uA(calc, "Shannon criterion") == math.inf
+
+    def test_the_checks_that_bear_no_limit_keep_an_infinite_margin(self):
+        """Validated envelope and Charge balance impose no ceiling on amplitude.
+
+        Not tautological: both names are written out, and the second half asserts the
+        *reason* -- their verdict does not move with amplitude -- against the oracle's
+        witness rather than against their margin.
+        """
+        import math
+
+        from oracles.fail_ceiling import LIMIT_BEARING as ORACLE_LIMIT_BEARING
+
+        from neurostim.safety import LIMIT_BEARING
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        checks = {c.name: c for c in calc.assess().checks}
+
+        assert set(checks) - LIMIT_BEARING == {"Validated envelope", "Charge balance"}
+        assert checks["Validated envelope"].margin == math.inf
+        assert checks["Charge balance"].margin == math.inf
+        assert set(ORACLE_LIMIT_BEARING) == LIMIT_BEARING
+
+
+class TestCheckKindAndProvisional:
+    """``kind`` separates the four things a limit can be about; ``provisional`` says the
+    limit is caveated (physics M1a, M1c, m6)."""
+
+    @staticmethod
+    def _calc() -> SafetyCalculator:
+        return SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+
+    def test_every_check_declares_one_of_the_four_kinds(self):
+        """Not tautological: the four labels are written out here, and the mapping from
+        each check name to its kind is written out in the next test."""
+        kinds = {c.kind for c in self._calc().assess().checks}
+        assert kinds <= {"tissue", "electrode-chronic", "electrode-acute", "instrument"}
+
+    def test_the_kind_of_each_check_is_the_one_its_source_measures(self):
+        """Not tautological: the expected mapping is stated here from what each check's
+        cited source is about -- Shannon and Butterwick measured tissue injury, the CIC
+        and water window are single-pulse interface properties, dissolution is chronic,
+        and compliance is a property of the stimulator, not of the patient."""
+        kinds = {c.name: c.kind for c in self._calc().assess().checks}
+
+        assert kinds == {
+            "Shannon criterion": "tissue",
+            "Charge injection limit": "electrode-acute",
+            "Water window": "electrode-acute",
+            "Validated envelope": "tissue",
+            "Current density": "tissue",
+            "Microelectrode charge/phase": "tissue",
+            "Chronic degradation": "electrode-chronic",
+            "Charge balance": "electrode-chronic",
+            "Compliance voltage": "instrument",
+        }
+
+    def test_the_current_density_limit_is_always_provisional(self):
+        """Its own docstring says why: the threshold is chick membrane and retina, so the
+        margin is against a preparation that is not the one being stimulated.
+
+        Not tautological: the expected value is ``True`` and the reason is the check's own
+        stated one, not a recomputation of anything.
+        """
+        density = next(
+            c for c in self._calc().assess().checks if c.name == "Current density"
+        )
+        assert density.provisional is True
+
+    def test_a_caveated_charge_injection_limit_is_provisional(self):
+        """Three distinct caveats, three fixtures, each chosen from the database itself.
+
+        * TIROF's stored CIC carries **no pulse width**, so its applicability at any
+          pulse width is unknown.
+        * Pt's was measured at 200 us, so 2000 us is ten times away from it.
+        * SS316LVM's source endorses the conservative end, so the optimistic policy
+          applies a number that source argues against.
+
+        Not tautological: each premise is asserted here against the material database
+        before the ``provisional`` flag is checked, so the test fails if the fixture stops
+        being the case it claims to be.
+        """
+        from neurostim.materials import get_material
+
+        assert get_material("TIROF").cic.pulse_width_us is None
+        assert get_material("Pt").cic.pulse_width_us == 200.0
+        assert get_material("SS316LVM").cic.recommended_policy == "conservative"
+
+        fixtures = (
+            ("TIROF", 200.0, "conservative"),
+            ("Pt", 2000.0, "conservative"),
+            ("SS316LVM", 100.0, "optimistic"),
+        )
+        for material, pulse_width_us, policy in fixtures:
+            calc = SafetyCalculator(
+                DiscElectrode(100.0, material),
+                StimProtocol(1.0, pulse_width_us, 130.0, 1.0),
+                policy=policy,  # type: ignore[arg-type]
+            )
+            charge = next(
+                c for c in calc.assess().checks if c.name == "Charge injection limit"
+            )
+            assert charge.provisional is True, (material, pulse_width_us, policy)
+
+    def test_a_verified_limit_at_its_measured_conditions_is_not_provisional(self):
+        """The flag must discriminate, not decorate.
+
+        Not tautological: Pt's CIC is verified and measured at 200 us, which is the pulse
+        width used, so the expected value is ``False`` -- the opposite of the test above.
+        """
+        charge = next(
+            c
+            for c in self._calc().assess().checks
+            if c.name == "Charge injection limit"
+        )
+        assert charge.provisional is False
+
+    def test_kind_and_provisional_reach_the_json(self):
+        """Not tautological: the keys and one expected value are written out, against a
+        payload that carries neither today."""
+        import json
+
+        from neurostim.io import report_to_json
+
+        payload = json.loads(report_to_json(self._calc()))
+        rows = {row["name"]: row for row in payload["checks"]}
+
+        assert rows["Compliance voltage"]["kind"] == "instrument"
+        assert rows["Current density"]["provisional"] is True
+        assert rows["Water window"]["margin"] is not None

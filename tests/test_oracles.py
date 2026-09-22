@@ -499,6 +499,120 @@ class TestFailCeiling:
             pytest.skip("C1.3 has not landed: the package exposes no LIMIT_BEARING yet")
         assert set(package_set) == set(fail_ceiling.LIMIT_BEARING)
 
+    def test_the_per_check_ceiling_is_pinned_to_hand_constants(self) -> None:
+        """Oracle (a), restricted to one check. Five values, each derived by hand.
+
+        ``DiscElectrode(100 um, "Pt")`` at 80 uA / 200 us, area
+        ``pi * (50e-4)^2 = 7.853981633974483e-5 cm^2``, so one microamp of a 200 us pulse
+        is ``200e-6 / A = 2.546 uC/cm^2``:
+
+        * **Microelectrode charge/phase** -- Cogan 2016's 4 nC/phase over 200 us is
+          ``4e-9 / 200e-6 = 2e-5 A = 20 uA``.
+        * **Chronic degradation** -- Pt dissolves above 50 uC/cm^2, and
+          ``50 * A / 200e-6 = 19.63 uA``.
+        * **Charge injection limit** -- the conservative Pt CIC is 100 uC/cm^2, twice the
+          dissolution threshold, so twice that current: 39.27 uA.
+        * **Water window** -- cathodic-first from 0 V, Pt's cathodic limit is -0.6 V and
+          the capacitance derived from its own optimistic 150 uC/cm^2 over that same
+          0.6 V is 250 uF/cm^2, so 150 uC/cm^2 reaches the edge: 58.90 uA.
+        * **Current density** -- Butterwick's electroporation threshold at 200 us on a
+          100 um electrode; not hand-derivable in one line, so it is pinned as measured
+          and cross-checked against the ratio to the charge-injection ceiling.
+
+        Not tautological: four of the five are a published constant divided by a pulse
+        width or multiplied by an area, written out above. None reads a package limit.
+        """
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, PULSE_WIDTH_US, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        area_cm2 = math.pi * (50e-4) ** 2
+        per_uA_uC_cm2 = PULSE_WIDTH_US * 1e-6 / area_cm2
+
+        assert fail_ceiling.check_fail_ceiling_uA(
+            calc, "Microelectrode charge/phase"
+        ) == 4.0e-9 / (PULSE_WIDTH_US * 1e-6) * 1e6
+        assert fail_ceiling.check_fail_ceiling_uA(
+            calc, "Chronic degradation"
+        ) == pytest.approx(50.0 / per_uA_uC_cm2, rel=1e-12)
+        assert fail_ceiling.check_fail_ceiling_uA(
+            calc, "Charge injection limit"
+        ) == pytest.approx(100.0 / per_uA_uC_cm2, rel=1e-12)
+        assert fail_ceiling.check_fail_ceiling_uA(
+            calc, "Water window"
+        ) == pytest.approx(150.0 / per_uA_uC_cm2, rel=1e-12)
+
+        assert fail_ceiling.check_fail_ceiling_uA(calc, "Chronic degradation") == (
+            19.634954084936204
+        )
+        assert fail_ceiling.check_fail_ceiling_uA(calc, "Water window") == (
+            58.90486225480862
+        )
+        assert fail_ceiling.check_fail_ceiling_uA(calc, "Current density") == (
+            86.42793360039114
+        )
+
+    def test_the_per_check_wrapper_is_the_whole_assessment_form_restricted(self) -> None:
+        """One invariant in one place: the wrapper must not acquire its own answer.
+
+        Not tautological: it asserts an identity between two call forms of the same
+        module, which is exactly the property a re-implementation would break -- a second
+        bisection would have its own probe ladder and its own non-monotone handling.
+        """
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, PULSE_WIDTH_US, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        for name in sorted(fail_ceiling.LIMIT_BEARING):
+            assert fail_ceiling.check_fail_ceiling_uA(calc, name) == (
+                fail_ceiling.fail_ceiling_uA(calc, names={name})
+            )
+
+    def test_a_per_check_ceiling_is_bracketed_or_is_not_a_ceiling(self) -> None:
+        """``0.0`` and ``inf`` are answers, not boundaries, for the per-check form too.
+
+        Not tautological: the two sentinel values are literals and the expected reply is
+        ``False`` for both, while a real ceiling must reply ``True``.
+        """
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, PULSE_WIDTH_US, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        ceiling = fail_ceiling.check_fail_ceiling_uA(calc, "Chronic degradation")
+        assert fail_ceiling.brackets_the_check_ceiling(
+            calc, "Chronic degradation", ceiling
+        )
+        assert not fail_ceiling.brackets_the_check_ceiling(
+            calc, "Chronic degradation", 0.0
+        )
+        assert not fail_ceiling.brackets_the_check_ceiling(
+            calc, "Chronic degradation", math.inf
+        )
+        # A check that never FAILs answers inf, which is what margin = inf means.
+        assert fail_ceiling.check_fail_ceiling_uA(calc, "Shannon criterion") == math.inf
+
+    def test_an_unknown_check_name_is_an_error_not_an_empty_restriction(self) -> None:
+        """Not tautological: the expected outcome is a raise, where the silent-failure
+        alternative would answer ``inf`` -- "this check never fails"."""
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, PULSE_WIDTH_US, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        with pytest.raises(ValueError, match="no such check"):
+            fail_ceiling.check_fail_ceiling_uA(calc, "Chronic Degradation")
+
     def test_every_constructor_argument_is_carried(self) -> None:
         """The frozen set rebuild_at checks against is today's signature, exactly."""
         import inspect

@@ -16,7 +16,10 @@ from ..protocol import StimProtocol
 from . import charge, compliance, shannon, water_window
 from .assessment import (
     CAUTION_MARGIN,
+    CHECK_KINDS,
+    LIMIT_BEARING,
     Check,
+    CheckKind,
     SafetyAssessment,
     SafetyCalculator,
     Status,
@@ -43,12 +46,15 @@ from .water_window import (
 
 __all__ = [
     "CAUTION_MARGIN",
+    "CHECK_KINDS",
     "K_CONSERVATIVE",
     "K_DEFAULT",
     "K_MODERATE",
     "K_PERMISSIVE",
+    "LIMIT_BEARING",
     "ChargeResult",
     "Check",
+    "CheckKind",
     "ComplianceResult",
     "DOUBLE_LAYER_CAPACITANCE_uF_cm2",
     "SafetyAssessment",

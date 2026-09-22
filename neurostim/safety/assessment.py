@@ -23,25 +23,89 @@ Status vocabulary
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+from typing import Literal
 
 from ..data import cogan2016
 from ..geometry.base import Electrode
 from ..materials import Material, Policy, get_material
 from ..protocol import StimProtocol
 from ..uncertainty import Interval, most_restrictive
+from ..units import charge_uC
 from . import charge as charge_mod
 from . import compliance as compliance_mod
 from . import current_density as jd_mod
 from . import envelope as envelope_mod
 from . import shannon as shannon_mod
 from . import water_window as ww_mod
-from ._limits import format_limit
+from ._limits import floor_to_pass, format_limit
 from .shannon import K_BOUNDS
 
 CAUTION_MARGIN = 2.0
 """Margin below which a passing check is downgraded to CAUTION."""
+
+CheckKind = Literal["tissue", "electrode-chronic", "electrode-acute", "instrument"]
+"""What a limit is *about*. Four answers, and they are not interchangeable.
+
+``tissue``
+    An injury threshold measured in tissue -- Shannon's separatrix through cat cortex
+    histology, Butterwick's electroporation threshold, Cogan's microelectrode
+    charge-per-phase. Exceeding one is a statement about the patient.
+``electrode-acute``
+    A single-pulse property of the interface: the charge-injection capacity and the
+    water window. Exceeding one drives irreversible reactions during the pulse.
+``electrode-chronic``
+    An accumulation over months of pulsing -- dissolution, and the DC an unbalanced
+    waveform leaves behind. Relevant to an implant, not to one acute session.
+``instrument``
+    A property of the stimulator, not of the preparation. Programme above it and the
+    protocol is not delivered as specified, which invalidates every other margin.
+
+Reported alongside the single headline rather than instead of it: a user replacing a
+stimulator cares about a different subset from a user choosing a chronic electrode
+(physics M1a, M1c).
+"""
+
+CHECK_KINDS: dict[str, CheckKind] = {
+    "Shannon criterion": "tissue",
+    "Charge injection limit": "electrode-acute",
+    "Water window": "electrode-acute",
+    "Validated envelope": "tissue",
+    "Current density": "tissue",
+    "Microelectrode charge/phase": "tissue",
+    "Chronic degradation": "electrode-chronic",
+    "Charge balance": "electrode-chronic",
+    "Compliance voltage": "instrument",
+}
+"""The kind of every check this package emits.
+
+A table rather than an argument at each construction site: each builder below returns a
+check from several branches, and a per-branch ``kind`` could disagree with itself about
+what the same check is. The kind is a property of the question, not of the answer.
+"""
+
+LIMIT_BEARING: frozenset[str] = frozenset(
+    {
+        "Shannon criterion",
+        "Charge injection limit",
+        "Water window",
+        "Current density",
+        "Microelectrode charge/phase",
+        "Chronic degradation",
+        "Compliance voltage",
+    }
+)
+"""The seven checks whose verdict depends on the amplitude, so each imposes a ceiling.
+
+``Validated envelope`` and ``Charge balance`` are excluded, and the exclusion is load
+bearing rather than tidy. Both are categorical properties of the parameter set -- how far
+the protocol sits from the conditions the Shannon fit was derived at, and whether the
+waveform recovers its charge -- so their verdicts do not move with current at all. A
+monophasic protocol FAILs Charge balance at every amplitude, which is why the limiting
+current is defined over this set and why an amplitude-independent failure has to be
+reported as "no amplitude is safe" instead of as a number (ledger 84, fix plan D3).
+"""
 
 
 class Status(str, Enum):
@@ -85,6 +149,43 @@ class Check:
     summary: str
     detail: str = ""
     margin: float = math.inf
+    """Ratio of this check's own FAIL ceiling to the applied current.
+
+    Above 1 means headroom; 0.5 means the protocol is at twice the ceiling; ``inf`` means
+    the check imposes no ceiling, either because it bears none or because it did not run.
+
+    **The FAIL ceiling, not the CAUTION ceiling, and not ``headroom / excursion``.** The
+    difference is not cosmetic: on ``DiscElectrode(100, "Pt")`` at 200 us the chronic FAIL
+    ceiling is 19.635 uA and the CAUTION ceiling 7.854; and the naive headroom reading of
+    the water-window margin is **negative** (-21.095 uA where the truth is 58.905), which
+    a finiteness test would accept.
+    """
+    ceiling_uA: float = math.inf
+    """Largest amplitude at which this check is not in a FAIL state.
+
+    Stored rather than recovered as ``margin * current_uA``: the limiting current is a
+    minimum over these, and a product that is one ulp high would name a limit that FAILs
+    its own check -- which is the defect the whole of Phase 1 is about.
+    """
+    provisional: bool = False
+    """Whether the limit rests on a constant or model this package flags as unconfirmed.
+
+    Travels with the margin so a caveated limit is visible *when it binds* (physics m6). A
+    provisional limit is not a weaker limit; it is one whose number may move when the
+    underlying measurement is made.
+    """
+
+    @property
+    def kind(self) -> CheckKind:
+        """What this check's limit is about; see :data:`CheckKind`."""
+        try:
+            return CHECK_KINDS[self.name]
+        except KeyError:
+            raise KeyError(
+                f"no kind declared for check {self.name!r}; add it to CHECK_KINDS. "
+                f"Every check must say whether its limit is about the tissue, the "
+                f"electrode or the stimulator."
+            ) from None
 
     def describe(self) -> str:
         """Multi-line rendering with the detail block indented."""
@@ -237,6 +338,121 @@ class SafetyAssessment:
             "-" * 72,
         ]
         return "\n".join(lines)
+
+
+# --- per-check ceilings ------------------------------------------------------------
+#
+# Every limit-bearing check needs the largest amplitude at which it does not FAIL, or the
+# minimum in `limiting_current_uA` cannot see it. Four of the seven already had one, as
+# the back-solve behind their own result; the four below did not, and their `margin` was
+# `inf` -- which is how a check that FAILs at 80 uA contributed nothing to a limit of
+# 141 uA (ledger 1).
+#
+# Each is floored onto the boundary of that check's own forward comparison by
+# `_limits.floor_to_pass`, so `margin * current` is the ceiling rather than a value near
+# it, and so programming the reported limit cannot FAIL.
+
+
+def _margin_from_ceiling(ceiling_uA: float, current_uA: float) -> float:
+    """Ceiling as a multiple of the applied current."""
+    if current_uA <= 0 or not math.isfinite(current_uA):
+        return math.inf
+    return ceiling_uA / current_uA
+
+
+def _water_window_ceiling_uA(
+    result: ww_mod.WaterWindowResult, protocol: StimProtocol, area_cm2: float
+) -> float:
+    """Largest amplitude whose peak potential stays inside the window.
+
+    Monotone in current only because the resting potential is inside the window, which
+    ``SafetyCalculator`` now enforces at construction: from outside it, a small pulse
+    drives the interface back in and a large one out the other side, and "the largest
+    amplitude that passes" would not be the answer to any question (see
+    ``water_window.validate_resting_potential_V``).
+    """
+    window = result.window
+    if window is None:
+        return math.inf
+    sign = 1.0 if protocol.anodic_first else -1.0
+    seed_density = ww_mod.max_charge_density_in_window_uC_cm2(
+        result.material_key,
+        anodic_first=protocol.anodic_first,
+        resting_potential_V=result.resting_potential_V,
+        capacitance_uF_cm2=result.capacitance_uF_cm2,
+    )
+
+    def stays_in_window(current_uA: float) -> bool:
+        density = charge_mod.charge_density_uC_cm2(
+            charge_uC(current_uA, protocol.pulse_width_us), area_cm2
+        )
+        excursion = ww_mod.polarisation_V(density, result.capacitance_uF_cm2)
+        return window.contains(result.resting_potential_V + sign * excursion)
+
+    return floor_to_pass(
+        seed_density * area_cm2 / (protocol.pulse_width_us * 1e-6),
+        stays_in_window,
+        name="Water window",
+    )
+
+
+def _chronic_ceiling_uA(
+    material: Material, protocol: StimProtocol, area_cm2: float
+) -> float:
+    """Largest amplitude at or below the material's dissolution threshold."""
+    threshold = material.chronic_threshold
+    if threshold is None:
+        return math.inf
+    high = threshold.high_uC_cm2
+    return floor_to_pass(
+        high * area_cm2 / (protocol.pulse_width_us * 1e-6),
+        lambda current_uA: charge_mod.charge_density_uC_cm2(
+            charge_uC(current_uA, protocol.pulse_width_us), area_cm2
+        )
+        <= high,
+        name="Chronic degradation",
+    )
+
+
+def _current_density_ceiling_uA(
+    result: jd_mod.CurrentDensityResult, area_cm2: float
+) -> float:
+    """Largest amplitude strictly below the electroporation threshold.
+
+    Strictly: the check FAILs at ``applied >= threshold``, so the amplitude that lands
+    exactly on the threshold is already a FAIL and the ceiling is the float below it.
+    """
+    comparison = result.threshold
+    if comparison is None:  # pragma: no cover - evaluate() always supplies one
+        return math.inf
+    threshold = comparison.threshold_A_per_cm2
+    return floor_to_pass(
+        threshold * area_cm2 * 1e6,
+        lambda current_uA: jd_mod.average_current_density_A_per_cm2(
+            current_uA, area_cm2
+        )
+        < threshold,
+        name="Current density",
+    )
+
+
+def _microelectrode_ceiling_uA(electrode: Electrode, protocol: StimProtocol) -> float:
+    """Largest amplitude at or below Cogan 2016's microelectrode damage threshold.
+
+    ``inf`` outside the microelectrode regime, and that is not a shortcut: above the
+    boundary the check reports NOT_EVALUATED, and inside the transition band it reports
+    CAUTION at every amplitude. In neither case is there an amplitude at which it starts
+    to FAIL, so neither imposes a ceiling.
+    """
+    if not cogan2016.is_microelectrode(electrode.area_cm2):
+        return math.inf
+    threshold_nC = cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE
+    return floor_to_pass(
+        threshold_nC * 1e-3 / (protocol.pulse_width_us * 1e-6),
+        lambda current_uA: charge_uC(current_uA, protocol.pulse_width_us) * 1e3
+        <= threshold_nC,
+        name="Microelectrode charge/phase",
+    )
 
 
 def _shannon_check(
@@ -824,7 +1040,7 @@ class SafetyCalculator:
             capacitance_uF_cm2=self.capacitance_uF_cm2,
         )
 
-        checks = (
+        raw_checks = (
             _shannon_check(
                 shannon_result, self.k, self.p, self.e.area_cm2, envelope_result
             ),
@@ -836,6 +1052,78 @@ class SafetyCalculator:
             _chronic_check(self.material, charge_result.charge_density_uC_cm2),
             _charge_balance_check(self.p),
             _compliance_check(compliance_result),
+        )
+
+        # The ceiling and the caveat are attached here rather than inside each builder:
+        # a builder returns its check from up to four branches, and a per-branch ceiling
+        # is four places for the same number to drift apart. A check that did not run
+        # imposes no ceiling whatever its own back-solve says -- Shannon's max current is
+        # a finite number on a microelectrode, where the check is NOT_EVALUATED because
+        # the criterion does not apply.
+        ceilings = {
+            "Shannon criterion": shannon_result.max_current_uA,
+            "Charge injection limit": charge_result.max_current_uA,
+            "Water window": _water_window_ceiling_uA(
+                ww_result, self.p, self.e.area_cm2
+            ),
+            "Current density": _current_density_ceiling_uA(jd_result, self.e.area_cm2),
+            "Microelectrode charge/phase": _microelectrode_ceiling_uA(self.e, self.p),
+            "Chronic degradation": _chronic_ceiling_uA(
+                self.material, self.p, self.e.area_cm2
+            ),
+            "Compliance voltage": compliance_result.max_current_uA,
+        }
+        caveats = {
+            # k above Shannon's own 1.5, a protocol far from the fit conditions, or a
+            # protocol outside the validated envelope: the limit is computed, but the
+            # criterion's authors do not stand behind the extrapolation.
+            "Shannon criterion": bool(shannon_mod.k_warning(self.k))
+            or bool(
+                shannon_mod.conditions_warning(
+                    self.p.pulse_width_us, self.p.frequency_hz
+                )
+            )
+            or not envelope_result.supports_unqualified_pass,
+            # An unverified constant, a pulse width far from the one it was measured at,
+            # or a policy the source argues against.
+            "Charge injection limit": bool(charge_result.condition_warning)
+            or bool(charge_result.policy_warning)
+            or not charge_result.verified,
+            # The window itself may be provisional, and the interfacial capacitance is
+            # derived from the material's own CIC unless the caller measured one.
+            "Water window": ww_result.window is not None
+            and not ww_result.window.verified,
+            # Always. Butterwick's threshold is chick membrane and retina, so the margin
+            # is against a preparation that is not the one being stimulated -- which is
+            # also why this check never returns a bare PASS.
+            "Current density": jd_result.threshold is not None,
+            # The macro/micro boundary is itself a band; inside it neither criterion is
+            # clearly the right one.
+            "Microelectrode charge/phase": cogan2016.in_regime_transition(
+                self.e.area_cm2
+            ),
+            # ChronicThreshold carries no `verified` field yet (ledger 30); when it does,
+            # this reads it.
+            "Chronic degradation": False,
+            # An estimated access resistance is the dominant term in the voltage budget.
+            "Compliance voltage": not compliance_result.access_resistance_is_exact,
+        }
+        checks = tuple(
+            replace(
+                check,
+                ceiling_uA=ceiling,
+                margin=_margin_from_ceiling(ceiling, self.p.current_uA),
+                provisional=caveats.get(check.name, False),
+            )
+            for check, ceiling in (
+                (
+                    check,
+                    math.inf
+                    if check.status is Status.NOT_EVALUATED
+                    else ceilings.get(check.name, math.inf),
+                )
+                for check in raw_checks
+            )
         )
         return SafetyAssessment(
             electrode=self.e,

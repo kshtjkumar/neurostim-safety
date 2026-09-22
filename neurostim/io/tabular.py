@@ -202,8 +202,11 @@ def report_to_json(
             {
                 "name": c.name,
                 "status": c.status.value,
+                "kind": c.kind,
                 "summary": c.summary,
                 "margin": None if c.margin == float("inf") else c.margin,
+                "ceiling_uA": None if c.ceiling_uA == float("inf") else c.ceiling_uA,
+                "provisional": c.provisional,
             }
             for c in assessment.checks
         ],
