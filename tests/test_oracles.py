@@ -344,7 +344,13 @@ class TestDiscSurfacePotential:
         assert resistance == pytest.approx(2857.142857142857)
 
     def test_the_rim_potential_is_exactly_current_times_resistance(self) -> None:
-        """``arcsin(1) = pi/2`` cancels the ``2/pi``, so this is bit-exact, not approximate."""
+        """``arcsin(1) = pi/2`` cancels the ``2/pi``, so this is bit-exact, not approximate.
+
+        This pins the arcsin normalisation of the resistance-taking primitive and nothing
+        else: the identity holds for whatever R is handed in, correct or not, which is
+        why it is not the pin. The pin is
+        ``test_at_a_hundred_radii_only_the_half_space_factor_agrees``.
+        """
         resistance = disc_field.newman_disc_resistance_ohm(self.SIGMA, self.RADIUS_M)
         rim = disc_field.disc_surface_potential_V(
             self.CURRENT_A, resistance, self.RADIUS_M, self.RADIUS_M
@@ -352,17 +358,89 @@ class TestDiscSurfacePotential:
         assert rim == self.CURRENT_A * resistance
         assert rim * 1e3 == pytest.approx(285.714286, abs=5e-7)
 
+    def test_the_self_contained_form_computes_its_own_resistance(self) -> None:
+        """``disc_potential_V`` takes the conductivity, so R can never be an input.
+
+        The same closed form, with ``R = 1/(4 sigma a)`` evaluated inside instead of
+        handed in. At the rim ``arcsin(1) = pi/2`` cancels the ``2/pi``, so this is the
+        285.714286 mV hand constant reached without the caller supplying a resistance.
+        """
+        rim = disc_field.disc_potential_V(
+            self.CURRENT_A, self.SIGMA, self.RADIUS_M, self.RADIUS_M
+        )
+        resistance = disc_field.newman_disc_resistance_ohm(self.SIGMA, self.RADIUS_M)
+        assert rim == self.CURRENT_A * resistance
+        assert rim * 1e3 == pytest.approx(285.714286, abs=5e-7)
+
+        distance = 100.0 * self.RADIUS_M
+        assert disc_field.disc_potential_V(
+            self.CURRENT_A, self.SIGMA, self.RADIUS_M, distance
+        ) == disc_field.disc_surface_potential_V(
+            self.CURRENT_A, resistance, self.RADIUS_M, distance
+        )
+
+    def test_a_wrong_resistance_makes_todays_field_model_look_correct(self) -> None:
+        """Why the pin may not take R as an input: a shared error cancels exactly.
+
+        Feed the resistance-taking form an R that is wrong by a factor of two and
+        today's unrepaired full-space field model scores 0.999983 against it -- the very
+        number that is supposed to mean "the field model has been repaired". A C3.1 test
+        written as ``disc_surface_potential_V(I, electrode.access_resistance_ohm, ...)``
+        would therefore be satisfied by a package that halved its access resistance and
+        left the field alone. The self-contained form has no parameter to feed.
+        """
+        import inspect
+
+        from neurostim import DiscElectrode
+        from neurostim.models import field
+
+        electrode = DiscElectrode(2.0 * self.RADIUS_M * 1e6, "Pt")
+        distance = 100.0 * self.RADIUS_M
+        today_V = field.potential_V(
+            self.CURRENT_A * 1e6, distance * 1e6, self.SIGMA, electrode=electrode
+        )
+        half_resistance = 0.5 * disc_field.newman_disc_resistance_ohm(
+            self.SIGMA, self.RADIUS_M
+        )
+        cancelled = disc_field.disc_surface_potential_V(
+            self.CURRENT_A, half_resistance, self.RADIUS_M, distance
+        )
+        assert today_V / cancelled == pytest.approx(0.999983, abs=5e-7)
+
+        parameters = inspect.signature(disc_field.disc_potential_V).parameters
+        assert "access_resistance_ohm" not in parameters
+        assert "conductivity_S_per_m" in parameters
+
+    def test_the_packages_disc_access_resistance_is_newmans(self) -> None:
+        """The other half of the pin, so the two errors cannot cancel.
+
+        The field ratio is pinned through the self-contained oracle and R is pinned
+        here directly against Newman 1966. A change that moves one without the other
+        now breaks one of the two.
+        """
+        from neurostim import DiscElectrode
+
+        electrode = DiscElectrode(2.0 * self.RADIUS_M * 1e6, "Pt")
+        assert electrode.access_resistance_ohm(self.SIGMA) == pytest.approx(
+            disc_field.newman_disc_resistance_ohm(self.SIGMA, self.RADIUS_M), rel=1e-15
+        )
+        assert electrode.access_resistance_ohm(self.SIGMA) == pytest.approx(
+            2857.142857142857
+        )
+
     def test_at_a_hundred_radii_only_the_half_space_factor_agrees(self) -> None:
         """The measurement that tells the two space conventions apart.
 
         Far from the disc the exact solution tends to the point source, so the ratio is
         the geometry factor and nothing else. 0.5 is a factor of two; 0.999983 is the
         genuine near-field residual of a disc at a hundred radii.
+
+        Through the self-contained form: this is the pin, and a resistance it was handed
+        would make it blind to an error in that resistance.
         """
-        resistance = disc_field.newman_disc_resistance_ohm(self.SIGMA, self.RADIUS_M)
         distance = 100.0 * self.RADIUS_M
-        exact = disc_field.disc_surface_potential_V(
-            self.CURRENT_A, resistance, self.RADIUS_M, distance
+        exact = disc_field.disc_potential_V(
+            self.CURRENT_A, self.SIGMA, self.RADIUS_M, distance
         )
 
         full_space = disc_field.point_source_potential_V(
@@ -382,9 +460,8 @@ class TestDiscSurfacePotential:
 
         electrode = DiscElectrode(2.0 * self.RADIUS_M * 1e6, "Pt")
         distance_um = 100.0 * self.RADIUS_M * 1e6
-        resistance = disc_field.newman_disc_resistance_ohm(self.SIGMA, self.RADIUS_M)
-        exact = disc_field.disc_surface_potential_V(
-            self.CURRENT_A, resistance, self.RADIUS_M, 100.0 * self.RADIUS_M
+        exact = disc_field.disc_potential_V(
+            self.CURRENT_A, self.SIGMA, self.RADIUS_M, 100.0 * self.RADIUS_M
         )
 
         today_V = field.potential_V(

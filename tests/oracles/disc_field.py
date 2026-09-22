@@ -9,10 +9,20 @@ follows from the same separation)::
 
 Two things make this the right oracle for the space-convention question.
 
-**It pins the resistance and the field together.** At the rim, ``arcsin(1) = pi/2``, so
-``V(a) = I * R_access`` exactly -- not approximately, bit-for-bit in IEEE arithmetic. Any
-change that moves the access resistance without moving the field, or the reverse, breaks
-it.
+**It pins the resistance and the field together -- through**
+:func:`disc_potential_V`, **which takes the conductivity and computes R itself.** At the
+rim, ``arcsin(1) = pi/2``, so ``V(a) = I * R_access`` exactly -- not approximately,
+bit-for-bit in IEEE arithmetic. Any change that moves the access resistance without moving
+the field, or the reverse, breaks it.
+
+That holds only for the self-contained form. :func:`disc_surface_potential_V` takes R as an
+argument and is the primitive the closed form is written in; a pin built on it is blind to
+an error in R that the package shares, because the two move together. Measured, not
+asserted: hand it an R that is wrong by a factor of two and today's unrepaired full-space
+field model scores **0.999983** against it -- the very number that is supposed to mean the
+field model has been repaired. So a test of the space convention must call
+:func:`disc_potential_V`, and pin the package's access resistance separately against
+:func:`newman_disc_resistance_ohm`. ``tests/test_oracles.py`` does both.
 
 **It separates the two errors that currently cancel.** The package's field model returns a
 full-space ``4 pi`` geometry factor for a disc, which is documented as flush in an
@@ -60,7 +70,25 @@ def disc_surface_potential_V(
 
 def newman_disc_resistance_ohm(conductivity_S_per_m: float, radius_m: float) -> float:
     """``R = 1/(4 sigma a)`` -- Newman 1966, the half-space flush disc."""
+    if conductivity_S_per_m <= 0.0:
+        raise ValueError(
+            f"conductivity_S_per_m must be > 0, got {conductivity_S_per_m!r}"
+        )
     return 1.0 / (4.0 * conductivity_S_per_m * radius_m)
+
+
+def disc_potential_V(
+    current_A: float, conductivity_S_per_m: float, radius_m: float, distance_m: float
+) -> float:
+    """Potential at ``distance_m`` from a flush disc, with R derived from the conductivity.
+
+    The form every pin should use. It is :func:`disc_surface_potential_V` composed with
+    :func:`newman_disc_resistance_ohm`, and the composition is the point: the access
+    resistance is the oracle's own, so a package whose R is wrong cannot make its field
+    model agree by supplying that R to both sides of the comparison.
+    """
+    resistance_ohm = newman_disc_resistance_ohm(conductivity_S_per_m, radius_m)
+    return disc_surface_potential_V(current_A, resistance_ohm, radius_m, distance_m)
 
 
 def point_source_potential_V(

@@ -34,7 +34,9 @@ numerical method that shares no code with the package:
     the package that also defines it.
 ``disc_field``
     The exact half-space disc solution ``V(r) = (2/pi) I R arcsin(a/r)``, a closed form
-    from the literature, evaluated with the standard library alone.
+    from the literature, evaluated with the standard library alone. ``disc_potential_V``
+    takes the conductivity and derives R itself, so a pin cannot be handed the resistance
+    it is meant to be checking.
 ``drift``
     A pulse-by-pulse accumulation loop, which reproduces the closed form to within the
     duration of one pulse without ever evaluating it.
@@ -46,7 +48,7 @@ numerical method that shares no code with the package:
 oracle that silently starts agreeing with the code is itself caught.
 """
 
-from .disc_field import disc_surface_potential_V
+from .disc_field import disc_potential_V, disc_surface_potential_V
 from .drift import drift_time_s, drift_time_s_closed_form
 from .fail_ceiling import (
     LIMIT_BEARING,
@@ -63,6 +65,7 @@ __all__ = [
     "LIMIT_BEARING",
     "NonMonotonePredicate",
     "brackets_the_ceiling",
+    "disc_potential_V",
     "disc_surface_potential_V",
     "drift_time_s",
     "drift_time_s_closed_form",
