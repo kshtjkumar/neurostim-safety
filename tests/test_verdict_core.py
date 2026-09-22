@@ -676,34 +676,44 @@ class TestEveryRenderSiteFloors:
         assert "472.8" not in text
 
     def test_the_figure_annotation_floors(self):
-        """``viz/plots.py`` prints the binding limit at ``:.3g``.
+        """``viz/plots.py`` prints the binding limit through ``format_limit``.
 
-        Not tautological: the expected string is the hand-floored 3-significant-digit
-        form of the same number, and the round-to-nearest form is asserted absent.
+        Not tautological: the expected string is the hand-floored four-significant-digit
+        form of 12.5*pi, and the round-to-nearest form is asserted absent.
+
+        On a different electrode from the other four sites, because C5.1 made this panel
+        annotate the assessment's binding limit instead of its own three-check minimum,
+        and on the worked example that number is exactly 20 uA -- where flooring and
+        rounding agree and the site would assert nothing. A 100 um Pt disc at 100 us
+        binds on chronic degradation at 39.26990816987241 uA, which ``:.4g`` prints as
+        "39.27" -- above the ceiling, the ledger 49 defect -- and ``format_limit`` as
+        "39.26".
         """
         import matplotlib
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        from neurostim import RingElectrode
         from neurostim.viz.plots import current_limit_sweep
+
+        electrode = DiscElectrode(100.0, "Pt")
+        protocol = StimProtocol(80, 100, 130, 1)
+        calc = SafetyCalculator(electrode, protocol, compliance_V=10.0)
+        assert calc.assess().limiting_current_uA == pytest.approx(
+            39.26990816987241, rel=1e-12  # 12.5*pi, floored onto its own check
+        )
 
         figure, axes = plt.subplots()
         try:
-            current_limit_sweep(
-                RingElectrode(330.0, 270.0, "Pt"),
-                StimProtocol(80, 200, 130, 1),
-                compliance_V=10.0,
-                ax=axes,
-            )
+            current_limit_sweep(electrode, protocol, compliance_V=10.0, ax=axes)
             texts = [text.get_text() for text in axes.texts]
         finally:
             plt.close(figure)
 
         binding = [text for text in texts if "binding limit" in text]
         assert binding, texts
-        assert "141.3" in binding[0]
+        assert "39.26" in binding[0]
+        assert "39.27" not in binding[0]
 
 
 class TestEveryLimitBearingCheckHasAMargin:

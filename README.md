@@ -140,6 +140,14 @@ Figures follow a publication contract: 7 pt sans-serif, editable text in vector 
 no top/right spines, and red/green reserved strictly for pass/fail rather than spent on
 ordinary categorical series.
 
+The figure is a render surface of the same assessment the report is, and is drawn at the
+calculator's own settings rather than the library defaults. Panel (b) draws every
+limit-bearing check that ran at its own ceiling, labelled with the check's name, and takes
+its binding amplitude and the mechanism that sets it from `calc.assess()` — so the number
+on the figure is the number in the report, and the mechanism it names is a curve you can
+find. A protocol unsafe at *every* amplitude gets the sentence naming the check in place
+of a number here too.
+
 ## Uncertainty
 
 Published limits are ranges, not numbers. Cogan gives platinum as a factor of three.

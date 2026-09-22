@@ -6,8 +6,11 @@ it should not be in a manuscript, and it is not in this module.
 
 from __future__ import annotations
 
+import inspect
 import math
+import textwrap
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -18,10 +21,11 @@ from ..models import field as field_mod
 from ..models import strength_duration as sd_mod
 from ..models import thermal as thermal_mod
 from ..protocol import StimProtocol
-from ..safety import SafetyCalculator
+from ..safety import LIMIT_BEARING, SafetyCalculator
 from ..safety import shannon as shannon_mod
 from ..safety._limits import format_limit
 from .style import (
+    CATEGORICAL,
     DOUBLE_COLUMN_MM,
     PALETTE,
     SINGLE_COLUMN_MM,
@@ -30,6 +34,41 @@ from .style import (
     panel_label,
     subplots,
 )
+
+_NOT_A_SETTING = frozenset({"self", "electrode", "protocol"})
+"""Constructor parameters of :class:`SafetyCalculator` that are not settings."""
+
+
+def _calculator_settings(calc: SafetyCalculator) -> dict[str, Any]:
+    """Every construction setting of ``calc``, ready to rebuild it elsewhere.
+
+    Read off the constructor signature rather than listed here, because a listed set is a
+    set that goes stale, and ledger 48 is what a stale one costs: ``safety_summary``
+    forwarded the electrode and the protocol and stopped, so panel (b) recomputed all
+    three of its curves at the library defaults (k = 1.5, conservative, sigma = 0.35)
+    while the suptitle carried the user's verdict. At ``k = 1.2, sigma = 0.10`` the panel
+    annotated a binding limit of 6878 uA against the assessment's 4869.59, with the drawn
+    Shannon limit 1.41x and the drawn compliance limit 3.44x the true ones -- both in the
+    permissive direction, on the figure the README tells users to put in a manuscript.
+
+    Every setting is stored on the calculator under its own parameter name, so a new one
+    is forwarded the day it is added. One that is not raises rather than being dropped: a
+    silently missing setting is exactly the defect this exists to close.
+    """
+    settings: dict[str, Any] = {}
+    for name in inspect.signature(SafetyCalculator.__init__).parameters:
+        if name in _NOT_A_SETTING:
+            continue
+        try:
+            settings[name] = getattr(calc, name)
+        except AttributeError:  # pragma: no cover - a new setting stored under a new name
+            raise AttributeError(
+                f"SafetyCalculator takes {name!r} at construction but does not store it "
+                f"under that name, so figures cannot forward it. Store it as "
+                f"self.{name}, or this panel will silently draw a library default "
+                f"beside the user's verdict (ledger 48)."
+            ) from None
+    return settings
 
 
 def shannon_safe_operating_area(
@@ -155,72 +194,101 @@ def current_limit_sweep(
     **Claim defended:** the maximum usable amplitude, and which physical limit sets it.
     Plotting the limits together rather than reporting them separately is the point:
     the binding constraint is often not the one people quote.
+
+    Both the candidate set and the binding amplitude are read off
+    :meth:`SafetyCalculator.assess`. This panel used to compute its own
+    ``min(shannon, cic, compliance)`` from the 0.1.0-compat properties -- the three-check
+    minimum C1.6 replaced with the minimum over all seven of
+    :data:`~neurostim.safety.LIMIT_BEARING` -- so the artist annotated
+    ``binding limit 141.3 µA`` beside a report headline of ``20.00`` on the package's own
+    worked example, a factor of 7.07 in the permissive direction (ledger 1, 48). A figure
+    and a report go into the same manuscript; they do not get to disagree.
+
+    Every limit-bearing check that ran is drawn, labelled with its own name, so the
+    mechanism the annotation names is a curve the reader can find. A ceiling does not move
+    with the requested amplitude -- that is what makes it a ceiling -- so each is a flat
+    line and the assessment is run once rather than once per sampled current.
+
+    When no amplitude is safe at all -- a monophasic protocol FAILs charge balance at
+    every amplitude, being a property of the waveform rather than of the current -- the
+    rule and its number are replaced by the sentence naming the check, not printed beside
+    it (ledger 84). The per-check ceilings stay: each is that check's own honest limit and
+    carries that check's name.
     """
     apply_style()
     if ax is None:
         _, ax = subplots(width_mm=SINGLE_COLUMN_MM, height_mm=62.0)
 
+    calc = SafetyCalculator(
+        electrode, protocol, compliance_V=compliance_V, **calculator_kwargs
+    )
+    assessment = calc.assess()
+    ceilings = [
+        (check.name, check.ceiling_uA)
+        for check in assessment.checks
+        if check.name in LIMIT_BEARING and math.isfinite(check.ceiling_uA)
+    ]
+
     if currents_uA is None:
-        base = SafetyCalculator(
-            electrode, protocol, compliance_V=compliance_V, **calculator_kwargs
-        )
-        top = max(base.max_current_shannon_uA, base.max_current_cic_uA) * 1.6
+        highest = max((ceiling for _, ceiling in ceilings), default=protocol.current_uA)
+        top = highest * 1.6
         currents_uA = np.logspace(
             math.log10(max(top * 1e-3, 1e-3)), math.log10(top), 120
         )
     currents = np.asarray(list(currents_uA), dtype=float)
 
-    from dataclasses import replace
-
-    shannon_limit = np.empty_like(currents)
-    cic_limit = np.empty_like(currents)
-    compliance_limit = np.full_like(currents, np.nan)
-    for i, current in enumerate(currents):
-        calc = SafetyCalculator(
-            electrode,
-            replace(protocol, current_uA=float(current)),
-            compliance_V=compliance_V,
-            **calculator_kwargs,
-        )
-        shannon_limit[i] = calc.max_current_shannon_uA
-        cic_limit[i] = calc.max_current_cic_uA
-        if compliance_V is not None:
-            compliance_limit[i] = calc.assess().compliance.max_current_uA
-
     ax.loglog(currents, currents, color=PALETTE["light_grey"], linewidth=0.8,
               linestyle=":", label="requested", zorder=1)
-    ax.loglog(currents, shannon_limit, color=PALETTE["signal"], label="Shannon limit")
-    ax.loglog(currents, cic_limit, color=PALETTE["accent"], label="charge-injection limit")
-    if compliance_V is not None:
+    for index, (name, ceiling_uA) in enumerate(ceilings):
+        lap, colour = divmod(index, len(CATEGORICAL))
         ax.loglog(
             currents,
-            compliance_limit,
-            color=PALETTE["grey"],
-            linestyle="--",
-            label="compliance limit",
+            np.full_like(currents, ceiling_uA),
+            color=CATEGORICAL[colour],
+            linestyle="-" if lap == 0 else "--",
+            label=name,
         )
 
-    binding = np.minimum(shannon_limit, cic_limit)
-    if compliance_V is not None:
-        binding = np.minimum(binding, compliance_limit)
-    ax.fill_between(currents, binding, currents.min(), color=PALETTE["pass"], alpha=0.07,
-                    linewidth=0, zorder=0)
-
-    crossing = binding[0]
-    ax.axhline(crossing, color=PALETTE["fail"], linewidth=0.7, linestyle="-", alpha=0.6)
-    ax.annotate(
-        f"binding limit {format_limit(crossing)} µA",
-        xy=(currents[0], crossing),
-        xytext=(2, 3),
-        textcoords="offset points",
-        fontsize=6,
-        color=PALETTE["fail"],
-    )
+    refusal = assessment.unsafe_at_any_amplitude_note()
+    if refusal:
+        # In place of the amplitude, not beside it: a reader who sees a number will
+        # programme it, however the sentence next to it is worded. The shaded region goes
+        # with it, for the same reason -- it is a claim that everything below is safe.
+        # Low in the panel, where the ceilings are not, and in the corner the other
+        # figures here put their caveats.
+        ax.text(
+            0.03,
+            0.04,
+            textwrap.fill(refusal, 44),
+            transform=ax.transAxes,
+            fontsize=6,
+            color=PALETTE["fail"],
+            va="bottom",
+        )
+    else:
+        binding_uA = assessment.limiting_current_uA
+        ax.fill_between(currents, binding_uA, currents.min(), color=PALETTE["pass"],
+                        alpha=0.07, linewidth=0, zorder=0)
+        ax.axhline(binding_uA, color=PALETTE["fail"], linewidth=0.7, linestyle="-",
+                   alpha=0.6)
+        ax.annotate(
+            f"binding limit {format_limit(binding_uA)} µA\n"
+            f"({assessment.limiting_mechanism})",
+            xy=(currents[0], binding_uA),
+            xytext=(2, 3),
+            textcoords="offset points",
+            fontsize=6,
+            color=PALETTE["fail"],
+        )
 
     ax.set_xlabel("Requested current (µA)")
     ax.set_ylabel("Permitted current (µA)")
     ax.set_title(f"Amplitude limits, {electrode.material}", pad=4)
-    ax.legend(loc="lower right", handlelength=1.6)
+    # Every candidate is a horizontal line spanning the full width, so an unframed legend
+    # sits on top of several of them and neither reads. This is the one legend in the
+    # module that needs to occlude rather than float.
+    ax.legend(loc="lower right", handlelength=1.6, fontsize=5.4, frameon=True,
+              framealpha=0.92, facecolor="white", edgecolor="none")
     return ax
 
 
@@ -501,6 +569,13 @@ def safety_summary(
     **Claim defended:** the complete safety position of one electrode/protocol pair --
     where it sits against the tissue criterion, what binds its amplitude, how it
     compares across materials, and how far its field reaches.
+
+    Every panel is drawn at ``calc``'s own settings. Panel (b) used to take only the
+    electrode, the protocol and the compliance voltage, so its three curves were
+    recomputed at the library defaults, and panel (d) drew the field at the library's
+    0.35 S/m whatever conductivity the verdict above it was computed with (ledger 48).
+    The settings come from :func:`_calculator_settings`, which reads the constructor
+    rather than a list, so a setting added later cannot be forgotten here.
     """
     apply_style()
     fig, axes = subplots(2, 2, width_mm=width_mm, height_mm=115.0)
@@ -509,15 +584,21 @@ def safety_summary(
     shannon_safe_operating_area(calc, ax=ax_a)
     panel_label(ax_a, "a")
 
-    current_limit_sweep(
-        calc.e, calc.p, ax=ax_b, compliance_V=compliance_V or calc.compliance_V
-    )
+    settings = _calculator_settings(calc)
+    if compliance_V is not None:
+        settings["compliance_V"] = compliance_V
+    current_limit_sweep(calc.e, calc.p, ax=ax_b, **settings)
     panel_label(ax_b, "b")
 
     material_comparison(calc.e, calc.p, ax=ax_c, policy=calc.policy)
     panel_label(ax_c, "c")
 
-    radial_field_profile(calc.p.current_uA, calc.e, ax=ax_d)
+    radial_field_profile(
+        calc.p.current_uA,
+        calc.e,
+        ax=ax_d,
+        sigma_S_per_m=calc.tissue_conductivity_S_per_m,
+    )
     panel_label(ax_d, "d")
 
     assessment = calc.assess()

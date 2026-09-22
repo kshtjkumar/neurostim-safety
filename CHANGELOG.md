@@ -33,6 +33,29 @@ Every reported limit also **floors** now instead of rounding to nearest. `141.37
 printed as "141.4 µA", and programming 141.4 µA FAILed the check whose maximum it claimed
 to be.
 
+### The summary figure draws the verdict it sits beside
+
+The figure and the report go into the same manuscript, and they disagreed. `safety_summary`
+took the electrode, the protocol and the compliance voltage into panel (b) and nothing
+else, so all of its curves were recomputed at the library defaults — `k = 1.5`,
+`conservative`, σ = 0.35 S/m — while the suptitle above them carried the user's verdict. At
+`k = 1.2`, σ = 0.10 the panel annotated a binding limit of **6878 µA** against the
+assessment's **4869.59**, with the drawn Shannon limit 1.41× and the drawn compliance limit
+3.44× the true ones, both permissive. Panel (d) drew the field at 0.35 S/m whatever
+conductivity the verdict used.
+
+And the panel computed its own `min(Shannon, charge injection, compliance)` — the
+three-check minimum this release replaced — so on the worked example it annotated
+**141.3 µA** beside a headline of **20.00**.
+
+Both are fixed. Every panel is drawn at the calculator's own settings, read off the
+constructor so a setting added later cannot be dropped from the figure. Panel (b) draws
+every limit-bearing check that ran at its own ceiling, labelled with the check's name, and
+takes its binding amplitude and mechanism from the assessment. When no amplitude is safe,
+the red rule, the shaded region and the number are replaced by the sentence naming the
+check — the figure was the fifth render surface, and the only one the refusal could not
+reach while `viz` computed its own minimum.
+
 ## 0.15.0 — a permissive setting could improve the verdict
 
 Reading a generated report surfaced a defect no test was watching for. On 316LVM,
