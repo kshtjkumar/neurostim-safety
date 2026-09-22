@@ -434,17 +434,30 @@ class TestReferenceRegistry:
         assert [d for d, n in dois.items() if n > 1] == []
 
     def test_every_key_is_reachable_from_the_package(self):
-        """A reference nothing cites is dead weight and drifts out of date."""
-        import subprocess
+        """A reference nothing cites is dead weight and drifts out of date.
+
+        This scan used to shell out to ``grep -rho -E ... neurostim``, which named the
+        package by a path relative to the working directory: run from anywhere but the
+        repository root it matched nothing and reported all 45 references unused. It also
+        depended on ``-o`` and ``-h`` behaving as GNU grep spells them, and on grep being
+        installed at all. The rglob below is the same regex over the same files, anchored
+        to this file's own location.
+        """
+        import pathlib
+        import re
 
         from neurostim.references import REFERENCES
 
-        hits = subprocess.run(
-            ["grep", "-rho", "-E", "[a-z0-9_]+", "--include=*.py", "neurostim"],
-            capture_output=True,
-            text=True,
-        ).stdout.split()
-        used = set(hits)
+        package = pathlib.Path(__file__).resolve().parents[1] / "neurostim"
+        assert package.is_dir(), f"package source not found at {package}"
+        sources = sorted(package.rglob("*.py"))
+        assert sources, f"no source files under {package}"
+
+        used = {
+            word
+            for path in sources
+            for word in re.findall(r"[a-z0-9_]+", path.read_text(encoding="utf-8"))
+        }
         unused = [k for k in REFERENCES if k not in used]
         assert unused == [], f"references defined but never cited: {unused}"
 
