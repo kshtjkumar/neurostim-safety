@@ -53,10 +53,23 @@ class Status(str, Enum):
 
     @property
     def rank(self) -> int:
-        """Severity ordering; higher is worse. NOT_EVALUATED sits below CAUTION."""
+        """Severity ordering; higher is worse. NOT_EVALUATED sits *below* PASS.
+
+        A check that did not run is not a finding. Ranking it above PASS made an overall
+        PASS unreachable for any macroelectrode -- three of the nine checks do not apply
+        above the macro/micro boundary, so the best attainable verdict was the same
+        ``NOT_EVALUATED`` a completely unconfigured assessment returns, and the two were
+        indistinguishable (ledger 11).
+
+        Ordering NOT_EVALUATED lowest makes :attr:`SafetyAssessment.status` the worst
+        verdict among the checks that *ran*, which is a statement about evidence. What the
+        old ordering was reaching for -- do not let a bare PASS imply completeness -- is
+        carried by :attr:`SafetyAssessment.not_evaluated` instead, which every headline
+        surface renders beside the status.
+        """
         return {
-            Status.PASS: 0,
-            Status.NOT_EVALUATED: 1,
+            Status.NOT_EVALUATED: 0,
+            Status.PASS: 1,
             Status.CAUTION: 2,
             Status.FAIL: 3,
         }[self]
@@ -83,6 +96,11 @@ class Check:
 
 def _worst(statuses: list[Status]) -> Status:
     return max(statuses, key=lambda s: s.rank) if statuses else Status.NOT_EVALUATED
+
+
+def _suffix(note: str) -> str:
+    """``" (...)"`` for a non-empty note, ``""`` otherwise, so no trailing space is left."""
+    return f" {note}" if note else ""
 
 
 @dataclass(frozen=True)
@@ -114,6 +132,30 @@ class SafetyAssessment:
     def cautions(self) -> tuple[Check, ...]:
         """Checks that passed but with a stretched assumption or thin margin."""
         return tuple(c for c in self.checks if c.status is Status.CAUTION)
+
+    @property
+    def not_evaluated(self) -> tuple[Check, ...]:
+        """Checks that could not run because a required input was not supplied.
+
+        The companion to :attr:`Status.rank` putting NOT_EVALUATED below PASS: the
+        headline is now the worst verdict among the checks that ran, so the set that did
+        not run has to be reported alongside it or a bare ``PASS`` would claim more than
+        was tested.
+        """
+        return tuple(c for c in self.checks if c.status is Status.NOT_EVALUATED)
+
+    def not_evaluated_note(self) -> str:
+        """Parenthetical naming the checks that did not run; empty when they all did.
+
+        One renderer for every headline surface -- :meth:`describe`, the PDF, the JSON and
+        the GUI -- so the four cannot drift apart.
+        """
+        missing = self.not_evaluated
+        if not missing:
+            return ""
+        noun = "check" if len(missing) == 1 else "checks"
+        names = ", ".join(c.name for c in missing)
+        return f"({len(missing)} {noun} not evaluated: {names})"
 
     @property
     def limiting_current_uA(self) -> float:
@@ -176,7 +218,7 @@ class SafetyAssessment:
             "",
             self.protocol.describe(),
             "",
-            f"Overall: {self.status.value}",
+            f"Overall: {self.status.value}{_suffix(self.not_evaluated_note())}",
             f"Limiting current: {self.limiting_current_uA:.4g} uA "
             f"({self.limiting_mechanism})",
             f"  across published ranges: "

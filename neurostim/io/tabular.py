@@ -195,6 +195,9 @@ def report_to_json(
             "compliance_V": calc.compliance_V,
         },
         "results": calc.report(),
+        # Top-level rather than inside ``results``: ``results`` is ``calc.report()``,
+        # whose keys become the columns of a sweep CSV, and a list is not a CSV cell.
+        "not_evaluated": [c.name for c in assessment.not_evaluated],
         "checks": [
             {
                 "name": c.name,

@@ -328,8 +328,13 @@ class SafetyWindow(QMainWindow):
             return
 
         colour = STATUS_COLOURS[assessment.status.value]
+        # The status is the worst verdict among the checks that ran; name the ones that
+        # did not, so the headline cannot read cleaner than the evidence behind it.
+        not_evaluated = assessment.not_evaluated_note()
         self.headline.setText(
-            f"{assessment.status.value} - limiting current "
+            f"{assessment.status.value}"
+            + (f" {not_evaluated}" if not_evaluated else "")
+            + f" - limiting current "
             f"{assessment.limiting_current_uA:.4g} uA ({assessment.limiting_mechanism})"
         )
         self.headline.setStyleSheet(f"color: {colour};")

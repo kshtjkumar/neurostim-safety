@@ -38,7 +38,7 @@ print(calc.describe())
 <!-- BEGIN GENERATED: quickstart-transcript -->
 
 ```
-Overall: FAIL
+Overall: FAIL (1 check not evaluated: Shannon criterion)
 Limiting current: 141.4 uA (Pt charge-injection limit)
   across published ranges: 141.4-212.1 uA (Shannon k 1.5-2.0, full material range)
 

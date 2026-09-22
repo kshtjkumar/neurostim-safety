@@ -223,9 +223,14 @@ def build_report(
         f'<font color="{_STATUS_HEX[assessment.status]}">'
         f"<b>{assessment.status.value}</b></font>"
     )
+    # The status is the worst verdict among the checks that ran, so the ones that did not
+    # run are named beside it rather than left for the reader to spot in the table.
+    not_evaluated = assessment.not_evaluated_note()
     story.append(
         Paragraph(
-            f"Overall assessment: {verdict} &middot; limiting current "
+            f"Overall assessment: {verdict}"
+            + (f" {not_evaluated}" if not_evaluated else "")
+            + f" &middot; limiting current "
             f"<b>{assessment.limiting_current_uA:.4g} &micro;A</b> "
             f"({assessment.limiting_mechanism})",
             styles["body"],
