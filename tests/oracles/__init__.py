@@ -28,7 +28,10 @@ numerical method that shares no code with the package:
     checks in a FAIL state. It never reads ``limiting_current_uA``, ``margin``, or any
     other quantity it is used to check. The monotonicity bisection needs is sampled across
     the whole bracket before the search runs, so a predicate that breaks it raises
-    ``NonMonotonePredicate`` instead of returning the edge of one passing band.
+    ``NonMonotonePredicate`` instead of returning the edge of one passing band. ``names``
+    restricts the predicate to a set of checks -- ``LIMIT_BEARING`` for the quantity
+    ledger 84's D3(i) names -- and that set is written out here rather than imported from
+    the package that also defines it.
 ``disc_field``
     The exact half-space disc solution ``V(r) = (2/pi) I R arcsin(a/r)``, a closed form
     from the literature, evaluated with the standard library alone.
@@ -46,6 +49,7 @@ oracle that silently starts agreeing with the code is itself caught.
 from .disc_field import disc_surface_potential_V
 from .drift import drift_time_s, drift_time_s_closed_form
 from .fail_ceiling import (
+    LIMIT_BEARING,
     NonMonotonePredicate,
     brackets_the_ceiling,
     fail_ceiling_uA,
@@ -56,6 +60,7 @@ from .fd_band import CLINICAL_DBS_ASPECT, FD_BAND_REFERENCE
 __all__ = [
     "CLINICAL_DBS_ASPECT",
     "FD_BAND_REFERENCE",
+    "LIMIT_BEARING",
     "NonMonotonePredicate",
     "brackets_the_ceiling",
     "disc_surface_potential_V",

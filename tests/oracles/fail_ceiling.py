@@ -1,10 +1,10 @@
 """The highest amplitude at which no check FAILs, found by binary search.
 
-This is the definition of "limiting current" the fix plan settles on, computed without
-reading the package's answer. It consults exactly one thing: whether
-``SafetyCalculator.assess().failed`` is empty. It never touches ``limiting_current_uA``,
-``limiting_mechanism``, ``margin``, or any per-check maximum -- which is what makes it a
-legitimate expected value for all of those.
+Computed without reading the package's answer. It consults exactly one thing: whether
+``SafetyCalculator.assess().failed`` is empty, optionally restricted to a named set of
+checks. It never touches ``limiting_current_uA``, ``limiting_mechanism``, ``margin``, or
+any per-check maximum -- which is what makes it a legitimate expected value for all of
+those.
 
 Why this is needed. On the plan's worked example -- ``RingElectrode(330, 270, "Pt")`` at
 80 uA, 200 us, 130 Hz -- the package reports a limiting current of 141.37 uA while two
@@ -14,6 +14,23 @@ the highest amplitude at which nothing fails. A test written against the package
 
 The search is over floats, not over a fixed tolerance: it narrows until the bracket is one
 ulp wide, so it returns the exact boundary float rather than something near it.
+
+Which checks count
+------------------
+The plan's D3(i) originally read "the highest amplitude at which no check FAILs". Ledger
+84 restates it as "the highest amplitude at which no **LIMIT-BEARING** check FAILs", and
+the qualifier changes the answer: ``Charge balance`` FAILs at every amplitude on a
+monophasic protocol, being a property of the waveform rather than of the amplitude, so the
+unrestricted ceiling there is ``0.0`` while the limit-bearing one is 15285.5 uA. Both
+quantities are wanted -- ``0.0`` is what ``unsafe_at_any_amplitude`` is about and 15285.5
+is what ``limiting_current_uA`` is about -- so ``names`` selects between them.
+
+:data:`LIMIT_BEARING` is written out here rather than imported. The package defines its own
+set in C1.3; an oracle that imported it would restate the package's partition of the checks
+and could never disagree with it. ``tests/test_oracles.py`` asserts the two agree once C1.3
+lands, which is a comparison of two independent statements rather than of one with itself.
+Reading a check's *name* is not reading a number: no expected value here is derived from
+anything the package computes.
 
 The monotonicity assumption, and what happens when it is false
 --------------------------------------------------------------
@@ -32,17 +49,17 @@ rather than bisecting one band and presenting its edge as the ceiling. The answe
 return is then re-checked by :func:`brackets_the_ceiling` before it leaves the function.
 
 This is what keeps ``0.0`` honest, and ``0.0`` is the one value that has to be. Under the
-convention settled in ledger 84 it is the *correct* answer for an amplitude-independent
-failure -- ``Charge balance`` FAILs at every amplitude on a monophasic protocol, being a
-property of the waveform -- so it cannot simply be turned into an error. It now means "no
-probe anywhere in the bracket passes", established across every decade of it, and never
-"the lowest probe failed". A caller that needs to tell the two apart asks
-:func:`brackets_the_ceiling`, which reports ``False`` for ``0.0`` instead of raising.
+ledger 84 convention it is the *correct* answer for an amplitude-independent failure, so it
+cannot simply be turned into an error. It now means "no probe anywhere in the bracket
+passes", established across every decade of it, and never "the lowest probe failed". A
+caller that needs to tell the two apart asks :func:`brackets_the_ceiling`, which reports
+``False`` for ``0.0`` instead of raising.
 """
 
 from __future__ import annotations
 
 import math
+from collections.abc import Collection
 from dataclasses import replace
 from typing import Any
 
@@ -61,6 +78,25 @@ _DEFAULT_LOWER_uA = 1e-12
 # caught by two probes. A band narrower than one step can still hide between probes, which
 # is the honest limit of sampling and not a bound this module can assert away.
 _PROBES_PER_DECADE = 4
+
+LIMIT_BEARING: frozenset[str] = frozenset(
+    {
+        "Shannon criterion",
+        "Charge injection limit",
+        "Water window",
+        "Current density",
+        "Microelectrode charge/phase",
+        "Chronic degradation",
+        "Compliance voltage",
+    }
+)
+"""The seven checks that impose a ceiling on amplitude (fix plan D3, ledger 84).
+
+Written out, never imported: see the module docstring. ``Charge balance`` and
+``Validated envelope`` are excluded because their verdicts do not move with amplitude --
+imbalance is a categorical property of the waveform and the envelope is a categorical
+property of the parameter set.
+"""
 
 
 class NonMonotonePredicate(AssertionError):
@@ -98,12 +134,29 @@ def rebuild_at(calculator: Any, current_uA: float) -> Any:
     )
 
 
-def no_check_fails(calculator: Any, current_uA: float) -> bool:
-    """Whether the assessment at ``current_uA`` has an empty ``failed`` tuple.
+def no_check_fails(
+    calculator: Any, current_uA: float, *, names: Collection[str] | None = None
+) -> bool:
+    """Whether the assessment at ``current_uA`` has no FAILing check among ``names``.
+
+    ``names = None`` means every check the assessment emits; pass :data:`LIMIT_BEARING`
+    for the quantity ledger 84's D3(i) names. A name the assessment does not emit is a
+    ``ValueError`` and not an empty restriction, because a misspelling would otherwise
+    weaken the predicate to "never fails" and the search would answer ``inf``.
 
     The only property of the package this oracle reads.
     """
-    return not rebuild_at(calculator, current_uA).assess().failed
+    assessment = rebuild_at(calculator, current_uA).assess()
+    if names is None:
+        return not assessment.failed
+
+    emitted = {check.name for check in assessment.checks}
+    unknown = sorted(set(names) - emitted)
+    if unknown:
+        raise ValueError(
+            f"no such check: {unknown}; this assessment emits {sorted(emitted)}"
+        )
+    return not any(check.name in names for check in assessment.failed)
 
 
 def failed_names(calculator: Any, current_uA: float) -> tuple[str, ...]:
@@ -144,8 +197,13 @@ def fail_ceiling_uA(
     *,
     lower_uA: float = _DEFAULT_LOWER_uA,
     upper_uA: float = _DEFAULT_UPPER_uA,
+    names: Collection[str] | None = None,
 ) -> float:
-    """Largest amplitude at which ``assess().failed`` is empty.
+    """Largest amplitude at which no check in ``names`` is in a FAIL state.
+
+    ``names = None`` considers every check; :data:`LIMIT_BEARING` gives the quantity
+    ledger 84's D3(i) names, which is the one the package's reported limiting current is
+    to be compared with.
 
     Returns ``0.0`` when no probe anywhere in the bracket passes -- which under the ledger
     84 convention is the correct answer for an amplitude-independent failure, and is the
@@ -156,18 +214,19 @@ def fail_ceiling_uA(
     :func:`brackets_the_ceiling`.
     """
     ladder = probe_ladder(lower_uA, upper_uA)
-    passes = [no_check_fails(calculator, amplitude) for amplitude in ladder]
+    passes = [no_check_fails(calculator, amplitude, names=names) for amplitude in ladder]
 
     first_fail = passes.index(False) if False in passes else len(passes)
     recovery = next(
         (index for index in range(first_fail + 1, len(passes)) if passes[index]), None
     )
     if recovery is not None:
+        failing = _failing_among(calculator, ladder[first_fail], names)
         raise NonMonotonePredicate(
-            f"FAIL states do not un-fail as amplitude rises, but these do: nothing passes "
-            f"at {ladder[first_fail]:.6g} uA ({', '.join(failed_names(calculator, ladder[first_fail]))}) "
-            f"while {ladder[recovery]:.6g} uA passes. Bisecting this bracket would return "
-            f"the edge of one passing band and hide the others, so there is no ceiling to "
+            f"FAIL states do not un-fail as amplitude rises, but these do: "
+            f"{', '.join(failing)} fails at {ladder[first_fail]:.6g} uA while "
+            f"{ladder[recovery]:.6g} uA passes. Bisecting this bracket would return the "
+            f"edge of one passing band and hide the others, so there is no ceiling to "
             f"report."
         )
 
@@ -181,12 +240,12 @@ def fail_ceiling_uA(
         middle = low + (high - low) / 2.0
         if middle <= low or middle >= high:
             break
-        if no_check_fails(calculator, middle):
+        if no_check_fails(calculator, middle, names=names):
             low = middle
         else:
             high = middle
 
-    if not brackets_the_ceiling(calculator, low):
+    if not brackets_the_ceiling(calculator, low, names=names):
         raise NonMonotonePredicate(
             f"the bisection settled on {low!r} uA, which is not a boundary: it does not "
             f"both pass and fail one ulp above. The predicate changed under the search."
@@ -194,7 +253,9 @@ def fail_ceiling_uA(
     return low
 
 
-def brackets_the_ceiling(calculator: Any, ceiling_uA: float) -> bool:
+def brackets_the_ceiling(
+    calculator: Any, ceiling_uA: float, *, names: Collection[str] | None = None
+) -> bool:
     """Whether ``ceiling_uA`` really is the boundary: it passes and its successor fails.
 
     A finiteness assertion is not enough. The naive ``headroom / excursion`` reading of the
@@ -207,6 +268,14 @@ def brackets_the_ceiling(calculator: Any, ceiling_uA: float) -> bool:
     """
     if not math.isfinite(ceiling_uA) or ceiling_uA <= 0.0:
         return False
-    return no_check_fails(calculator, ceiling_uA) and not no_check_fails(
-        calculator, math.nextafter(ceiling_uA, math.inf)
+    return no_check_fails(calculator, ceiling_uA, names=names) and not no_check_fails(
+        calculator, math.nextafter(ceiling_uA, math.inf), names=names
     )
+
+
+def _failing_among(
+    calculator: Any, current_uA: float, names: Collection[str] | None
+) -> tuple[str, ...]:
+    """``failed_names`` restricted to ``names``, for diagnostic messages."""
+    failing = failed_names(calculator, current_uA)
+    return failing if names is None else tuple(n for n in failing if n in names)

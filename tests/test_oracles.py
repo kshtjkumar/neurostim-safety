@@ -147,6 +147,116 @@ class TestFailCeiling:
         with pytest.raises(fail_ceiling.NonMonotonePredicate):
             fail_ceiling.fail_ceiling_uA(worked_example)
 
+    def test_the_limit_bearing_names_are_the_seven_the_plan_settles_on(
+        self, worked_example
+    ) -> None:
+        """D3 names seven. The two it excludes impose no current ceiling."""
+        assert set(fail_ceiling.LIMIT_BEARING) == {
+            "Shannon criterion",
+            "Charge injection limit",
+            "Water window",
+            "Current density",
+            "Microelectrode charge/phase",
+            "Chronic degradation",
+            "Compliance voltage",
+        }
+        emitted = {check.name for check in worked_example.assess().checks}
+        assert set(fail_ceiling.LIMIT_BEARING) <= emitted
+        assert emitted - set(fail_ceiling.LIMIT_BEARING) == {
+            "Charge balance",
+            "Validated envelope",
+        }
+
+    def test_the_limit_bearing_ceiling_is_the_quantity_d3_restates(self) -> None:
+        """Ledger 84 restates D3(i) as the highest amplitude at which no LIMIT-BEARING
+        check FAILs. On a monophasic protocol the qualifier changes the answer, which is
+        why it is load-bearing: Charge balance FAILs at every amplitude and bears no
+        limit, so the unrestricted ceiling is 0.0 while the limit-bearing one is finite.
+
+        Pinned by hand to Shannon, not to the package's Shannon code. log10(D) = k -
+        log10(Q) with D = Q/A gives Q = sqrt(10^k * A); at k = 1.5 and
+        A = pi * 0.127 cm * 0.15 cm that is 1.375696 uC, and 1.375696 uC / 90 us is
+        15285.51 uA.
+        """
+        from neurostim import CylindricalBandElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+            compliance_V=10.0,
+        )
+        area_cm2 = math.pi * 0.127 * 0.15
+        charge_uC = math.sqrt(10.0**1.5 * area_cm2)
+        expected_uA = charge_uC / (90.0 * 1e-6)
+        assert charge_uC == pytest.approx(1.375696, abs=5e-7)
+        assert expected_uA == pytest.approx(15285.51, abs=5e-3)
+
+        assert fail_ceiling.fail_ceiling_uA(calc) == 0.0
+        ceiling = fail_ceiling.fail_ceiling_uA(calc, names=fail_ceiling.LIMIT_BEARING)
+        # The boundary float sits two ulps above the closed form -- D2's flooring budget,
+        # not a disagreement about the physics.
+        assert 0.0 <= (ceiling - expected_uA) / math.ulp(expected_uA) <= 4.0
+        assert fail_ceiling.brackets_the_ceiling(
+            calc, ceiling, names=fail_ceiling.LIMIT_BEARING
+        )
+        assert fail_ceiling.failed_names(calc, math.nextafter(ceiling, math.inf)) == (
+            "Shannon criterion",
+            "Charge balance",
+        )
+
+    def test_restricting_the_predicate_changes_nothing_when_nothing_is_excluded(
+        self, worked_example
+    ) -> None:
+        """On the biphasic worked example neither excluded check FAILs, so both agree."""
+        assert fail_ceiling.fail_ceiling_uA(worked_example) == 20.0
+        assert (
+            fail_ceiling.fail_ceiling_uA(worked_example, names=fail_ceiling.LIMIT_BEARING)
+            == 20.0
+        )
+
+    def test_a_name_the_assessment_does_not_emit_is_refused(self, worked_example) -> None:
+        """A misspelled name would silently weaken the predicate to "never fails"."""
+        with pytest.raises(ValueError, match="no such check"):
+            fail_ceiling.fail_ceiling_uA(worked_example, names={"Shannon criteria"})
+
+    def test_the_oracle_defines_the_limit_bearing_set_itself(self) -> None:
+        """Structural: it may not import the set from the code it is used to check.
+
+        ``LIMIT_BEARING`` is defined by the package in C1.3. An oracle that imported it
+        would restate the package's own partition of the checks and could never disagree
+        with it.
+        """
+        import re
+
+        text = Path(fail_ceiling.__file__ or "").read_text(encoding="utf-8")
+        body = text.split('"""', 2)[-1]
+        assert re.search(r"^LIMIT_BEARING\b[^=]*=", body, re.MULTILINE)
+        for line in body.splitlines():
+            if "neurostim" in line:
+                assert line.strip() == "from neurostim import SafetyCalculator", line
+
+    def test_the_oracle_and_the_package_agree_on_the_limit_bearing_set(self) -> None:
+        """Once C1.3 lands, the two definitions must not drift apart.
+
+        Skipped until it does -- there is nothing to compare against yet. After it lands,
+        a check added to or dropped from the package's set without the oracle following
+        fails here, rather than leaving the oracle quietly computing a different quantity.
+        """
+        import importlib
+
+        package_set = None
+        for module_name in ("neurostim.safety", "neurostim.safety.assessment"):
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:  # pragma: no cover - the package ships both today
+                continue
+            package_set = getattr(module, "LIMIT_BEARING", None)
+            if package_set is not None:
+                break
+        if package_set is None:
+            pytest.skip("C1.3 has not landed: the package exposes no LIMIT_BEARING yet")
+        assert set(package_set) == set(fail_ceiling.LIMIT_BEARING)
+
     def test_a_protocol_that_never_fails_reports_no_ceiling(self) -> None:
         """``inf`` is an honest answer; the bracket's upper end presented as one is not."""
         from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
