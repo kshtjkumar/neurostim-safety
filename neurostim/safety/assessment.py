@@ -536,6 +536,30 @@ class SafetyAssessment:
 # it, and so programming the reported limit cannot FAIL.
 
 
+# --- construction-time validation of the settings ----------------------------------
+#
+# A setting that is not a number used to produce a verdict anyway. `compliance_V = -5.0`
+# printed "needs 0.52 V but only -5.00 V available"; `nan` yielded FAIL by comparison
+# accident (ledger 13). Worse, a blank `compliance_V` cell in a batch CSV arrives as `nan`,
+# whose ceiling is `nan`, and `min()` silently discards it -- `min([141.0, nan])` is 141.0
+# while `min([nan, 141.0])` is nan, so the answer depended on check order and the row was
+# indistinguishable from a valid one (ledger 52).
+#
+# At construction, not at assess(): the calculator is passed around, serialised and
+# rebuilt, and an object that cannot produce a meaningful answer should not exist. It also
+# means a batch row fails where `assess_batch` catches it and records an ERROR row with
+# the message, instead of producing a plausible number.
+
+
+def _require_finite_above(name: str, value: float, floor: float, *, strict: bool) -> None:
+    """Raise unless ``value`` is a real number on the right side of ``floor``."""
+    ok = math.isfinite(value) and (value > floor if strict else value >= floor)
+    if ok:
+        return
+    relation = f"> {floor:g}" if strict else f">= {floor:g}"
+    raise ValueError(f"{name} must be finite and {relation}, got {value!r}")
+
+
 def _margin_from_ceiling(ceiling_uA: float, current_uA: float) -> float:
     """Ceiling as a multiple of the applied current."""
     if current_uA <= 0 or not math.isfinite(current_uA):
@@ -1143,6 +1167,23 @@ class SafetyCalculator:
         capacitance_uF_cm2: float | None = None,
     ) -> None:
         shannon_mod.validate_k(k)
+        _require_finite_above(
+            "tissue_conductivity_S_per_m",
+            tissue_conductivity_S_per_m,
+            0.0,
+            strict=True,
+        )
+        _require_finite_above("lead_resistance_ohm", lead_resistance_ohm, 0.0, strict=False)
+        if compliance_V is not None:
+            _require_finite_above("compliance_V", compliance_V, 0.0, strict=True)
+        if measured_impedance_ohm is not None:
+            _require_finite_above(
+                "measured_impedance_ohm", measured_impedance_ohm, 0.0, strict=True
+            )
+        if capacitance_uF_cm2 is not None:
+            _require_finite_above(
+                "capacitance_uF_cm2", capacitance_uF_cm2, 0.0, strict=True
+            )
         self.e = electrode
         self.p = protocol
         self.k = k

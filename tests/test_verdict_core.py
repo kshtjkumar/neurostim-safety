@@ -1498,3 +1498,157 @@ class TestTheIntervalContainsThePointEstimate:
         assert assessment.limiting_current_interval_uA.contains(
             assessment.limiting_current_uA
         )
+
+
+class TestNonFiniteSettingsAreRejected:
+    """Ledger 13 and 52. A setting that is not a number produced a verdict anyway.
+
+    ``compliance_V = -5.0`` printed "needs 0.52 V but only -5.00 V available"; ``nan``
+    yielded FAIL by comparison accident. And a blank ``compliance_V`` cell in a batch CSV
+    becomes ``nan``, whose ceiling is ``nan``, which ``min()`` silently discards --
+    ``min([141.0, 212.0, nan]) == 141.0`` but ``min([nan, 141.0, 212.0])`` is ``nan``. The
+    row then reports a limiting current indistinguishable from a valid one.
+    """
+
+    @staticmethod
+    def _build(**settings):
+        return SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), StimProtocol(80, 200, 130, 1), **settings
+        )
+
+    @pytest.mark.parametrize(
+        ("setting", "value"),
+        [
+            ("compliance_V", float("nan")),
+            ("compliance_V", float("inf")),
+            ("compliance_V", -5.0),
+            ("compliance_V", 0.0),
+            ("tissue_conductivity_S_per_m", float("nan")),
+            ("tissue_conductivity_S_per_m", 0.0),
+            ("tissue_conductivity_S_per_m", -0.35),
+            ("lead_resistance_ohm", float("nan")),
+            ("lead_resistance_ohm", -1.0),
+            ("measured_impedance_ohm", float("nan")),
+            ("measured_impedance_ohm", 0.0),
+            ("capacitance_uF_cm2", float("nan")),
+            ("capacitance_uF_cm2", 0.0),
+            ("resting_potential_V", float("nan")),
+        ],
+    )
+    def test_the_setting_is_refused_at_construction(self, setting, value):
+        """Not tautological: each (name, value) pair is written out and the expected
+        outcome is a raise that names the setting -- where today every one of them
+        constructs and goes on to produce a verdict."""
+        with pytest.raises(ValueError, match=setting):
+            self._build(**{setting: value})
+
+    def test_a_valid_setting_of_the_same_shape_still_constructs(self):
+        """The guard must reject the value, not the parameter.
+
+        Not tautological: every setting above is supplied at a legitimate value and the
+        expected outcome is a working assessment.
+        """
+        calc = self._build(
+            compliance_V=10.0,
+            tissue_conductivity_S_per_m=0.27,
+            lead_resistance_ohm=500.0,
+            measured_impedance_ohm=4000.0,
+            capacitance_uF_cm2=37.5,
+            resting_potential_V=0.1,
+        )
+        assert calc.assess().status is not None
+
+    def test_a_nan_candidate_can_no_longer_reach_the_minimum(self):
+        """Ledger 52's mechanism, stated as the property it breaks.
+
+        Not tautological: the assertion is that every limit-bearing ceiling is a number,
+        checked with ``math.isnan`` over the assessment -- and the only way a ``nan``
+        entered was through a setting that is now refused.
+        """
+        import math
+
+        from neurostim.safety import LIMIT_BEARING
+
+        calc = self._build(compliance_V=10.0)
+        for check in calc.assess().checks:
+            if check.name in LIMIT_BEARING:
+                assert not math.isnan(check.ceiling_uA), check.name
+
+    def test_a_blank_compliance_cell_becomes_an_error_row_not_a_verdict(self):
+        """Ledger 52's reproduction, on the surface it was found on.
+
+        Not tautological: the two rows are identical apart from the blank cell, and the
+        expected outcome is that they differ -- one a verdict, one an ERROR carrying the
+        message. Today both report 19.634954 uA and a FAIL status.
+        """
+        from neurostim.io import assess_batch
+
+        base = {
+            "shape": "disc",
+            "diameter_um": 100,
+            "material": "Pt",
+            "current_uA": 80,
+            "pulse_width_us": 200,
+            "frequency_hz": 130,
+            "train_duration_s": 1,
+        }
+        frame = assess_batch(
+            [
+                {"label": "good", **base, "compliance_V": 10.0},
+                {"label": "blank", **base, "compliance_V": float("nan")},
+            ]
+        )
+        rows = {row["label"]: row for _, row in frame.iterrows()}
+
+        assert rows["good"]["status"] != "ERROR"
+        assert rows["blank"]["status"] == "ERROR"
+        assert "compliance_V" in rows["blank"]["error"]
+        assert "ValueError" in rows["blank"]["error"]
+
+
+class TestTheCeilingOracleSurvivesConstructionTimeValidation:
+    """Amendment 3. Both ceiling oracles rebuild a calculator up to ~135 times per call
+    across a 1e-12 to 1e6 uA bracket. Nothing validates ``current_uA`` today, so nothing
+    breaks -- the guard lands with the validation so that a later extension to amplitude is
+    caught by a test rather than by a crashed bisection.
+    """
+
+    def test_an_amplitude_the_constructor_refuses_is_not_a_passing_amplitude(
+        self, monkeypatch
+    ):
+        """Not tautological: the rejection threshold is written into the scripted
+        calculator here, and the expected answers -- ``False`` rather than a raise, and a
+        ceiling at the largest constructible amplitude rather than at the script's own
+        boundary -- both follow from it."""
+        from oracles import fail_ceiling
+        from test_oracles import scripted_calculator
+
+        def script(current_uA: float) -> frozenset[str]:
+            return frozenset() if current_uA < 500.0 else frozenset({"Water window"})
+
+        script.rejects_above_uA = 50.0  # type: ignore[attr-defined]
+
+        calc = scripted_calculator(script, monkeypatch)
+
+        assert fail_ceiling.no_check_fails(calc, 10.0)
+        assert not fail_ceiling.no_check_fails(calc, 1e6)
+        assert fail_ceiling.fail_ceiling_uA(calc) == 50.0
+
+    def test_the_guard_does_not_hide_a_misspelled_check_name(self):
+        """The catch must be narrow. A ``ValueError`` from an unknown check name is a test
+        defect and must still surface.
+
+        Not tautological: the expected outcome is a raise with a specific message, against
+        a call that differs from the one above only in the check name.
+        """
+        from oracles import fail_ceiling
+
+        from neurostim import RingElectrode
+
+        calc = SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+        with pytest.raises(ValueError, match="no such check"):
+            fail_ceiling.no_check_fails(calc, 10.0, names={"Water Window"})

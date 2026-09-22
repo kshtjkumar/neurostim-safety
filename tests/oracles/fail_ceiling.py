@@ -193,6 +193,27 @@ def rebuild_at(calculator: Any, current_uA: float) -> Any:
     )
 
 
+UNCONSTRUCTIBLE = "<amplitude refused at construction>"
+"""Stand-in name for an amplitude the package declines to build a calculator at.
+
+Not a check. It is reported in the failing set so that "the package refuses this
+amplitude" is answered the same way as "a check fails at this amplitude": neither is an
+amplitude at which nothing fails, and the ceiling must be the largest amplitude that is
+*both* constructible and passing.
+
+Nothing validates ``current_uA`` today, so nothing produces this -- which is exactly why
+it is here. Both ceiling oracles rebuild a ``SafetyCalculator`` up to ~135 times per call
+across a ``1e-12`` to ``1e6`` uA bracket, and C1.9 begins validating settings at
+construction. If validation ever reaches amplitude, the upper bracket would raise and the
+bisection would crash instead of returning a ceiling; with this, a test catches it rather
+than a stack trace.
+
+Returned whatever ``names`` restricts to, deliberately: an amplitude that cannot be built
+is not one at which a named check passes. It is angle-bracketed so it cannot collide with
+a real check name.
+"""
+
+
 def failing_checks(
     calculator: Any, current_uA: float, *, names: Collection[str] | None = None
 ) -> frozenset[str]:
@@ -203,10 +224,19 @@ def failing_checks(
     ``ValueError`` and not an empty restriction, because a misspelling would otherwise
     weaken the predicate to "never fails" and the search would answer ``inf``.
 
+    An amplitude the package refuses to construct answers :data:`UNCONSTRUCTIBLE` rather
+    than raising. The catch is around the rebuild alone, so the unknown-name ``ValueError``
+    raised below it still surfaces -- that one is a defect in the caller, not a fact about
+    the package.
+
     Names, never numbers: this and :func:`no_check_fails` are the whole of what the oracle
     reads from the package.
     """
-    assessment = rebuild_at(calculator, current_uA).assess()
+    try:
+        rebuilt = rebuild_at(calculator, current_uA)
+    except ValueError:
+        return frozenset({UNCONSTRUCTIBLE})
+    assessment = rebuilt.assess()
     if names is not None:
         emitted = {check.name for check in assessment.checks}
         unknown = sorted(set(names) - emitted)
