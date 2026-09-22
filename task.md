@@ -12,9 +12,9 @@
 | 0 | Git baseline + traceability | DONE (bfca95d) |
 | 1 | Parallel read-only audit (6 agents) | DONE - 78 findings |
 | 2 | Synthesis + fix plan (delegated planner) | DONE - docs/audit/FIX_PLAN.md, 41 commits, 7 conventions |
-| 3 | Adversarial re-plan / criticism | RUNNING - 2 critics (physics, execution) |
-| 4 | Execution, fix by fix, one commit each | PENDING |
-| 5 | Independent re-review of every fix | PENDING |
+| 3 | Adversarial re-plan / criticism | DONE - 13 blockers found, FIX_PLAN_v2.md |
+| 4 | Execution, fix by fix, one commit each | Phase 0 DONE (6 commits, 522->627 tests); Phase 1 blocked on plan amendment |
+| 5 | Independent re-review of every fix | Phase 0 review RUNNING |
 | 6 | Test hardening (negative + property + mutation) | PENDING |
 | 7 | Docs, CI, packaging to JOSS bar | PENDING |
 | 8 | Final verification + provenance strict pass | PENDING |
