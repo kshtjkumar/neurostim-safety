@@ -194,6 +194,18 @@ def test_ci_runs_the_branch_point_gate() -> None:
     )
 
 
+def test_ci_fetches_the_full_history_for_the_ledger_gate() -> None:
+    """``actions/checkout@v4`` defaults to ``fetch-depth: 1``.
+
+    The ledger gate asserts that every recorded commit id exists. Under a depth-1
+    checkout no historical object is present, so the assertion fails on the first Phase 1
+    commit that fills a Commit cell -- on a ledger that is correct.
+    """
+    lint = _ci_job("lint")
+    assert "ledger_check.py" in lint, "this test guards the job that runs the gate"
+    assert "fetch-depth: 0" in lint
+
+
 # --- the generated README transcript -------------------------------------------------
 
 
@@ -351,6 +363,29 @@ def _run_ledger(ledger: Path, plan: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _transplant_ledger_check(root: Path) -> Path:
+    """A copy of the gate whose ``REPO_ROOT`` is ``root``, not this repository.
+
+    The script locates the repository from its own path, so the only way to ask it what
+    it does where no history is available is to put it somewhere that has none.
+    """
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    transplanted = scripts / "ledger_check.py"
+    transplanted.write_text(LEDGER_CHECK.read_text(encoding="utf-8"), encoding="utf-8")
+    return transplanted
+
+
+def _ci_job(name: str) -> str:
+    """One job's block from the workflow, sliced by indentation."""
+    lines = CI_WORKFLOW.read_text(encoding="utf-8").splitlines()
+    start = lines.index(f"  {name}:")
+    for offset, line in enumerate(lines[start + 1 :], start + 1):
+        if line.strip() and not line.startswith("   ") and not line.startswith("#"):
+            return "\n".join(lines[start:offset])
+    return "\n".join(lines[start:])
+
+
 class TestLedgerGate:
     """The ledger is the record of what was wrong; a row that does not parse is lost.
 
@@ -447,6 +482,92 @@ class TestLedgerGate:
         ledger, plan = _write_pair(tmp_path, rows)
         result = _run_ledger(ledger, plan)
         assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_the_hash_check_is_skipped_outside_a_git_checkout(self, tmp_path: Path) -> None:
+        """No history is not a fabricated hash. It must say so and pass, not fail.
+
+        A JOSS reviewer running the gate on an unpacked sdist has no ``.git`` at all.
+        Reporting every recorded commit as "does not exist" there is a confusing failure
+        about a ledger that is correct.
+        """
+        transplanted = _transplant_ledger_check(tmp_path)
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | done | "
+            "0000000000000000000000000000000000000000 |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = subprocess.run(
+            [sys.executable, str(transplanted), "--ledger", str(ledger), "--plan", str(plan)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "not a git checkout" in result.stderr
+        assert "1 recorded commit id" in result.stderr
+
+    def test_the_hash_check_is_skipped_in_a_shallow_clone(self, tmp_path: Path) -> None:
+        """``actions/checkout@v4`` defaults to ``fetch-depth: 1``.
+
+        Under a depth-1 checkout no historical object is present, so every recorded hash
+        resolves to "does not exist" and the gate fails the lint job on the first Phase 1
+        commit that fills a Commit cell. The workflow now asks for the full history; this
+        is what happens anywhere else.
+        """
+        transplanted = _transplant_ledger_check(tmp_path)
+        for command in (
+            ["git", "init", "-q", "."],
+            ["git", "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-q",
+             "--allow-empty", "-m", "x"],
+        ):
+            subprocess.run(command, cwd=tmp_path, check=True, capture_output=True)
+        (tmp_path / ".git" / "shallow").touch()
+
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | done | "
+            "0000000000000000000000000000000000000000 |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = subprocess.run(
+            [sys.executable, str(transplanted), "--ledger", str(ledger), "--plan", str(plan)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "shallow" in result.stderr
+
+    def test_a_fabricated_hash_still_fails_where_the_history_is_there(
+        self, tmp_path: Path
+    ) -> None:
+        """The degradation must not have turned the gate off in the place it runs."""
+        transplanted = _transplant_ledger_check(tmp_path)
+        for command in (
+            ["git", "init", "-q", "."],
+            ["git", "-c", "user.name=t", "-c", "user.email=t@e", "commit", "-q",
+             "--allow-empty", "-m", "x"],
+        ):
+            subprocess.run(command, cwd=tmp_path, check=True, capture_output=True)
+
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | done | "
+            "0000000000000000000000000000000000000000 |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = subprocess.run(
+            [sys.executable, str(transplanted), "--ledger", str(ledger), "--plan", str(plan)],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            check=False,
+        )
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "0000000" in result.stderr
 
     def test_a_duplicated_entry_number_is_caught(self, tmp_path: Path) -> None:
         rows = (

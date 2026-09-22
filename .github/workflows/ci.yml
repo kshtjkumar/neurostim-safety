@@ -65,6 +65,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The ledger gate asserts that every commit id CODE_MISTAKES_LOG.md records is
+          # a commit that exists. actions/checkout defaults to fetch-depth: 1, which
+          # leaves no historical object to look one up in, so the gate would skip the
+          # assertion here (see scripts/ledger_check.py) on a ledger that is correct.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:

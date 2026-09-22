@@ -17,7 +17,12 @@ What this gate asserts
    are exempt: those are defects *in* the plan, disposed of in its section 1b, and by
    construction have no row in its coverage table.
 4. Any commit id a row records is a commit that exists. A ledger claiming a fix landed in
-   a commit that was never made is worse than one claiming nothing.
+   a commit that was never made is worse than one claiming nothing. This one assertion
+   needs the repository's history, which is not always there: ``actions/checkout@v4``
+   defaults to ``fetch-depth: 1`` and an unpacked sdist has no ``.git`` at all. Where the
+   history is unavailable the assertion is **skipped with a message naming how many ids
+   went unchecked and why**, rather than failing every recorded hash on a ledger that is
+   correct. The CI workflow asks for the full history so the gate is never skipped there.
 
 Usage
 -----
@@ -146,9 +151,44 @@ def commit_exists(sha: str) -> bool:
     return result.returncode == 0
 
 
-def check(ledger_text: str, plan_text: str) -> list[str]:
-    """Every failed assertion, as a list of messages. Empty means clean."""
+def unavailable_history() -> str | None:
+    """Why recorded commit ids cannot be checked here, or ``None`` when they can.
+
+    ``git cat-file -e`` cannot tell "this commit was never made" from "this checkout does
+    not have it", and the second is the common case: a shallow clone holds one commit and
+    an unpacked sdist holds none. Asking first is what keeps a missing history from being
+    reported as a ledger full of fabricated hashes.
+    """
+    probe = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return f"{REPO_ROOT} is not a git checkout"
+    if probe.stdout.strip() == "true":
+        return (
+            f"{REPO_ROOT} is a shallow clone -- git clone --depth, or "
+            f"actions/checkout's default fetch-depth: 1 -- so no historical object is "
+            f"present to look an id up in"
+        )
+    return None
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """What the gate found: ``failures`` decide the exit status, ``notices`` explain."""
+
+    failures: list[str]
+    notices: list[str]
+
+
+def check(ledger_text: str, plan_text: str) -> Outcome:
+    """Every failed assertion, plus every assertion that could not be made here."""
     failures: list[str] = []
+    notices: list[str] = []
     table = parse_table(ledger_text)
     width = len(table.header)
 
@@ -183,15 +223,22 @@ def check(ledger_text: str, plan_text: str) -> list[str]:
             f"be scheduled or declared a {PLAN_DEFECT_SEVERITY} entry"
         )
 
-    for row in table.entries:
-        sha = row.commit
-        if _HASH.match(sha) and not commit_exists(sha):
-            failures.append(
-                f"entry {row.number} records commit {sha}, which does not exist in this "
-                f"repository"
-            )
+    recorded = [row for row in table.entries if _HASH.match(row.commit)]
+    reason = unavailable_history()
+    if reason is not None:
+        notices.append(
+            f"{len(recorded)} recorded commit id(s) were NOT checked: {reason}. Every "
+            f"other assertion was made."
+        )
+    else:
+        for row in recorded:
+            if not commit_exists(row.commit):
+                failures.append(
+                    f"entry {row.number} records commit {row.commit}, which does not "
+                    f"exist in this repository"
+                )
 
-    return failures
+    return Outcome(failures, notices)
 
 
 def _abort(*lines: str) -> NoReturn:
@@ -215,9 +262,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
     args = parser.parse_args(argv)
 
-    failures = check(_read(args.ledger), _read(args.plan))
-    if failures:
-        for failure in failures:
+    outcome = check(_read(args.ledger), _read(args.plan))
+    for notice in outcome.notices:
+        print(f"NOTE: {notice}", file=sys.stderr)
+    if outcome.failures:
+        for failure in outcome.failures:
             print(f"FAIL: {failure}", file=sys.stderr)
         return 1
 
