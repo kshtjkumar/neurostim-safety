@@ -257,6 +257,68 @@ class TestFailCeiling:
             pytest.skip("C1.3 has not landed: the package exposes no LIMIT_BEARING yet")
         assert set(package_set) == set(fail_ceiling.LIMIT_BEARING)
 
+    def test_every_constructor_argument_is_carried(self) -> None:
+        """The frozen set rebuild_at checks against is today's signature, exactly."""
+        import inspect
+
+        from neurostim import SafetyCalculator
+
+        assert frozenset(
+            {
+                "electrode",
+                "protocol",
+                "k",
+                "material",
+                "policy",
+                "medium",
+                "tissue_conductivity_S_per_m",
+                "lead_resistance_ohm",
+                "compliance_V",
+                "measured_impedance_ohm",
+                "resting_potential_V",
+                "capacitance_uF_cm2",
+            }
+        ) == fail_ceiling.CARRIED_ARGUMENTS
+        signature = inspect.signature(SafetyCalculator.__init__)
+        assert set(signature.parameters) - {"self"} == set(fail_ceiling.CARRIED_ARGUMENTS)
+
+    def test_a_new_optional_constructor_argument_is_caught(
+        self, worked_example, monkeypatch
+    ) -> None:
+        """The protection rebuild_at documents, for the case that actually arises.
+
+        A new REQUIRED parameter already shows up as a TypeError at the call. A new
+        OPTIONAL one -- which is what Phase 1 adds -- was silently defaulted, and the
+        oracle then answered about a different calculator from the one it was handed.
+        """
+        import inspect
+
+        import neurostim
+
+        real = neurostim.SafetyCalculator
+
+        class Drifted(real):  # type: ignore[misc, valid-type]
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                super().__init__(*args, **kwargs)
+
+        signature = inspect.signature(real.__init__)
+        Drifted.__init__.__signature__ = signature.replace(  # type: ignore[attr-defined]
+            parameters=[
+                *signature.parameters.values(),
+                inspect.Parameter(
+                    "counter_electrode_area_cm2",
+                    inspect.Parameter.KEYWORD_ONLY,
+                    default=1.0,
+                ),
+            ]
+        )
+        monkeypatch.setattr(neurostim, "SafetyCalculator", Drifted)
+
+        with pytest.raises(
+            fail_ceiling.ConstructorDrift, match="counter_electrode_area_cm2"
+        ):
+            fail_ceiling.rebuild_at(worked_example, 1.0)
+
     def test_a_protocol_that_never_fails_reports_no_ceiling(self) -> None:
         """``inf`` is an honest answer; the bracket's upper end presented as one is not."""
         from neurostim import DiscElectrode, SafetyCalculator, StimProtocol

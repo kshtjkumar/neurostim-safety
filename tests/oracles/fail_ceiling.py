@@ -58,9 +58,11 @@ caller that needs to tell the two apart asks :func:`brackets_the_ceiling`, which
 
 from __future__ import annotations
 
+import inspect
 import math
 from collections.abc import Collection
 from dataclasses import replace
+from functools import cache
 from typing import Any
 
 # The searched amplitude is in microamps. One amp is far above any electrode this package
@@ -99,6 +101,41 @@ property of the parameter set.
 """
 
 
+CARRIED_ARGUMENTS: frozenset[str] = frozenset(
+    {
+        "electrode",
+        "protocol",
+        "k",
+        "material",
+        "policy",
+        "medium",
+        "tissue_conductivity_S_per_m",
+        "lead_resistance_ohm",
+        "compliance_V",
+        "measured_impedance_ohm",
+        "resting_potential_V",
+        "capacitance_uF_cm2",
+    }
+)
+"""Every argument ``SafetyCalculator`` takes, as of the commit that froze this set.
+
+:func:`rebuild_at` names all twelve, and checks this set against the live signature before
+it builds anything. See :class:`ConstructorDrift` for why the naming alone is not enough.
+"""
+
+
+class ConstructorDrift(AssertionError):
+    """``SafetyCalculator`` takes an argument this oracle does not carry, or has lost one.
+
+    A new **required** parameter announces itself: ``rebuild_at`` would raise ``TypeError``
+    at the call. A new **optional** one -- which is what the phases ahead add -- does not.
+    It is silently defaulted, and the oracle then answers about a calculator that differs
+    from the one it was handed in exactly the field the new phase introduced. The
+    docstring claimed the explicit argument list protected against that; only this check
+    does.
+    """
+
+
 class NonMonotonePredicate(AssertionError):
     """``assess().failed`` does not have the assumed shape, so no ceiling can be reported.
 
@@ -112,12 +149,15 @@ class NonMonotonePredicate(AssertionError):
 def rebuild_at(calculator: Any, current_uA: float) -> Any:
     """The same calculator with only the amplitude changed.
 
-    Every construction argument is carried across explicitly. A ``copy`` would be shorter
-    and would silently inherit any future field; naming them means a new field that
-    changes the verdict shows up here as a missing argument rather than as a wrong answer.
+    Every construction argument is carried across explicitly, and the signature is
+    checked against :data:`CARRIED_ARGUMENTS` before anything is built. A ``copy`` would be
+    shorter and would silently inherit any future field; naming the arguments catches a new
+    **required** one, and the signature check catches a new **optional** one, which naming
+    alone does not -- see :class:`ConstructorDrift`.
     """
     from neurostim import SafetyCalculator
 
+    _assert_constructor_is_frozen(SafetyCalculator)
     return SafetyCalculator(
         calculator.e,
         replace(calculator.p, current_uA=current_uA),
@@ -270,6 +310,26 @@ def brackets_the_ceiling(
         return False
     return no_check_fails(calculator, ceiling_uA, names=names) and not no_check_fails(
         calculator, math.nextafter(ceiling_uA, math.inf), names=names
+    )
+
+
+@cache
+def _assert_constructor_is_frozen(calculator_class: type) -> None:
+    """Raise :class:`ConstructorDrift` unless the signature is the one that was frozen.
+
+    Cached on the class: the bisection rebuilds a calculator ~135 times per call and the
+    signature cannot change between two of them.
+    """
+    live = set(inspect.signature(calculator_class.__init__).parameters) - {"self"}
+    added = sorted(live - CARRIED_ARGUMENTS)
+    dropped = sorted(CARRIED_ARGUMENTS - live)
+    if not added and not dropped:
+        return
+    raise ConstructorDrift(
+        f"{calculator_class.__name__} no longer takes the arguments this oracle carries: "
+        f"added {added}, dropped {dropped}. An argument that is not carried is left at its "
+        f"default, so the oracle would answer about a different calculator from the one it "
+        f"was handed. Carry it in rebuild_at and add it to CARRIED_ARGUMENTS."
     )
 
 
