@@ -121,13 +121,22 @@ class TestPropagationIntoAssessment:
             compliance_V=10.0,
         ).assess()
 
-    def test_platinum_range_reaches_the_final_limit(self, assessment):
-        """The polarity-resolved Pt range must survive to the reported current limit.
+    def test_platinum_range_reaches_the_charge_injection_ceiling(self, assessment):
+        """The polarity-resolved Pt range must survive to the charge-injection limit.
 
         The default protocol is cathodic-first, so Rose & Robblee's 100-150 uC/cm^2
         sub-range applies rather than the 50-150 union of both polarities.
+
+        Rewritten at C1.8. It used to read the *final* limit, which stopped being the
+        charge-injection one when C1.6 widened the candidate set: Cogan's 4 nC/phase
+        microelectrode threshold binds at 20.0 uA on this ring, well below platinum's
+        141.4-212.1 uA band, and that threshold has no published range -- so the reported
+        interval now collapses onto 20.0. The platinum range is still propagated and is
+        still correct; it simply no longer binds. Asserted here where it is still visible,
+        with the containment of the final interval covered in tests/test_verdict_core.py.
         """
-        interval = assessment.limiting_current_interval_uA
+        interval = assessment.charge.max_current_interval_uA
+        assert interval is not None
         assert interval.low == pytest.approx(141.4, rel=1e-3)
         assert interval.high == pytest.approx(212.1, rel=1e-3)
         assert interval.fold_range == pytest.approx(1.5, rel=1e-6)
@@ -140,16 +149,6 @@ class TestPropagationIntoAssessment:
         ).assess().charge
         assert anodic.limit_interval_uC_cm2 == Interval(50.0, 100.0)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "C1.6 widened the point estimate to all seven limit-bearing checks while "
-            "limiting_current_interval_uA still propagates only Shannon and the CIC, so "
-            "the point estimate (20.0 uA) now sits below the interval (141.37-212.06). "
-            "C1.8 widens the interval through the same per-check machinery; this marker "
-            "is strict so that commit cannot land without removing it."
-        ),
-    )
     def test_point_estimate_sits_at_the_conservative_end(self, assessment):
         assert assessment.limiting_current_uA == pytest.approx(
             assessment.limiting_current_interval_uA.low

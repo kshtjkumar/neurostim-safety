@@ -382,26 +382,53 @@ class SafetyAssessment:
     def limiting_current_interval_uA(self) -> Interval:
         """Binding current limit as an interval over the published ranges.
 
-        The point estimate in :attr:`limiting_current_uA` depends on two arbitrary
-        choices -- a single Shannon ``k`` and a single ``policy`` end of the material's
-        range. This propagates both instead: the Shannon band 1.5-2.0 and the full
-        published charge-injection range, reduced to whichever binds at each end.
+        The point estimate in :attr:`limiting_current_uA` depends on arbitrary choices --
+        a single Shannon ``k``, a single ``policy`` end of the material's range. This
+        propagates the published ranges instead, reduced to whichever binds at each end.
+
+        **Over the same candidate set as the point estimate**, which is the whole of this
+        commit. It used to propagate only Shannon and the charge-injection range while the
+        point estimate is a minimum over all seven limit-bearing checks, so the two were
+        answers to different questions: the worked example reported a limit of 20.0 uA
+        beside an interval of 141.37-212.06 uA that does not contain it. An interval that
+        excludes its own point estimate is a second, contradictory answer rather than a
+        wider statement of the same one.
+
+        Two checks carry a genuine published band and contribute one: Shannon over
+        ``k`` 1.5-2.0, and chronic degradation over its stored threshold band. The rest
+        contribute their ceiling exactly -- not because they are certain, but because no
+        source in this bibliography gives a range for them, and inventing one here would
+        be the kind of unsourced number this package exists to avoid. A check that did not
+        run contributes nothing at all.
 
         A wide result is not a defect of the calculation. It is what the literature
         actually supports, and narrowing it requires characterising your own electrodes.
         """
         candidates = [
-            shannon_mod.max_current_interval_uA(
+            self._ceiling_interval_uA(check)
+            for check in self._limit_bearing
+            if check.status is not Status.NOT_EVALUATED
+        ]
+        if not candidates:  # pragma: no cover - Current density always evaluates
+            return Interval.exact(math.inf)
+        return most_restrictive(candidates)
+
+    def _ceiling_interval_uA(self, check: Check) -> Interval:
+        """One check's ceiling across whatever published range stands behind it."""
+        if check.name == "Shannon criterion":
+            return shannon_mod.max_current_interval_uA(
                 self.electrode.area_cm2, self.protocol.pulse_width_us
             )
-        ]
-        if self.charge.max_current_interval_uA is not None:
-            candidates.append(self.charge.max_current_interval_uA)
-        else:  # pragma: no cover - only if a caller builds ChargeResult by hand
-            candidates.append(Interval.exact(self.charge.max_current_uA))
-        if self.compliance.evaluated:
-            candidates.append(Interval.exact(self.compliance.max_current_uA))
-        return most_restrictive(candidates)
+        if check.name == "Charge injection limit":
+            if self.charge.max_current_interval_uA is not None:
+                return self.charge.max_current_interval_uA
+            # pragma: no cover - only if a caller builds ChargeResult by hand
+            return Interval.exact(self.charge.max_current_uA)
+        if check.name == "Chronic degradation":
+            return _chronic_ceiling_interval_uA(
+                self.material, self.protocol, self.electrode.area_cm2
+            )
+        return Interval.exact(check.ceiling_uA)
 
     @property
     def limiting_mechanism(self) -> str:
@@ -417,6 +444,24 @@ class SafetyAssessment:
         be the minimum, and the name is looked up rather than composed.
         """
         return min(self._limit_bearing, key=lambda c: c.ceiling_uA).name
+
+    def _published_range_note(self) -> str:
+        """What the interval beside it does and does not span.
+
+        When the binding check has no published range the interval collapses onto the
+        point estimate, and saying "across published ranges" without saying so would read
+        as a precision the literature does not supply.
+        """
+        if self.limiting_current_interval_uA.is_exact:
+            return (
+                f"(unchanged: {self.limiting_mechanism} has no published range; "
+                f"Shannon k {K_BOUNDS[0]}-{K_BOUNDS[1]} and the material range were "
+                f"propagated and do not bind)"
+            )
+        return (
+            f"(Shannon k {K_BOUNDS[0]}-{K_BOUNDS[1]}, full material range, "
+            f"chronic threshold band)"
+        )
 
     def _by_kind_line(self) -> str:
         """The per-kind limits in a fixed order, so the line is stable run to run."""
@@ -457,7 +502,7 @@ class SafetyAssessment:
                 f"({self.limiting_mechanism})",
                 f"  across published ranges: "
                 f"{self.limiting_current_interval_uA.describe('uA', floor=True)} "
-                f"(Shannon k {K_BOUNDS[0]}-{K_BOUNDS[1]}, full material range)",
+                f"{self._published_range_note()}",
                 f"  by kind: {self._by_kind_line()}",
             ]
             incomplete = self.limits_incomplete_note()
@@ -534,6 +579,20 @@ def _water_window_ceiling_uA(
     )
 
 
+def _density_ceiling_uA(
+    limit_uC_cm2: float, protocol: StimProtocol, area_cm2: float, *, name: str
+) -> float:
+    """Largest amplitude whose charge density stays at or below ``limit_uC_cm2``."""
+    return floor_to_pass(
+        limit_uC_cm2 * area_cm2 / (protocol.pulse_width_us * 1e-6),
+        lambda current_uA: charge_mod.charge_density_uC_cm2(
+            charge_uC(current_uA, protocol.pulse_width_us), area_cm2
+        )
+        <= limit_uC_cm2,
+        name=name,
+    )
+
+
 def _chronic_ceiling_uA(
     material: Material, protocol: StimProtocol, area_cm2: float
 ) -> float:
@@ -541,14 +600,30 @@ def _chronic_ceiling_uA(
     threshold = material.chronic_threshold
     if threshold is None:
         return math.inf
-    high = threshold.high_uC_cm2
-    return floor_to_pass(
-        high * area_cm2 / (protocol.pulse_width_us * 1e-6),
-        lambda current_uA: charge_mod.charge_density_uC_cm2(
-            charge_uC(current_uA, protocol.pulse_width_us), area_cm2
-        )
-        <= high,
-        name="Chronic degradation",
+    return _density_ceiling_uA(
+        threshold.high_uC_cm2, protocol, area_cm2, name="Chronic degradation"
+    )
+
+
+def _chronic_ceiling_interval_uA(
+    material: Material, protocol: StimProtocol, area_cm2: float
+) -> Interval:
+    """The dissolution ceiling across the published band, not at one end of it.
+
+    ``ChronicThreshold`` stores a band -- 20-50 uC/cm^2 for platinum -- of which the upper
+    end is where the check FAILs and the lower end where it starts to caution. Both ends
+    are real published numbers, so the interval spans them.
+    """
+    threshold = material.chronic_threshold
+    if threshold is None:
+        return Interval.exact(math.inf)
+    return Interval(
+        _density_ceiling_uA(
+            threshold.low_uC_cm2, protocol, area_cm2, name="Chronic degradation"
+        ),
+        _density_ceiling_uA(
+            threshold.high_uC_cm2, protocol, area_cm2, name="Chronic degradation"
+        ),
     )
 
 

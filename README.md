@@ -40,7 +40,7 @@ print(calc.describe())
 ```
 Overall: FAIL (1 check not evaluated: Shannon criterion)
 Limiting current: 20.00 uA (Microelectrode charge/phase)
-  across published ranges: 141.3-212.0 uA (Shannon k 1.5-2.0, full material range)
+  across published ranges: 20.00 uA (unchanged: Microelectrode charge/phase has no published range; Shannon k 1.5-2.0 and the material range were propagated and do not bind)
   by kind: tissue 20.00 uA, electrode-acute 141.3 uA, electrode-chronic 70.68 uA, instrument 965.3 uA
   INCOMPLETE: 1 limit-bearing check did not run (Shannon criterion), so the true limit may be lower
 
@@ -146,14 +146,19 @@ Published limits are ranges, not numbers. Cogan gives platinum as a factor of th
 Rather than hide that behind the `policy` setting, the assessment reports both:
 
 ```
-Limiting current: 20.00 uA (Microelectrode charge/phase)
-  across published ranges: 141.3-212.0 uA (Shannon k 1.5-2.0, full material range)
+Limiting current: 19.63 uA (Chronic degradation)
+  across published ranges: 7.853-19.63 uA (Shannon k 1.5-2.0, full material range, chronic threshold band)
 ```
 
 ```python
-assessment.limiting_current_interval_uA     # Interval(141.37167, 212.05750)
-assessment.charge.limit_interval_uC_cm2     # Interval(50.0, 150.0)
+assessment.limiting_current_interval_uA     # Interval(7.85398, 19.63495)
+assessment.charge.limit_interval_uC_cm2     # Interval(100.0, 150.0)
 ```
+
+The interval is over the same candidate set as the point estimate, so it always contains
+it. When the check that binds has no published range of its own — Cogan's 4 nC/phase
+microelectrode threshold is a single number — the interval collapses onto the point
+estimate and says so, rather than reporting a spread the literature does not supply.
 
 Both ends of a limit interval are printed **floored** to four significant digits, not
 rounded to nearest: rounding a maximum to nearest rounds it up, and programming the

@@ -643,14 +643,28 @@ class TestEveryRenderSiteFloors:
         assert "141.4" not in by_kind
 
     def test_describe_floors_both_ends_of_the_published_range(self):
-        """Not tautological: 141.37166941154072 and 212.05750411731108 floor by hand to
-        141.3 and 212.0; ``:.4g`` prints 141.4 and 212.1."""
+        """Not tautological: the low end is platinum's 20 uC/cm^2 dissolution threshold
+        over this area and pulse width, 7.853981633974483 uA, which floors by hand to
+        7.853 where ``:.4g`` rounds it up to 7.854 -- and 7.854 uA FAILs the check whose
+        maximum it claims to be.
+
+        The fixture is a 100 um Pt disc rather than the worked-example ring: from C1.8 the
+        ring's interval collapses onto its point estimate, because the check that binds
+        there -- Cogan's 4 nC/phase -- has no published range. On the disc the chronic
+        threshold band 20-50 uC/cm^2 straddles the limit at both ends.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
         line = next(
             row
-            for row in self._worked_example().describe().splitlines()
+            for row in calc.describe().splitlines()
             if "across published ranges" in row
         )
-        assert "141.3-212.0" in line
+        assert "7.853-" in line
+        assert "7.854" not in line
 
     def test_the_pdf_floors_every_limit_it_prints(self):
         """Not tautological: the three ledger-49 sites are asserted on extracted PDF text
@@ -1383,3 +1397,104 @@ class TestLimitsIncompleteAndByKind:
         assert "20.00" in text
         assert "incomplete" in text.lower()
         assert "incomplete" in headline_text(calc.assess()).lower()
+
+
+class TestTheIntervalContainsThePointEstimate:
+    """T16. The interval and the point estimate must be answers to the same question.
+
+    ``limiting_current_interval_uA`` propagated only the Shannon band and the material's
+    charge-injection range, so after C1.6 widened the point estimate to all seven
+    limit-bearing checks the two disagreed outright: the worked example reported a limit of
+    20.0 uA and an interval of 141.37-212.06 uA that does not contain it. An interval that
+    excludes its own point estimate is not a wider statement of the same thing; it is a
+    second, contradictory answer.
+    """
+
+    @staticmethod
+    def _cases():
+        from dataclasses import replace
+
+        from neurostim.materials import MATERIALS
+
+        electrode = DiscElectrode(100.0, "Pt")
+        base = StimProtocol(80.0, 200.0, 130.0, 1.0)
+        for material in MATERIALS:
+            for policy in ("conservative", "nominal", "optimistic"):
+                for anodic_first in (False, True):
+                    yield SafetyCalculator(
+                        electrode,
+                        replace(base, anodic_first=anodic_first),
+                        material=material,
+                        policy=policy,  # type: ignore[arg-type]
+                        compliance_V=10.0,
+                    )
+
+    def test_the_interval_contains_the_point_estimate(self):
+        """Not tautological: the two quantities are computed by different code from
+        different inputs -- the point estimate from each check's own ceiling at the
+        configured k and policy, the interval from published ranges -- and containment is
+        a relation between them, not a restatement of either."""
+        for calc in self._cases():
+            assessment = calc.assess()
+            interval = assessment.limiting_current_interval_uA
+            limit = assessment.limiting_current_uA
+
+            assert interval.contains(limit), (
+                calc.material.key,
+                calc.policy,
+                calc.p.anodic_first,
+                limit,
+                (interval.low, interval.high),
+            )
+
+    def test_the_worked_example_interval_moves_down_with_its_point_estimate(self):
+        """Not tautological: the expected low end is the microelectrode ceiling, 20.0 uA,
+        which is a published constant over a pulse width and is where the point estimate
+        independently landed."""
+        from neurostim import RingElectrode
+
+        assessment = SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        ).assess()
+        interval = assessment.limiting_current_interval_uA
+
+        assert interval.low == pytest.approx(20.0)
+        assert interval.contains(20.0)
+        assert interval.high < 141.37166941154072
+
+    def test_a_published_range_still_widens_the_interval(self):
+        """The interval must stay an interval, not collapse to the point estimate.
+
+        Not tautological: the fixture is chosen so the *chronic* threshold binds, whose
+        published band is 20-50 uC/cm^2 on platinum -- a factor of 2.5 -- and the expected
+        fold is that ratio, written out.
+        """
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(500.0, 200.0, 50.0, 1.0)
+        ).assess()
+        interval = assessment.limiting_current_interval_uA
+
+        assert assessment.limiting_mechanism == "Chronic degradation"
+        assert interval.fold_range == pytest.approx(50.0 / 20.0, rel=1e-6)
+        assert interval.contains(assessment.limiting_current_uA)
+
+    def test_a_check_that_did_not_run_does_not_narrow_the_interval(self):
+        """Not tautological: the premise -- Shannon NOT_EVALUATED on this microelectrode
+        -- is asserted from the assessment, and the expected behaviour is that the Shannon
+        band, which would bind at 472.7-841.3 uA, is absent from the result."""
+        from neurostim import RingElectrode
+
+        calc = SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+        assessment = calc.assess()
+        shannon = next(c for c in assessment.checks if c.name == "Shannon criterion")
+
+        assert shannon.status is Status.NOT_EVALUATED
+        assert assessment.limiting_current_interval_uA.contains(
+            assessment.limiting_current_uA
+        )
