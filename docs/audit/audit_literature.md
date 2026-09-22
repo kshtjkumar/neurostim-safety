@@ -1,10 +1,110 @@
 # Literature Audit — `neurostim_safety`
 
-Read-only audit. Every literature-derived numeric constant in the package checked against
-its cited primary source. Primary sources read from plain-text extractions of the PDFs in
-`papers_stim_calc_ref/` (in `$SCRATCH/txt/`); PDFs consulted where extraction was garbled.
+**Scope.** Every literature-derived numeric constant in `neurostim/materials.py`,
+`neurostim/references.py`, all twelve `neurostim/data/*.py` modules, `neurostim/audit.py`,
+the conductivity constants in `models/field.py` and `models/thermal.py`, and the README
+tables — checked against the primary source each one cites. Sources read from the PDFs in
+`papers_stim_calc_ref/` (plain-text extractions, PDF pages where the extraction was
+garbled); 15 DOIs resolved against Crossref plus one against DataCite. Read-only: no file
+in the repository was modified.
 
-Verdict vocabulary:
+---
+
+## Summary
+
+### Counts by verdict
+
+Counted per table row below (one row ≈ one constant, condition set, or DOI); ≈300 checks.
+
+| verdict | count | note |
+|---|---|---|
+| **MATCH** | ≈258 | value, units and conditions agree with the source |
+| **CONDITION-DROPPED** | 9 | number right, a condition that sets it is not recorded |
+| **MISMATCH** | 8 | code disagrees with the source it cites |
+| **DERIVED** (presented as read) | 7 | computed by the package, not printed in the source |
+| **UNVERIFIABLE** | 24 | source absent or inaccessible; see section 17 |
+| **UNIT-ERROR** | **0** | every unit conversion recomputed by hand was correct |
+
+**No unit errors were found anywhere.** mC/cm^2 ↔ uC/cm^2, uC/mm^2 ↔ uC/cm^2, nC/phase over
+um^2 → uC/cm^2, ps/ns/us/ms → s, mm → cm, S/m, ml/min/kg → 1/s, and °C → K were each
+recomputed independently and all agree.
+
+### The package's central claim
+
+> "Every literature-derived constant carries its primary source **and the conditions under
+> which it was measured**."
+
+**Largely true, with four real exceptions.** The Cogan 2008 Table 2 transcription is exact;
+the deliberate departures from Cogan to the primaries (AIROF, PEDOT, Ta2O5) are each
+documented and each checks out against the primary text; Gabriel Part III Table 1, McCreery
+1990 Table I, McCreery 1995, Riedy & Walter's Table I, ISO Table 101 and Elwassif Table I
+are transcribed without a single numeric error. The exceptions are S-1, S-2, S-3 and S-6
+below.
+
+### Not-a-MATCH findings, severity ranked
+
+| # | severity | finding | where |
+|---|---|---|---|
+| **S-1** | **high** | **Pt in-vivo derating 2-14x contradicts the source that publishes its own.** Leung et al. (2014) state "in vivo was between **8.7 times less (200 us) and 3.2 times less (3200 us)** ... determined by dividing the in vitro Qinj by the mean in vivo Qinj **at the respective pulsewidths**". The code's 2 and 14 come from dividing best-in-vitro by worst-in-vivo **across mismatched pulse widths** — the exact comparison the authors pre-empted. Low bound too permissive (2 vs 3.2), high bound above even Cogan 2016's "as much as a factor of 10" | `data/cogan2016.py:112-118`, F-10 |
+| **S-2** | **high** | **The 316LVM recommendation is misattributed, and it gates behaviour.** The package says three times that Riedy & Walter's "own year-long experiment concludes 20 uC/cm^2 is the maximum feasible density". The paper says "It has recently been suggested that **tissue surrounding the stimulating electrode is not damaged** ... below 0.2 uC/mm^2 (20 uC/cm^2) **[8]**. **Based on this report**, 20 uC/cm^2 appears to be the maximum..." — a **tissue-damage** figure from a cited book chapter, not their corrosion result. Their corrosion conclusion is the milder "20 uC/cm^2 may still be suitable for many long-term intermittent in vivo applications". Drives `recommended_policy` and `exceeds_recommendation()` | `data/riedy_walter1996.py:8-13`, `materials.py:672-692`, F-26 |
+| **S-3** | **high** | **The SS316LVM `MeasuredRange` attaches one experiment's conditions to another experiment's numbers.** Riedy & Walter never measured a 316LVM charge-injection capacity: 40 uC/cm^2 "has been reported" (their refs 5-7) and 20 uC/cm^2 is what "is available for nonfaradic charge transfer" (their ref 8). The stored 100 us / 60 pps / interstitial-fluid / 0.016 cm^2 conditions describe the **corrosion** experiment run at those densities. Nothing in the record says so | `materials.py:653-686`, F-27 |
+| **S-4** | **high** | **README PEDOT row is stale by 4.2x at the top end.** README "Corrections" table says PEDOT is now **3.6-15.0 mC/cm^2**; `materials.py` holds **2.3-3.6**, referenced to Cui & Zhou, with a note explicitly rejecting the 15 mC/cm^2 abstract value | README:91 vs `materials.py:534-539`, F-46 |
+| **S-5** | **high** | **Elwassif provenance defect: the citation resolves to a different paper than the one transcribed.** `data/elwassif2006.py` states its values are "read from the conference paper" (Proc. 28th IEEE EMBS 2006, pp. 3580-3583) — and the repo PDF is that paper — but `references.py` defines `elwassif2006` as the **J Neural Eng 3(4):306-315** article, with that journal's DOI, pages, volume and PMID. Verified: the DOI resolves to the journal article. All 12 Table I rows render a citation to the wrong publication | `references.py:701-714`, F-18 |
+| **S-6** | **medium** | **Butterwick: the module re-fits an exponent the source publishes.** `FITTED_DURATION_EXPONENT = -0.4429` is derived from two abstract anchor points and used as the **default**. Butterwick prints the actual fits: "the power fit slopes are **t^-0.52 and t^-0.48 in the chronic regime**, and t^-0.49 and t^-0.41 with the single shots on CAM and retina". For the exact case modelled — retina, sustained — the source's own fit is **-0.48**, which appears nowhere in the module | `data/butterwick2007.py:70-73`, F-14 |
+| **S-7** | **medium** | **AIROF derating evidence string misquotes Hu et al. (2006).** The code says "in vitro 3-4 mC/cm^2 is about ten times what **the same films deliver in vivo**". Hu says 3-4 mC/cm^2 is "about ten times larger than what **Pt microelectrodes** can typically produce", citing another paper; Hu's *own* in vitro values are 1.18 and 1.69 mC/cm^2. The separate in-vivo sentence ("the in vivo value is about 10 % of the in vitro ones") does support the factor of 10 — the number survives, the sentence welds two different claims together | `data/cogan2016.py:119-124`, F-10 |
+| **S-8** | **medium** | **SIROF derating range widened past its cited source.** Kane et al. (2013) state "the maximum charge capacity in vivo was reduced by a **factor of 2-3**". The code stores **2-4** with `evidence` naming only Kane; the 4 is Cogan 2016's review figure | `data/cogan2016.py:125-130`, F-10 |
+| **S-9** | **medium** | **README claims two provenance flags that never fire.** "Values that could not be confirmed ... are flagged `PROVISIONAL` wherever they surface" — **no shipped value carries the flag** (run output: `not verified: []`). "PEDOT's headline limit ... is flagged `NOT PEER REVIEWED` at every point of use" — the abstract value **is not used at all**, and nothing in the database has an unreviewed CIC reference (`not peer reviewed: []`). The machinery works; the README describes a state the code left behind | README:15, 205-206, F-38/F-39 |
+| **S-10** | **medium** | **`audit.py` omits the provenance and conditions from the reproducibility record.** The `constants` block captures low/high/units/reference/pulse_width only. `cic.verified` (the PROVISIONAL flag), `area_basis`, `waveform`, `bias`, `medium`, `temperature_C`, `measured_area_cm2`, the polarity sub-ranges and `recommended_policy` are all absent from the digest payload — i.e. exactly the conditions the package's opening paragraph says are the point | `audit.py:121-139`, F-40 |
+| **S-11** | **medium** | **Two Ta2O5 designs carry a pulse width they were not measured at.** The etched-Ta 2.6 uC/mm^2 is Table III's best-reported column, which `materials.py` itself argues is "a **slow-charge figure**, not a pulsed one" — the two modules contradict each other. The etched-Ti 6.3 uC/mm^2 was measured with an **AC capacitance bridge** (Table I, "1570 (AC)"; footnote d). Both are tagged `pulse_width_us=200.0` | `data/ta2o5_capacitor.py:219,234`, F-30 |
+| **S-12** | **medium** | **McCreery 2010 drops the four conditions that make 4 nC/phase mean anything**: pulse width **200 us**, interpulse bias **+0.6 V** (applied specifically to raise charge capacity), electrode area **2000 +/- 150 um^2**, and **cathodic** pulses. Separately, `DAMAGE_RADIUS_HALF_DUTY_UM = 60` is presented as a stimulation damage radius when the source says control (insertion) loss "was responsible for **most of the neuronal loss within 150 um** of the electrodes pulsed with the 50 % duty cycle" | `data/mccreery2010.py`, F-8/F-9 |
+| **S-13** | **medium** | **Butterwick's d^-2 size correction was measured on single pulses only** ("These measurements were performed with **only one pulse** of duration 60 us on CAM and 600 us on the retina"), and its absolute anchors (139 uA on retina, 55 uA on CAM below 200 um) are not carried. The code applies the correction unconditionally, on top of the 50-pulse saturated default. The source also shows the duration exponent itself varies with size (t^-0.48 at 1 mm vs t^-0.29 at 0.115 mm), so the two corrections are not independent as the code assumes | `data/butterwick2007.py:145-150`, F-15 |
+| **S-14** | **low** | `separating_k_range()` returns a **zero-width band**: highest safe surface point k = log10(5)+log10(10) = **1.69897**, lowest damaging/partial k = log10(1)+log10(50) = **1.69897**. The docstring's claim that "any separatrix has to fall inside this band" would admit only k = 1.699 and exclude every k the package and literature use | `data/mccreery1990.py:241-253`, F-3 |
+| **S-15** | **low** | Ta2O5 docstring is **2x off** on a derived density: "5 nC ... on a 1e-4 mm^2 electrode, **which is 10,000 uC/cm^2 and 50 A/cm^2**". Those densities are the paper's, but for its introduction's **0.5e-6 cm^2 = 5e-5 mm^2** electrode. On the coded 1e-4 mm^2 it is 5,000 uC/cm^2 and 25 A/cm^2. The constant itself (Table III's idealized area) is correct | `data/ta2o5_capacitor.py:48-50`, F-28 |
+| **S-16** | **low** | `THERMAL_CONDUCTIVITY_RANGE_W_PER_MK = (0.5, 0.6)` **narrows** Elwassif's Table I sweep, which runs 0.45, 0.50, 0.55, 0.60 — excluding the lowest value, which produces the hottest result in that block | `data/elwassif2006.py:108`, F-20 |
+| **S-17** | **low** | `PEAK_RISE_K`'s docstring conflates two rows: it says the 0.82 K case is "highest tissue conductivity, **lowest thermal conductivity in the sweep**, and zero perfusion". That row is sigma = 0.35 at k = **0.527**, not the sweep's lowest k (0.45) | `data/elwassif2006.py:96-99`, F-19 |
+| **S-18** | **low** | Unsupported comparative claim: "TiO2 buys **5-10x** the storage of Ta2O5 and pays about the same factor in leakage". Rose et al. say "a factor of **as much as 4**"; Table III gives 2.6 vs 6.3 uC/mm^2 (**2.4x**) and 0.07 vs 0.10 nA/nF (**1.4x**). It also conflicts with the module's own line 73 ("2-4x the permittivity ... 1-2 orders more leakage") | `data/ta2o5_capacitor.py:236-241`, F-31 |
+| **S-19** | **low** | `leung2014` dated **2014**; the paper is IEEE TBME **62(3):849-857, 2015** (Crossref, and Cogan 2016 cites it as "Leung et al 2015") | `references.py:307-323`, F-35 |
+| **S-20** | **low** | `itis2025` dated **2025** and titled "Version 4.2"; the DOI resolves correctly but IT'IS gives v4.2's release date as **04/06/2024**. The cited spreadsheet is not in the repo | `references.py:665-681`, F-36 |
+| **S-21** | **low** | `user_measurement` has no `source_type`, so it defaults to `"journal"` and **`peer_reviewed` returns `True`** for a user's own measurement. `citation()` contains `if ... self.source_type != "user"`, showing `"user"` was intended and never set. Display is saved only because `describe()` special-cases the key by name | `references.py:609-618`, F-37 |
+| **S-22** | **low** | Two `DERIVED` values sit in fields named for measurements: `measured_area_cm2=4.1e-4` for AIROF is the **midpoint** of Beebe & Rose's stated 3.7-4.5e-4 cm^2; `forming_voltage_V=2.5` for the Schaldach Ta wire is **back-solved** from the paper's 2 V breakdown / 0.8. Contrast `asanuma1976.py`, which labels its midpoints as midpoints — the right pattern | `materials.py:444`, `ta2o5_capacitor.py:159`, F-29/F-32 |
+| **S-23** | **low** | `LEAD_3389_CONTACT_DIAMETER_UM = 1270` sits under `REFERENCE = "elwassif2006"` in a block headed "the authors' stated tissue parameters", but the conference paper never states a contact diameter — it is the Medtronic datasheet figure, with no manufacturer reference in `references.py`. Relatedly, `implied_power_W`'s default `source_radius_m = 1.3803e-3` is the equal-area sphere of **four** contacts while the protocol energises **two**, which is what makes the docstring's "325 ohm" come out (two contacts give ~230 ohm) | `data/elwassif2006.py:113,143`, F-21/F-22 |
+| **S-24** | **low** | README, other stale or imprecise claims: "four of the five material values" (the table lists five changes; the database has nine materials); "Charge-injection limit — Source: Cogan 2008 Table 2" (most rows actually trace to primaries, which is better than claimed); "Water window — Cogan 2008; **Merrill 2005**" (no `WaterWindow` cites Merrill); "**That gap is not reconciled**" for the Elwassif 0.8 K figure (both `thermal.py` and `data/elwassif2006.py` reconcile it at length); the Primary-sources list omits ~11 sources that supply constants; and the default conductivity is **0.35 S/m from Elwassif**, not the IT'IS 0.419 S/m the "Thermal" bullet implies | README:64-70, 84, 213-214, 227-230, F-42/F-47 |
+| **S-25** | **low** | Secondary chains not recorded in `references.py`: Wang & Weiland (2012) for the 240 uC/cm^2 edge corrosion (recorded as "via Cogan" in `current_distribution.py` but **not** in `cogan2016.py`); McCreery (2008) for the 1-2 nC/ph physiological threshold; Lan et al. (1981) for the 1.2 V 316LVM limit; Robblee & Rose (1990) for the 20 uC/cm^2 recommendation | F-12, F-25, F-26 |
+
+### What the audit confirms outright
+
+- **Gabriel et al. (1996) Part III Table 1** — all four tissues (grey matter, white matter,
+  blood, muscle), all fourteen parameters each, transcribed exactly, with every ps/ns/us/ms
+  conversion correct. The derived 0.104 S/m at 2500 Hz, and the "roughly a third of 0.35" /
+  "a quarter of the IT'IS value" comparisons, all reproduce by running the code.
+- **McCreery et al. (1990) Table I** — all twelve pulsed rows and all eleven stated
+  conditions exact, including the 23/64/41 site counts and the 6.5 +/- 3e-5 cm^2 area.
+- **Riedy & Walter (1996)** — all nine Table I cells, all four one-year drift values, all
+  eleven protocol constants, verbatim electrolyte and discharge-circuit descriptions. The
+  `wire_area_cm2` docstring's "about 5 %" and "about 15 %" claims both recompute correctly.
+- **ISO 14708-3:2017** — all seven Table 101 CEM43 thresholds, Formula (1), both R values,
+  the 39-57 °C validity range, and the Table 102 2 °C MRI criterion.
+- **Elwassif et al. (2006) Table I** — all twelve rows, both leads, cell for cell.
+- **Cogan 2008 Table 2** — all seven rows, both Qinj and potential-limit columns, plus the
+  comment column, exact. Including the blank Ta2O5 potential-limits cell, which the code
+  correctly mirrors as `water_window=None`.
+- **Rose & Robblee (1990)** and **Beebe & Rose (1988)** primaries — the Pt 50-100/100-150
+  polarity split, the -0.60/+0.90 V vs SCE limits, the 250 uC/cm^2 at 1 ms, the 600 uC/cm^2
+  at +0.9 V bias, and AIROF's 2.1/1.0/3.5 mC/cm^2 — all exact.
+- **The Cogan 2016 "k = 1.4" slip** the package flags is real: log10(6)+log10(12) = **1.857**,
+  while the paper's other worked example (60 uC/cm^2 on 0.005 cm^2, "k ~ 1.25") evaluates to
+  **1.2553**. The package's correction is right and is documented at the point of use.
+- **The Rose & Robblee "VIII vs VII" catch** is real: Crossref confirms paper **VIII** at
+  37:1118-1120, so Cogan 2008's ref. 71 is the one in error.
+- **15 of 16 DOIs resolve to exactly the paper claimed**, with matching volume, issue, pages
+  and authors. The two exceptions are year fields (S-19, S-20), not wrong papers.
+- **`pennes1948` DOI handling is exemplary** — it leaves `doi=""` and states in the note that
+  the widely cited 1998 reprint DOI belongs to the reprint "and must not be attached to this
+  record".
+
+---
+
+## Verdict vocabulary used in the per-module tables below
 
 - **MATCH** — code value and units equal the source value and units, conditions recorded.
 - **CONDITION-DROPPED** — number is right, but a measurement condition the source states and
@@ -872,3 +972,372 @@ the published curves reach 4-5x rheobase at 0.1 ms where the fitted chronaxies p
 
 `ELECTRODE_TIP_UM = (10.0, 15.0)` and `PREPARATION` — **not located** in the extracted text;
 see the unverified list in section 17.
+
+---
+
+## 13. `neurostim/materials.py` — the material database
+
+### 13a. Cogan (2008) Table 2, "Charge-injection limits of electrode materials for stimulation in the CNS", p. 282
+
+Transcribed from the source table cell by cell:
+
+| source row | source Qinj (mC/cm^2) | source limits (V vs Ag\|AgCl) | source refs | code | verdict |
+|---|---|---|---|---|---|
+| Pt and PtIr alloys, faradaic/capacitive | 0.05-0.15 | -0.6-0.8 | 71 | Pt and PtIr both 0.05-0.15, `_PT_IR_WINDOW` -0.6/+0.8 | **MATCH** |
+| Activated iridium oxide, faradaic | 1-5 | -0.6-0.8 | 72, 73 | AIROF **1.0-3.5** (Beebe & Rose primary), note says "Cogan 2008 Table 2 rounds this row to 1-5" | **MATCH** (deliberate, documented departure to the primary) |
+| Thermal iridium oxide, faradaic | ~1 | -0.6-0.8 V | 74 | TIROF 1.0, `approximate=True`, ref `robblee1986_tirof` | **MATCH**, and "No pulse width is stated for this row in either source" is correct — the table has no pulse-width column at all |
+| Sputtered iridium oxide, faradaic | 1-5 | -0.6-0.8 V | 75 + unpublished | SIROF 1.0-5.0, ref `cogan2004_sirof` | **MATCH** |
+| Tantalum/Ta2O5, capacitive | ~0.5 | **(cell blank)** | 76, 77 | Ta2O5 **0.088-0.15** from Rose 1985 primary; `water_window=None` | **MATCH** (departure documented); the `None` window correctly mirrors the blank cell |
+| Titanium nitride, capacitive | ~1 | -0.9 to 0.9 | 78 | TiN 1.0 `approximate=True`, window -0.9/+0.9, ref `weiland2002_tin` | **MATCH** |
+| PEDOT, faradaic | 15 | -0.9 to 0.6 | 79 | PEDOT **2.3-3.6** from Cui & Zhou primary; window -0.9/+0.6 ref `cogan2008` | **MATCH** for the window; the Qinj departure is deliberate and documented |
+
+Table 2 comment column also checks out verbatim: "Positive bias required for high Qinj.
+Damaged by extreme negative potentials (<-0.6 V)" (AIROF/SIROF), "Requires large positive
+bias" (Ta2O5), "Oxidized at positive potentials" (TiN), "Benefits from positive bias"
+(SIROF, PEDOT) — each reproduced in the corresponding `note` or `bias` field.
+The TiN window's note ("water reduction and oxidation at -0.9 V and 0.9 V by slow-sweep
+cyclic voltammetry") is verbatim from p. 282: "water reduction and oxidation potentials of
+-0.9 V and 0.9 V (versus Ag|AgCl), respectively, as measured by slow-sweep-rate cyclic
+voltammetry". **MATCH.**
+
+**Stainless steel is indeed absent from Cogan Table 2** — confirmed by reading the table.
+The README's and `materials.py`'s claim on that point is correct.
+
+### 13b. Rose & Robblee (1990) — the Pt row, read from the primary
+
+| file:line | constant | code | source | verdict |
+|---|---|---|---|---|
+| :358-362 | Pt cic low/high | 0.05-0.15 mC/cm^2 | Abstract: "charge injection limits of a Pt electrode using 0.2 ms charge balanced, biphasic current pulses ranged from **50 to 150 uC/cm^2** geometric" | **MATCH**; 50 uC/cm^2 = 0.05 mC/cm^2 ✓ |
+| :369 | `anodic_first_range` | (0.05, 0.10) | "the charge injection limit for anodic-first pulses is about **50-100 uC/cm^2 geom**" | **MATCH** |
+| :370 | `cathodic_first_range` | (0.10, 0.15) | "and the charge injection limit for cathodic-first pulses is about **100-150 uC/cm^2**" | **MATCH** |
+| :363 | pulse_width_us | 200.0 | "The pulse width was 0.2 ms, and the repetition rate was 50 pps" | **MATCH** |
+| :364 | waveform | charge-balanced, capacitively coupled biphasic, 50 pps | "capacitively coupled with either cathodic-first (CF) or anodic-first (AF) polarity"; 50 pps | **MATCH** |
+| :366 | area_basis | geometric | "The values are normalized to the geometric area of the electrode" | **MATCH** |
+| note | potential limits -0.60 / +0.90 V **vs SCE** | as stated | "These limits were **-0.60 and +0.90 V versus SCE**, respectively" | **MATCH** — the package's SCE-vs-Ag\|AgCl caveat is well founded, and Cogan's table does print -0.6-0.8 vs Ag\|AgCl |
+| note | 1 ms lifts CF limit to 250 uC/cm^2 | 250 | "Type A electrodes injected **250 uC/cm^2 with CF pulses** and 225 uC/cm^2 with AF pulses when the pulse duration was increased to **1 ms**" | **MATCH** |
+| note | +0.9 V vs SCE bias lifts it to 600 uC/cm^2 | 600 | "the type C electrode was biased at 0.9 V versus SCE, up to **600 uC/cm^2 geom** could be injected with 0.2 ms cathodal pulses" | **MATCH** |
+| note | Brummer & Turner 300-350 uC/cm^2 real area at >0.6 ms | 300-350 | "electrochemically safe values of **300-350 uC/cm^2 real surface area**" | **MATCH** |
+| :381-391 | ChronicThreshold Pt 20-50 uC/cm^2 | 20-50 | "We have shown previously that some Pt dissolution occurs even at charge densities of **20-50 uC/cm^2 geom** [9], [13]" | **MATCH**, though note it is Rose & Robblee reporting their own *earlier* work, cited to refs [9]/[13], neither of which is in `references.py` |
+
+### 13c. Beebe & Rose (1988) — the AIROF row, read from the primary
+
+| file:line | constant | code | source (Abstract, p. 494) | verdict |
+|---|---|---|---|---|
+| :437-438 | cic low/high | 1.0-3.5 mC/cm^2 | "...was **2.1 and 1.0 mC/cm^2 geometric for anodic-first and cathodic-first**, respectively, 0.2 ms balanced charge biphasic current pulses. Electrodes biased at +0.8 V versus SCE accepted charge up to **3.5 mC/cm^2 geometric** with monophasic cathodal pulses" | **MATCH** |
+| :448-449 | anodic/cathodic sub-ranges | (2.1, 2.1) / (1.0, 1.0) | same sentence | **MATCH**, exact |
+| :442 | bias | "+0.8 V vs SCE for the 3.5 mC/cm^2 monophasic cathodal figure" | same sentence | **MATCH**, and correctly scoped to the 3.5 figure only |
+| :441 | pulse_width_us / waveform | 200 us, biphasic 50 pps | "All pulsing was done with 0.2 ms pulses per phase and a repetition rate of 50 pulses/s" | **MATCH** |
+| :443 | medium | bicarbonate buffered saline, pH 7.3 | "in bicarbonate buffered saline (0.1M NaCl + 0.023M NaHCO3)"; Fig. 1 caption "at pH 7.3" | **MATCH** (the "80 ohm.cm" resistivity was not located in the extraction — see section 17) |
+| note | potential limits -0.6 / +0.8 **vs SCE** | as stated | "potential limits of -0.6 V and +0.8 V versus SCE" | **MATCH** |
+| note | wire area 3.7-4.5e-4 cm^2 | as stated | "The areas ranged from **3.7 to 4.5 x 10^-4 cm^2**" | **MATCH** |
+| :444 | `measured_area_cm2` | 4.1e-4 | **not printed** — it is the midpoint of 3.7-4.5e-4 | **DERIVED** (see F-32) |
+
+### 13d. Other material rows
+
+| file:line | constant | code | source | verdict |
+|---|---|---|---|---|
+| :515-519 | TiN, Weiland et al. 2002 | 0.9 mC/cm^2 in vitro, 0.5 ms, 4000 um^2 | via Cogan 2008 ref 78 and `references.py` note | **MATCH** to what the package itself records; **not independently verified** — Weiland 2002 is not in `papers_stim_calc_ref/` (section 17). Note the stored `cic` is 1.0 (Cogan's "~1"), not Weiland's 0.9, and the note says so explicitly ✓ |
+| :540-555 | PEDOT peer-reviewed cluster | 2.3 (Cui & Zhou 2007), 2.5 +/- 0.1 (Luo 2011), 3.6 (Nyberg 2007, 1 ms, ITO) | Cui & Zhou DOI resolves to the right paper; Nyberg DOI resolves to the right paper; 3.6 mC/cm^2 for PEDOT-PSS on ITO at 1 ms is recorded in `references.py` | **MATCH** for the sources' identity; the three individual Qinj values were **not independently read** from Cui & Zhou, Luo or Nyberg — those PDFs are absent (Luo is present as `nihms-292839`, the other two are not). See section 17 |
+| :555 | PEDOT `pulse_width_us` | 400.0 | Cui & Zhou's pulse width was not read | **UNVERIFIABLE** (see section 17) |
+| :26-37 | AIROF_TEMPERATURE_GAIN = 2.0/1.67 | Qinj 1.67 -> 2.0 mC/cm^2 between 20 C and 37 C at 0.1 ms; R_access 5360 -> 4052 ohm | Cogan 2008 body text | **MATCH** to what `references.py` records; the specific Cogan sentence was not re-located in this pass (the claim is repeated identically in `materials.py:449-451` and README) |
+| :23 | BODY_TEMPERATURE_C = 37.0 | 37 C | physiological constant | **MATCH** |
+
+### Findings
+
+**F-32 (DERIVED midpoint in a field named for a measurement).** `measured_area_cm2=4.1e-4`
+on the AIROF row is the arithmetic midpoint of Beebe & Rose's stated 3.7-4.5e-4 cm^2 range.
+The source prints a range; the code stores a single number in a field whose name asserts it
+was measured. Harmless numerically (nothing divides by it), but it is the same category of
+silent derivation the package elsewhere flags explicitly (contrast `asanuma1976.py`, which
+labels its midpoints as midpoints — the right pattern).
+
+**F-33 (the Cogan-vs-primary departures are all sound).** Three material rows deliberately
+disagree with Cogan Table 2 — AIROF (1-3.5 not 1-5), PEDOT (2.3-3.6 not 15), Ta2O5
+(0.088-0.15 not ~0.5). Each departure is documented in the row's `note`, each cites the
+primary that supports it, and in each case the reasoning checks out against the primary text
+I read. This is the strongest part of the package and it does what the README claims.
+
+**F-34 (recap of F-26/F-27).** The SS316LVM row is the exception: its number is secondary
+inside its cited source, its conditions belong to a different experiment, and its
+`recommendation_note` misattributes the recommendation. Detail in section 10.
+
+---
+
+## 14. `neurostim/references.py` — DOI spot-checks and the provenance flags
+
+### DOI resolution — 15 checked against Crossref, plus the IT'IS DataCite DOI
+
+| key | DOI in code | resolves to | code metadata | verdict |
+|---|---|---|---|---|
+| shannon1992 | 10.1109/10.126616 | Shannon, "A model of safe levels for electrical stimulation", IEEE TBME 39(4):424-426, 1992 | 39(4), 424-426, 1992 | **MATCH** |
+| mccreery1990 | 10.1109/10.102812 | McCreery, Agnew, Yuen, Bullara, "Charge density and charge per phase as cofactors...", IEEE TBME 37(10):996-1001, 1990 | 37(10), 996-1001, 1990 | **MATCH** |
+| merrill2005 | 10.1016/j.jneumeth.2004.10.020 | Merrill, Bikson, Jefferys, "Electrical stimulation of excitable tissue...", J Neurosci Methods 141(2):171-198, 2005 | 141(2), 171-198, 2005 | **MATCH** |
+| cogan2008 | 10.1146/annurev.bioeng.10.061807.160518 | Cogan, "Neural Stimulation and Recording Electrodes", Annu Rev Biomed Eng 10:275-309, 2008 | 10, 275-309, 2008 | **MATCH** |
+| rose_robblee1990 | 10.1109/10.61038 | Rose & Robblee, "Electrical stimulation with Pt electrodes. **VIII**. ... 0.2 ms pulses", IEEE TBME 37(11):1118-1120, 1990 | 37(11), 1118-1120, 1990, "VIII" | **MATCH** — and this **confirms the package's claim** that Cogan 2008 ref. 71 printing "VII" at 37:1119-20 is an error in Cogan's reference list |
+| beebe_rose1988 | 10.1109/10.2122 | Beebe & Rose, "Charge injection limits of activated iridium oxide electrodes with 0.2 ms pulses in bicarbonate buffered saline", IEEE TBME 35(6):494-495, 1988 | vol "35", 494-495, 1988 | **MATCH** (issue number 6 not recorded; volume and pages correct) |
+| riedy_walter1996 | 10.1109/10.495287 | Riedy & Walter, "Effects of low charge injection densities on corrosion responses of pulsed 316LVM stainless steel electrodes", IEEE TBME 43(6):660-663, 1996 | 43(6), 660-663, 1996 | **MATCH** |
+| newman1966 | 10.1149/1.2424003 | Newman, "Resistance for Flow of Current to a Disk", J Electrochem Soc 113(5):501, 1966 | 113(5), 501-502, 1966 | **MATCH** |
+| rand_woods1971 | 10.1016/0368-1874(71)80004-7 | Rand & Woods, "The nature of adsorbed oxygen on rhodium, palladium and gold electrodes", J Electroanal Chem 31(1):29-38, 1971 | 31(1), 29-38, 1971 | **MATCH** |
+| nyberg2007_pedot | 10.1016/j.jneumeth.2006.08.008 | Nyberg, Shimada, Torimitsu, "Ion conducting polymer microelectrodes for interfacing with neural networks", J Neurosci Methods 160(1):16-25, 2007 | 160(1), 16-25, 2007 | **MATCH** |
+| cui_zhou2007 | 10.1109/TNSRE.2007.909811 | Cui & Zhou, "Poly(3,4-Ethylenedioxythiophene) for Chronic Neural Stimulation", IEEE TNSRE 15(4):502-508, 2007 | 15(4), 502-508, 2007 | **MATCH** |
+| rose1985_capacitor | 10.1016/0165-0270(85)90001-9 | Rose, Kelliher, Robblee, "Assessment of capacitor electrodes for intracortical neural stimulation", J Neurosci Methods 12(3):181-193, 1985 | vol "12", 181-193, 1985 | **MATCH** |
+| stoney1968 | 10.1152/jn.1968.31.5.659 | Stoney Jr, Thompson, Asanuma, "Excitation of pyramidal tract cells by intracortical microstimulation: effective extent of stimulating current", J Neurophysiol 31(5):659-669, 1968 | 31(5), 659-669, 1968 | **MATCH** |
+| itis2025 | 10.13099/VIP21000-04-2 | redirects to IT'IS "Tissue Properties Database V4.2", release date **04/06/2024** | `year=2025` | **DOI resolves; YEAR MISMATCH** — see F-36 |
+| elwassif2006 | 10.1088/1741-2560/3/4/008 | Elwassif, Kong, Vazquez, Bikson, "Bio-heat transfer model of deep brain stimulation-induced temperature changes", **J Neural Eng 3(4):306-315, 2006** | 3(4), 306-315, 2006 | **DOI and metadata internally consistent — but it is the wrong paper for the values stored.** See F-18 |
+| leung2014 | 10.1109/TBME.2014.2366514 | Leung, Shivdasani, Nayagam, Shepherd, "In Vivo and In Vitro Comparison of the Charge Injection Capacity of Platinum Macroelectrodes", IEEE TBME 62(3):849-857, **2015** | `year=2014`, vol 62(3), 849-857 | **YEAR MISMATCH** — see F-35 |
+
+A deliberately malformed DOI (`10.1016/j.jmeth.placeholder`) returned HTTP 404, confirming
+the check would have caught a bad DOI.
+
+### Findings
+
+**F-35 (MISMATCH, minor).** `leung2014` is dated 2014 in the code; Crossref, and the journal
+issue (IEEE TBME vol 62, issue 3), date it **2015**. Cogan 2016 itself cites it as
+"Leung et al 2015". The reference key, the `year` field and every rendered citation are off
+by a year. Volume, issue, pages, title and authors are all correct.
+
+**F-36 (MISMATCH, minor).** `itis2025` carries `year=2025` and a note saying the values were
+"read from materialparameterdatabasecurrent20250821.xls, the release current at 2026-08".
+The DOI resolves to IT'IS "Tissue Properties Database **V4.2**", whose release date the IT'IS
+download page gives as **04/06/2024**. Either the version or the year is wrong: a 2025 file
+is not v4.2's release, and the title field says "Version 4.2". The cited spreadsheet is
+**not present in the repository**, so the specific numbers cannot be traced (section 17).
+
+**F-37 (`user_measurement` is flagged peer-reviewed).** `references.py:609-618` defines
+`user_measurement` with no `source_type`, so it defaults to `"journal"` and
+`cite("user_measurement").peer_reviewed` returns **`True`** (verified by running the code).
+`Reference.citation()` even contains `if not self.peer_reviewed and self.source_type != "user"`,
+which shows the author intended `source_type="user"` — the `SourceType` docstring lists
+`user` as a valid value — and it was never set. The consequence is contained today only
+because `MeasuredRange.describe()` special-cases the key by name
+(`materials.py:176`: `if not self.peer_reviewed and self.reference != "user_measurement"`),
+so the display is right by a second mechanism. Any code that asks the reference itself
+whether a user measurement is peer-reviewed gets the wrong answer.
+
+**F-38 (`PROVISIONAL` never fires in the shipped database).** The README states, in the
+opening warning box: *"Values that could not be confirmed against a primary source are
+flagged `PROVISIONAL` wherever they surface."* Verified by running the code:
+
+```
+not verified: []          # no Material has verified == False
+not peer reviewed: []     # no Material's CIC reference has peer_reviewed == False
+```
+
+Every one of the nine `MeasuredRange` records and every `WaterWindow` takes the default
+`verified=True`. The only path that ever produces `PROVISIONAL` is
+`with_measured_cic()`, which sets `verified=False` on a **user's own** measurement — i.e. the
+flag fires only for values that are not literature at all. That is not wrong (the
+`PROVISIONAL` machinery works, and it is exercised), but the README sentence implies a class
+of literature values carrying the flag, and there are none. The same is true of
+`TissueThermalProperties`: `fully_verified` returns `True` for the shipped defaults.
+
+**F-39 (`NOT PEER REVIEWED` never fires either, and the README claims it does).** README,
+Known limitations: *"**PEDOT's headline limit is not peer reviewed** — it comes from a meeting
+abstract, and is flagged `NOT PEER REVIEWED` at every point of use."* Both halves are wrong
+as the code now stands:
+- The headline 15 mC/cm^2 abstract value **is not used at all**. `materials.py` PEDOT
+  references `cui_zhou2007`, a peer-reviewed journal paper, at 2.3-3.6 mC/cm^2, and its note
+  says in terms "Cogan's headline 15 mC/cm^2 ... is not used here".
+- Consequently nothing is flagged: `cui_zhou2007.peer_reviewed` is `True`, so
+  `MeasuredRange.describe()` appends nothing. Run output above confirms **no** material in
+  the database has an unreviewed CIC reference.
+`cogan2007_pedot` is correctly typed `source_type="abstract"` (peer_reviewed `False`) and is
+still in the bibliography — so the machinery is right and the label would render if the value
+were used. It is the README that is stale.
+
+**F-40 (`audit.py` does not record the provenance flags it exists to preserve).**
+`audit.py:121-139` builds the `constants` block from `material.key`, `cic.units`, `cic.low`,
+`cic.high`, `cic.reference`, `cic.pulse_width_us`, `shannon_k_default`, the water window and
+the chronic threshold. It does **not** capture `cic.verified`. Two runs — one on a literature
+material, one on a `with_measured_cic` copy that happens to carry the same low/high — differ
+in `cic.reference` (so the digest does change, which saves it), but the `PROVISIONAL` status
+itself is absent from the record. Also absent from the digest payload:
+`area_basis`, `waveform`, `bias`, `medium`, `temperature_C`, `measured_area_cm2`, the
+polarity sub-ranges and `recommended_policy` — i.e. exactly the measurement conditions the
+package's opening paragraph says are the point. A record reproduced years later proves the
+*numbers* were the same; it does not record the conditions under which they were measured.
+
+**F-41 (`source_type="standard"` is undeclared).** See F-24. `SourceType`'s docstring lists
+six values; the code uses eight (`standard` and, intended but unset, `user`). `standard` is
+not in `PEER_REVIEWED`, so ISO 14708-3 renders as "[STANDARD - not peer reviewed]".
+
+---
+
+## 15. Gabriel 1996 vs IT'IS v4.2 — which is actually in the code
+
+**Both are, for different quantities, and the README does misstate one of them.**
+
+| quantity | value in code | source key | where |
+|---|---|---|---|
+| default electrical conductivity for field/access-resistance calculations | **0.35 S/m** | `elwassif2006` (the DBS-modelling convention) | `field.py:42` `BRAIN_CONDUCTIVITY_S_PER_M` — the **package default**, used by `potential_V` and everything downstream |
+| grey-matter electrical conductivity, alternative | **0.419 S/m** (sd 0.230, n = 214) | IT'IS v4.2 | `field.py:52` `GREY_MATTER_CONDUCTIVITY_S_PER_M` — offered, **not** the default |
+| white-matter electrical conductivity | **0.348 S/m** (sd 0.194, n = 194) | IT'IS v4.2 | `field.py:59` |
+| blood electrical conductivity | **0.662 S/m** (sd 0.107, n = 33) | IT'IS v4.2 | `field.py:67` |
+| frequency-dependent complex permittivity and conductivity | four-Cole-Cole parameters | **Gabriel 1996 Part III**, `gabriel1996_iii` | `data/gabriel1996.py` — a **standalone module, wired into no calculation**; nothing in `safety/`, `models/` or `transient.py` calls it |
+| thermal conductivity, density, specific heat, perfusion, blood properties, metabolic heat | 0.547 W/m/K, 1044.5 kg/m^3, 3695.8 J/kg/K, 0.013294 1/s, 1049.75 kg/m^3, 3617 J/kg/K, 16230 W/m^3 | IT'IS v4.2, `source="itis2025"` | `models/thermal.py:124-153`, with sd and n per field |
+
+So: **IT'IS v4.2 supplies the thermal properties and the alternative electrical
+conductivities; Gabriel Part III supplies a dispersion model that is exposed but not used;
+and the actual default conductivity for every field and compliance calculation is 0.35 S/m
+from Elwassif, which is neither of them.**
+
+The `gabriel1996.py` module docstring is honest about all three and says why
+(`0.35 S/m` is kept "for comparability with published DBS work"). Its arithmetic checks out —
+running the code:
+
+```
+effective freq for a 200 us pulse (1/2W): 2500 Hz
+  grey matter   sigma = 0.1043 S/m
+  white matter  sigma = 0.0645 S/m
+  blood         sigma = 0.7000 S/m
+  muscle        sigma = 0.3316 S/m
+0.35 / 0.1043 = 3.36    0.419 / 0.1043 = 4.02
+```
+
+`references.py:378-386` claims "Evaluated at the effective frequency of a 200 us pulse this
+gives grey matter **0.104 S/m**, roughly **a third** of the 0.35 S/m DBS-modelling convention
+and **a quarter** of the IT'IS value." **All three numbers verified: MATCH.**
+
+### Findings
+
+**F-42 (README misstatement, item 4 of the brief).** README, Known limitations:
+*"**Thermal** — spreading-resistance heating only. **Tissue properties are now IT'IS v4.2 with
+uncertainty**..."* — this is **correct** for `models/thermal.py`. But the README's **What it
+computes** table attributes the compliance-voltage / access-resistance path to "Newman 1966"
+and says nothing about which conductivity feeds it, and nowhere does the README say that the
+**default electrical conductivity is 0.35 S/m from Elwassif, not the IT'IS 0.419 S/m**. A
+reader of the README would reasonably conclude the package runs on IT'IS values throughout.
+Since access resistance scales as 1/sigma, the undocumented default makes every compliance
+number about **20 % higher** than the IT'IS-sourced alternative would give. The source code
+documents this properly; the README does not.
+
+**F-43 (Gabriel Part III is dead code with respect to every safety number).** `data/gabriel1996.py`
+transcribes Table 1 perfectly (section 1) and computes a conductivity three to four times
+lower than anything the package actually uses — and no calculation consumes it. It is a
+documented comparison, not an input. That is defensible, but the README's Primary-sources
+list does **not** mention Gabriel at all, while `references.py` holds two Gabriel entries, so
+a reader checking provenance from the README will not find the module.
+
+**F-44 (Gabriel Part I entry — its stated use is a caveat, not a value).** `references.py:170-188`
+(`gabriel1996`, Part I) correctly states "Part I is a graphical survey with **no tabulated
+values**; the parametric Cole-Cole model is in Part III". No numeric constant in the package
+is sourced to Part I. The two caveats attributed to it (temperature coefficients of 1-2 %/C
+at low frequencies; grey/white matter well characterised only above 10 kHz) were **not
+re-verified against the Part I text** in this pass — see section 17.
+
+**F-45 (the IT'IS numbers themselves are UNVERIFIABLE from here).** The IT'IS values in
+`field.py` and `thermal.py` — 0.419/0.348/0.662 S/m, 0.547 W/m/K, 1044.5 kg/m^3,
+3695.8 J/kg/K, 0.013294 1/s, 1049.75 kg/m^3, 3617 J/kg/K, 16230 W/m^3, and all the paired
+(sd, n) values — could **not** be confirmed. The IT'IS database web pages render their tables
+from JavaScript and returned no numbers to a fetch; the cited spreadsheet
+(`materialparameterdatabasecurrent20250821.xls`) is not in the repository; and web search did
+not surface the individual figures. The DOI resolves and the database is real, so this is an
+access limitation, not evidence of an error. Two internal consistency checks that **do** pass:
+- `perfusion_per_s` inverted on the stored 0.013294 1/s and 1044.5 kg/m^3 gives
+  **763.7 ml/min/kg**, a round, plausible IT'IS-style grey-matter figure — the ml/min/kg ->
+  1/s conversion (`x 1e-6 / 60 x rho`) is dimensionally correct and the docstring's warning
+  about the factor-of-1000 density trap is right.
+- the derived penetration depth `L = sqrt(kappa/W) = 3.29 mm` is physically sensible for
+  perfused grey matter.
+
+---
+
+## 16. README verification
+
+### 16a. "Corrections to the 0.1.0 prototype" table vs `materials.py` as it stands
+
+| README row | README "current" | actual `materials.py` value | verdict |
+|---|---|---|---|
+| `SS` 0.05 -> | 0.02-0.04 mC/cm^2 | `SS316LVM` cic 0.02-0.04 mC/cm^2 | **MATCH** |
+| `Pt` 0.10 -> | 0.05-0.15 | `Pt` cic 0.05-0.15 | **MATCH** |
+| `PtIr` 0.15 -> | 0.05-0.15 | `PtIr` cic 0.05-0.15 | **MATCH** |
+| **`PEDOT` 5.0 ->** | **3.6-15.0** | **`PEDOT` cic 2.3-3.6** | **MISMATCH** |
+| `SIROF` 2.0 -> | 1.0-5.0 | `SIROF` cic 1.0-5.0 | **MATCH** |
+
+**F-46 (README MISMATCH — the PEDOT row describes a version of the code that no longer
+exists).** The README says PEDOT is now **3.6-15.0 mC/cm^2** and explains that "Cogan's
+15 mC/cm^2 is from a **conference abstract**; the low end is Nyberg et al.'s peer-reviewed
+value". `materials.py:534-539` actually holds **2.3-3.6 mC/cm^2**, referenced to
+`cui_zhou2007`, with a note that rejects the 15 mC/cm^2 abstract value outright. The two
+ranges overlap at a single point (3.6). Anyone reading the README to find the package's
+PEDOT limit gets a number **4.2x** too high at the top end. Verified by running the code:
+`PEDOT cic=2.3-3.6 mC/cm2 ref=cui_zhou2007`.
+
+**F-47 (README arithmetic).** "Tracing every constant to its primary source changed **four of
+the five** material values". The table immediately below lists **five** rows, all five of
+which changed; and `materials.py` now ships **nine** materials (Pt, PtIr, AIROF, SIROF,
+TIROF, TiN, PEDOT, Ta2O5, SS316LVM), so "the five" no longer describes the database either.
+
+### 16b. Other README claims checked
+
+| README claim | status |
+|---|---|
+| "Values that could not be confirmed against a primary source are flagged `PROVISIONAL` wherever they surface" | **stale/misleading** — no shipped value carries the flag (F-38) |
+| "PEDOT's headline limit ... is flagged `NOT PEER REVIEWED` at every point of use" | **false as the code stands** — the abstract value is not used, and nothing is flagged (F-39) |
+| "Charge-injection limit — Source: **Cogan 2008 Table 2**" (What it computes table) | **understates the code** — Pt/PtIr trace to `rose_robblee1990`, AIROF to `beebe_rose1988`, Ta2O5 to `rose1985_capacitor`, SS to `riedy_walter1996`; only SIROF, TIROF and TiN sit on Cogan's refs. The code went to the primaries; the README credits the review |
+| "Water window — Source: Cogan 2008; **Merrill 2005**" | **no `WaterWindow` in the package references Merrill**; the windows cite `cogan2008` and `riedy_walter1996` |
+| "Cogan gives platinum as a factor of three" (Uncertainty section) | **MATCH** — 0.05-0.15 mC/cm^2 is exactly 3x |
+| "`charge.limit_interval_uC_cm2 # Interval(50.0, 150.0)`" | **MATCH** — 0.05-0.15 mC/cm^2 = 50-150 uC/cm^2 ✓ conversion correct |
+| "Cogan also reports ~20 % temperature dependence (20 °C vs 37 °C)" | **MATCH** to `AIROF_TEMPERATURE_GAIN = 2.0/1.67 = 1.198`, i.e. +19.8 % ✓ arithmetic correct |
+| "strong area dependence for SIROF; neither is corrected for" | **MATCH** — `materials.py` SIROF note records 5 mC/cm^2 on 2000 um^2 vs 750 uC/cm^2 on 0.05 cm^2 vs 100 uC/cm^2 for 200 nm SIROF at 10 ms, and no scaling is applied anywhere |
+| "the ~0.8 K peak Elwassif et al. (2006) report ... **That gap is not reconciled**" | **stale** — `data/elwassif2006.py` and `models/thermal.py` **do** reconcile it at length (power ratio ~100x; "Compare power, not amplitude"). The README still says it is unreconciled |
+| "VTA ... the default value was read from a **secondary summary**" | **MATCH and commendable** — `tehovnik2006`'s k ~ 675 uA/mm^2 is confirmed present in Tehovnik et al. 2006 ("K = 675 uA/mm^2", derived there as I/R^2 from 50 and 100 uA at 0.286 and 0.368 mm), and the README flags the weakness rather than hiding it |
+| "Stainless steel is absent from Cogan Table 2" | **MATCH** — confirmed by reading Table 2 |
+| "`tests/test_literature.py` pins ... the IT'IS tissue values and their unit conversion" | the test exists; the **underlying IT'IS numbers remain unverified against IT'IS** (F-45), so the test pins the code to itself for those rows |
+| Primary-sources list (Shannon; McCreery 1990; Merrill; Cogan 2008; Rose & Robblee; Riedy & Walter; Brummer & Turner; Rand & Woods; Newman; Pennes; Elwassif; Lapicque; Weiss; Stoney; Tehovnik; Kuncel & Grill) | **incomplete** — omits Beebe & Rose 1988, Rose et al. 1985, Schmidt et al. 1982, Butterwick 2007, Cogan 2016, McCreery 1995, McCreery 2010, Asanuma 1976, Gabriel (both parts), IT'IS and ISO 14708-3, all of which supply constants |
+
+---
+
+## 17. What I could NOT verify, and why
+
+Everything below is **UNVERIFIABLE** from this audit. None of it is evidence of an error —
+it is where the trail stopped.
+
+### 17a. Sources with no local copy and no accessible online text
+
+| constant(s) | file:line | source needed | why it stopped |
+|---|---|---|---|
+| IT'IS grey/white/blood conductivity 0.419 / 0.348 / 0.662 S/m and their (sd, n) = (0.230, 214), (0.194, 194), (0.107, 33) | `models/field.py:52,59,67` | IT'IS v4.2 spreadsheet | The IT'IS web tables render from JavaScript and returned no numbers to WebFetch; the cited file `materialparameterdatabasecurrent20250821.xls` is **not in the repository**; web search did not surface the individual figures. The DOI resolves and the database is real |
+| IT'IS thermal properties 0.547 W/m/K, 1044.5 kg/m^3, 3695.8 J/kg/K, 0.013294 1/s, 1049.75 kg/m^3, 3617 J/kg/K, 16230 W/m^3 and all six (sd, n) pairs | `models/thermal.py:124-153` | same | same. Two internal consistency checks pass (see F-45): the perfusion back-converts to 763.7 ml/min/kg and L = 3.29 mm is physically sensible |
+| Weiland et al. (2002): 0.9 mC/cm^2 in vitro, 0.5 ms, 4000 um^2 | `materials.py:515-519`, `references.py:539-553` | Weiland, Anderson & Humayun, IEEE TBME 49:1574-1579 (2002) | not in `papers_stim_calc_ref/`; reachable only through Cogan 2008 ref 78, which prints only "~1" |
+| Cui & Zhou (2007) 2.3 mC/cm^2 and its 400 us pulse width | `materials.py:534,538` | Cui & Zhou, IEEE TNSRE 15(4):502-508 | PDF absent. The **DOI resolves to the correct paper**; the Qinj value and the pulse width were not read from it |
+| Nyberg et al. (2007) 3.6 mC/cm^2 on ITO at 1 ms, GSA 2500 um^2 | `references.py:586-595`, `materials.py` PEDOT note | Nyberg, Shimada & Torimitsu, J Neurosci Methods 160(1):16-25 | PDF absent. **DOI resolves to the correct paper**; the value was not read from it |
+| Luo et al. (2011) 2.5 +/- 0.1 mC/cm^2, n = 4 | `references.py:296-306` | PDF **is** present (`nihms-292839`) | not read in this pass — ran out of scope, not out of source |
+| Robblee et al. (1986) thermal iridium oxide "~1" | `references.py:492-503` | MRS Symp Proc 55:303-310 | conference proceedings, not online; reachable only through Cogan Table 2, which is what the code cites |
+| Cogan et al. (2004) SIROF 1-5 mC/cm^2 | `references.py:517-530` | IEEE EMBS 2004 proceedings | not in the repo; reachable only through Cogan Table 2 |
+| Cogan et al. (2007) PEDOT abstract 15 mC/cm^2 | `references.py:557-572` | MRS meeting abstract QQ2.7 | a meeting abstract with no DOI. **This is the package's own point** — it is correctly typed `source_type="abstract"` and correctly not used |
+| Rose et al. (1985) 0.26 mm^2 area for the Lerner sintered electrode | `ta2o5_capacitor.py:183` | Rose 1985 | the paper gives 0.10 +/- 0.01 uF and 1.5 uC/mm^2 at 4 V, from which 0.267 mm^2 follows; the area itself was not located printed |
+| Beebe & Rose (1988) electrolyte resistivity "80 ohm.cm" | `materials.py:443` | Beebe & Rose 1988 | not found in the text extraction; the rest of the medium string (bicarbonate buffered saline, pH 7.3) **is** confirmed |
+| Cogan 2008 AIROF temperature sentence (1.67 -> 2.0 mC/cm^2, R_access 5360 -> 4052 ohm, 20 C -> 37 C at 0.1 ms) | `materials.py:26-37,449-451` | Cogan 2008 body | not re-located in this pass; the claim is internally consistent across three places in the package and the derived +19.8 % matches the README's "~20 %" |
+| Gabriel Part I caveats (1-2 %/C temperature coefficients; grey/white matter characterised only above 10 kHz) | `references.py:181-187` | C Gabriel et al. 1996 Part I (PDF **is** present) | not read in this pass. No numeric constant depends on it |
+| Stoney et al. (1968) n = 3 chronaxie curves | `asanuma1976.py:125` | Stoney 1968 (PDF **is** present) | Asanuma quotes Stoney's 0.12-0.4 ms range but states no n; Stoney itself not read for the count. **DOI resolves to the correct paper** |
+| Tehovnik (2006) "quoted for **surface electrodes**" | `references.py:775-782` | Tehovnik 2006 (PDF present) | the value **K = 675 uA/mm^2 is confirmed** in the text (derived there from 50 and 100 uA at 0.286 and 0.368 mm); whether it is specifically the surface-electrode constant was not established |
+| Asanuma 500 uA upper bound | `asanuma1976.py:170` | Asanuma 1976 | 400 uA appears twice in the text and "the effective extent on the surface becomes 4-5 mm" is confirmed; **500 uA was not located** |
+| Asanuma `ELECTRODE_TIP_UM = (10.0, 15.0)` and `PREPARATION` | `asanuma1976.py:59,62` | Asanuma 1976 | not located in the extraction |
+| Medtronic 3389 contact diameter 1.27 mm | `elwassif2006.py:113` | Medtronic implant manual | not stated in the cited conference paper; no manufacturer reference in `references.py` (F-21) |
+| Lan, Daroux & Mortimer (1981) 1.2 V reversible limit for 316LVM | via `riedy_walter1996.py:94` | J Electrochem Soc 136:947-954 | the number is confirmed *as reported by* Riedy & Walter; the originating paper is not in the repo or in `references.py` (F-25) |
+| Robblee & Rose (1990) book chapter — the actual source of the 20 uC/cm^2 recommendation | via `riedy_walter1996.py` and `materials.py` SS316LVM | Neural Prostheses: Fundamental Studies, pp. 25-66 | a book chapter, not online. Its role is established from Riedy & Walter's citation `[8]` (F-26); its own content was not read |
+| Wang & Weiland (2012) 240 uC/cm^2 edge corrosion | `cogan2016.py:180`, `current_distribution.py:72` | via Cogan 2016 | not in the repo, no `references.py` entry (F-12) |
+| McCreery (2008) 1-2 nC/ph physiological threshold | via `cogan2016.py:45` | via Cogan 2016 | not in the repo, no `references.py` entry |
+| Pennes (1948), Lapicque (1907), Weiss (1901) | `references.py:687-700, 716-735` | originals | Pre-DOI. **No numeric constant in the package is sourced to any of them** — they carry equation forms only, so there is nothing numeric to check. The `pennes1948` entry's handling is exemplary: it states that the widely cited 1998 reprint DOI (10.1152/jappl.1998.85.1.5) belongs to the reprint "and must not be attached to this record", and correctly leaves `doi=""` |
+
+### 17b. Things I chose not to re-derive
+
+- The four `Derating` **numbers** for Pt/PtIr/AIROF/SIROF were checked against Leung, Hu,
+  Kane and Cogan 2016 and are reported in F-10. What I did **not** do is recompute a
+  pulse-width-matched derating for every material and propose replacements — that is a fix,
+  not an audit finding.
+- `safety/`, `transient.py`, `uncertainty.py`, `sensitivity.py`, `geometry/`, `io/`, `viz/`
+  and `gui/` were out of scope for this audit except where a literature constant is consumed
+  there. The Shannon/charge-density arithmetic itself belongs to the safety-math audit.
+- `tests/test_literature.py` was not executed. Note that for the IT'IS rows it can only pin
+  the code to itself, since the underlying numbers are unverified (F-45).
+
+### 17c. One paper-internal problem worth repeating
+
+McCreery et al. (1990) eq. (1) is transcribed correctly by the code, but the **paper's own
+worked example does not follow from its own equation** — with QD_s = 800 uC/cm^2, R = 45 um,
+x = 60 um it gives 160 uC/cm^2 against the paper's stated "approximately 130" (and 320 vs
+260 for the 1600 uC/cm^2 case; the same 0.8125 ratio, so a consistent difference in R or x
+rather than a single typo). The code carries only the equation, so it inherits no error, but
+anyone checking the module against the paper's prose will hit this. Detail in F-4.
