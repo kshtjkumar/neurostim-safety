@@ -935,3 +935,149 @@ class TestCheckKindAndProvisional:
         assert rows["Compliance voltage"]["kind"] == "instrument"
         assert rows["Current density"]["provisional"] is True
         assert rows["Water window"]["margin"] is not None
+
+
+class TestUnsafeAtAnyAmplitude:
+    """Ledger 84. A check outside ``LIMIT_BEARING`` FAILs at every amplitude, so there is
+    no ceiling to report -- and the package printed one anyway.
+
+    Verified before the fix: monophasic ``CylindricalBandElectrode(1270, 1500, "PtIr")``
+    at 3000 uA / 90 us / 130 Hz reports ``failed == ['Charge balance']`` and prints
+    ``Limiting current: 1.528e+04 uA (Shannon tissue-damage criterion)``, while the
+    unrestricted fail-ceiling oracle answers 0.0. A reader is told 15.3 mA is the ceiling
+    for a protocol that is unsafe at any amplitude.
+
+    This is a separate field from ``limits_incomplete``, not a reuse of it, because the
+    two carry opposite instructions: one says *the number may be too high*, this one says
+    *there is no number*.
+    """
+
+    @staticmethod
+    def _monophasic() -> SafetyCalculator:
+        from neurostim import CylindricalBandElectrode
+
+        return SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+            compliance_V=10.0,
+        )
+
+    @staticmethod
+    def _worked_example() -> SafetyCalculator:
+        from neurostim import RingElectrode
+
+        return SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+
+    def test_the_failure_is_amplitude_independent_and_the_oracle_names_it(self):
+        """The precondition, asserted rather than assumed.
+
+        Not tautological: ``amplitude_independent_failures`` walks 73 probes from 1e-12 to
+        1e6 uA and reports the checks that FAIL at every one of them. It reads names, not
+        numbers, and it is a strictly stronger statement than a bare ceiling of 0.0 --
+        which is why it is the witness the rendering is asserted against.
+        """
+        from oracles.fail_ceiling import amplitude_independent_failures
+
+        assert amplitude_independent_failures(self._monophasic()) == ("Charge balance",)
+        assert amplitude_independent_failures(self._worked_example()) == ()
+
+    def test_unsafe_at_any_amplitude_names_the_check_the_oracle_names(self):
+        """Not tautological: the package field is compared against the oracle's witness,
+        computed by probing the assessment across eighteen decades."""
+        from oracles.fail_ceiling import amplitude_independent_failures
+
+        calc = self._monophasic()
+        assessment = calc.assess()
+
+        assert tuple(c.name for c in assessment.unsafe_at_any_amplitude) == (
+            amplitude_independent_failures(calc)
+        )
+        assert self._worked_example().assess().unsafe_at_any_amplitude == ()
+
+    def test_describe_prints_no_number_and_names_the_check(self):
+        """Not tautological: the assertion is an **absence** -- the amplitude the package
+        prints today, 1.528e+04, must not appear in the headline block -- together with the
+        presence of the check's name.
+
+        Scoped to the headline, not to the whole rendering: the Shannon check's own detail
+        block still reports 1.528e+04 as *the Shannon criterion's* limit, and it should.
+        That number is true about that criterion. What was false is calling it the
+        limiting current for a protocol no amplitude makes safe.
+        """
+        text = self._monophasic().describe()
+        lines = text.splitlines()
+        headline = "\n".join(lines[: next(i for i, s in enumerate(lines) if s.startswith("["))])
+        limiting = [
+            line for line in lines if line.startswith("Limiting current:")
+        ]
+
+        assert limiting, text
+        assert "1.528e+04" not in headline
+        assert "15285" not in headline
+        assert "no amplitude is safe" in limiting[0].lower()
+        assert "Charge balance" in limiting[0]
+        assert "across published ranges" not in headline
+
+    def test_report_to_json_refuses_the_number_too(self):
+        """A machine consumer is the one that cannot read a caveat in prose.
+
+        Not tautological: the expected values are ``None`` for the amplitude and the
+        literal check name for the flag, against a payload that today carries
+        15285.50941588086.
+        """
+        import json
+
+        from neurostim.io import report_to_json
+
+        payload = json.loads(report_to_json(self._monophasic()))
+
+        assert payload["unsafe_at_any_amplitude"] == ["Charge balance"]
+        assert payload["results"]["limiting_current_uA"] is None
+        assert "Charge balance" in payload["results"]["limiting_mechanism"]
+
+    def test_the_pdf_header_refuses_the_number(self, tmp_path):
+        """Not tautological: asserted on extracted PDF text, absence and presence both,
+        and scoped to the header sentence -- the Computed quantities table below it still
+        reports the Shannon criterion's own limit, which is a true statement about that
+        criterion."""
+        text = pdf_text(self._monophasic(), tmp_path / "unsafe.pdf")
+        start = text.index("Overall assessment:")
+        header = text[start : text.index("Electrode", start)]
+
+        assert "no amplitude is safe" in header.lower()
+        assert "Charge balance" in header
+        assert "1.528e+04" not in header
+
+    def test_the_gui_headline_refuses_the_number(self):
+        """The headline is the one line a user reads before acting.
+
+        Not tautological: the GUI's own headline builder is driven with the monophasic
+        assessment and the resulting string is checked for the absent number and the
+        present name.
+        """
+        pytest.importorskip("PyQt6")
+        from neurostim.gui.app import headline_text
+
+        text = headline_text(self._monophasic().assess())
+
+        assert "no amplitude is safe" in text.lower()
+        assert "Charge balance" in text
+        assert "1.528e+04" not in text
+
+    def test_a_safe_protocol_still_gets_its_number(self):
+        """The refusal must fire only where it belongs.
+
+        Not tautological: the worked example's witness is empty (asserted above), and the
+        expected rendering is the floored 141.3 from C1.3.
+        """
+        line = next(
+            row
+            for row in self._worked_example().describe().splitlines()
+            if row.startswith("Limiting current:")
+        )
+        assert "141.3" in line
+        assert "no amplitude is safe" not in line.lower()

@@ -58,7 +58,7 @@ from ..materials import Policy, list_materials
 from ..protocol import StimProtocol, Waveform
 from ..safety import SafetyCalculator, shannon
 from ..safety._limits import format_limit
-from ..safety.assessment import Status
+from ..safety.assessment import SafetyAssessment, Status
 from ..viz.plots import shannon_safe_operating_area
 from ..viz.style import STATUS_COLOURS, apply_style
 
@@ -114,6 +114,35 @@ def _spin(minimum: float, maximum: float, value: float, decimals: int = 3) -> QD
     box.setKeyboardTracking(False)
     box.setMinimumWidth(110)
     return box
+
+
+def headline_text(assessment: SafetyAssessment) -> str:
+    """The one line a user reads before acting.
+
+    A free function, not a method on the window, so it can be asserted on without a
+    running Qt application -- and so it stays in step with the other three headline
+    surfaces, which share the same two renderers on ``SafetyAssessment``.
+
+    Two things it must never do: read cleaner than the evidence behind it (so the checks
+    that did not run are named), and print an amplitude when no amplitude is safe (so an
+    amplitude-independent failure replaces the number rather than sitting beside it).
+    """
+    not_evaluated = assessment.not_evaluated_note()
+    refusal = assessment.unsafe_at_any_amplitude_note()
+    limit = (
+        refusal
+        if refusal
+        else (
+            f"limiting current "
+            f"{format_limit(assessment.limiting_current_uA)} uA "
+            f"({assessment.limiting_mechanism})"
+        )
+    )
+    return (
+        f"{assessment.status.value}"
+        + (f" {not_evaluated}" if not_evaluated else "")
+        + f" - {limit}"
+    )
 
 
 class SafetyWindow(QMainWindow):
@@ -329,16 +358,7 @@ class SafetyWindow(QMainWindow):
             return
 
         colour = STATUS_COLOURS[assessment.status.value]
-        # The status is the worst verdict among the checks that ran; name the ones that
-        # did not, so the headline cannot read cleaner than the evidence behind it.
-        not_evaluated = assessment.not_evaluated_note()
-        self.headline.setText(
-            f"{assessment.status.value}"
-            + (f" {not_evaluated}" if not_evaluated else "")
-            + f" - limiting current "
-            f"{format_limit(assessment.limiting_current_uA)} uA "
-            f"({assessment.limiting_mechanism})"
-        )
+        self.headline.setText(headline_text(assessment))
         self.headline.setStyleSheet(f"color: {colour};")
 
         self.table.setRowCount(len(assessment.checks))

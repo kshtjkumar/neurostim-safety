@@ -198,6 +198,11 @@ def report_to_json(
         # Top-level rather than inside ``results``: ``results`` is ``calc.report()``,
         # whose keys become the columns of a sweep CSV, and a list is not a CSV cell.
         "not_evaluated": [c.name for c in assessment.not_evaluated],
+        # Non-empty means ``results.limiting_current_uA`` is null and the protocol is
+        # unsafe as a waveform, not at some amplitude (ledger 84).
+        "unsafe_at_any_amplitude": [
+            c.name for c in assessment.unsafe_at_any_amplitude
+        ],
         "checks": [
             {
                 "name": c.name,

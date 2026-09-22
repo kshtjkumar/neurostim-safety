@@ -227,13 +227,23 @@ def build_report(
     # The status is the worst verdict among the checks that ran, so the ones that did not
     # run are named beside it rather than left for the reader to spot in the table.
     not_evaluated = assessment.not_evaluated_note()
+    # In place of the amplitude, never beside it: a reader who sees a number will
+    # programme it whatever the sentence next to it says (ledger 84).
+    refusal = assessment.unsafe_at_any_amplitude_note()
+    headline = (
+        f"<b>{refusal}</b>"
+        if refusal
+        else (
+            f"limiting current "
+            f"<b>{format_limit(assessment.limiting_current_uA)} &micro;A</b> "
+            f"({assessment.limiting_mechanism})"
+        )
+    )
     story.append(
         Paragraph(
             f"Overall assessment: {verdict}"
             + (f" {not_evaluated}" if not_evaluated else "")
-            + f" &middot; limiting current "
-            f"<b>{format_limit(assessment.limiting_current_uA)} &micro;A</b> "
-            f"({assessment.limiting_mechanism})",
+            + f" &middot; {headline}",
             styles["body"],
         )
     )

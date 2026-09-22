@@ -260,6 +260,44 @@ class SafetyAssessment:
         return f"({len(missing)} {noun} not evaluated: {names})"
 
     @property
+    def unsafe_at_any_amplitude(self) -> tuple[Check, ...]:
+        """FAILing checks that impose no ceiling, so no amplitude clears them.
+
+        A check outside :data:`LIMIT_BEARING` has an amplitude-independent verdict by
+        construction -- that is what bearing no limit means. If such a check FAILs, it
+        FAILs at every amplitude, and the protocol is unsafe as a waveform rather than as
+        an amplitude. A monophasic protocol is the case on record: it FAILs Charge balance
+        at 1 fA and at 1 A alike, and the package still printed a limiting current of
+        15.3 mA for it (ledger 84).
+
+        The tuple rather than a boolean, because every surface has to **name** the check:
+        "no amplitude is safe" without saying which check makes it so tells a user nothing
+        they can act on.
+
+        Distinct from ``limits_incomplete``, and deliberately not merged with it: that one
+        says *the number may be too high, a candidate was missing*, this one says *there is
+        no number*. One flag would force one rendering on two opposite messages.
+        """
+        return tuple(
+            c
+            for c in self.checks
+            if c.status is Status.FAIL and c.name not in LIMIT_BEARING
+        )
+
+    def unsafe_at_any_amplitude_note(self) -> str:
+        """Sentence naming why no amplitude is safe; empty when one is.
+
+        One renderer for :meth:`describe`, ``report_to_json``, the PDF header and the GUI
+        headline, so the four cannot disagree about what they are refusing to print.
+        """
+        checks = self.unsafe_at_any_amplitude
+        if not checks:
+            return ""
+        names = ", ".join(c.name for c in checks)
+        verb = "FAILs" if len(checks) == 1 else "FAIL"
+        return f"no amplitude is safe: {names} {verb} at every amplitude"
+
+    @property
     def limiting_current_uA(self) -> float:
         """Lowest current limit across every check that produces one.
 
@@ -321,11 +359,22 @@ class SafetyAssessment:
             self.protocol.describe(),
             "",
             f"Overall: {self.status.value}{_suffix(self.not_evaluated_note())}",
-            f"Limiting current: {format_limit(self.limiting_current_uA)} uA "
-            f"({self.limiting_mechanism})",
-            f"  across published ranges: "
-            f"{self.limiting_current_interval_uA.describe('uA', floor=True)} "
-            f"(Shannon k {K_BOUNDS[0]}-{K_BOUNDS[1]}, full material range)",
+        ]
+        # In place of a number, not beside one: a reader who sees an amplitude will
+        # programme it, however the sentence next to it is worded. The interval goes with
+        # it, for the same reason -- it is two more amplitudes.
+        refusal = self.unsafe_at_any_amplitude_note()
+        if refusal:
+            lines.append(f"Limiting current: none -- {refusal}")
+        else:
+            lines += [
+                f"Limiting current: {format_limit(self.limiting_current_uA)} uA "
+                f"({self.limiting_mechanism})",
+                f"  across published ranges: "
+                f"{self.limiting_current_interval_uA.describe('uA', floor=True)} "
+                f"(Shannon k {K_BOUNDS[0]}-{K_BOUNDS[1]}, full material range)",
+            ]
+        lines += [
             "",
         ]
         lines += [c.describe() for c in self.checks]
@@ -1145,6 +1194,7 @@ class SafetyCalculator:
         meanings; everything else is additive.
         """
         assessment = self.assess()
+        unsafe = assessment.unsafe_at_any_amplitude_note()
         return {
             # --- 0.1.0 keys ---
             "area_cm2": self.e.area_cm2,
@@ -1164,8 +1214,13 @@ class SafetyCalculator:
             "peak_electrode_potential_V": assessment.water_window.peak_potential_V,
             "duty_cycle": self.p.duty_cycle,
             "net_dc_current_uA": self.p.net_dc_current_uA,
-            "limiting_current_uA": assessment.limiting_current_uA,
-            "limiting_mechanism": assessment.limiting_mechanism,
+            # None, not a number, when no amplitude is safe. A machine consumer is the
+            # one that cannot read the caveat in the prose beside it, and this dict is
+            # what becomes the columns of a batch CSV (ledger 84).
+            "limiting_current_uA": (
+                None if unsafe else assessment.limiting_current_uA
+            ),
+            "limiting_mechanism": unsafe or assessment.limiting_mechanism,
             "status": assessment.status.value,
         }
 
