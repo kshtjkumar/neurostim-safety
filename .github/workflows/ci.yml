@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         include:
           - os: macos-latest
             python-version: "3.12"
@@ -81,6 +81,41 @@ jobs:
 
       - name: Mypy
         run: mypy neurostim
+
+  coverage:
+    name: Branch-point coverage floor
+    runs-on: ubuntu-latest
+    # coverage.py's headline branch figure counts *arcs*, so a decision whose else-side
+    # is never taken still scores 50 %. This job re-aggregates coverage.py's own JSON
+    # output to branch *points* -- decisions with every exit exercised -- because that
+    # is the quantity the audit measured: 48.30 % against a blended line+branch total of
+    # 88.15 %. `--cov-fail-under` would gate the latter and can never ratchet the
+    # former, so the metric lives in scripts/branch_floor.py where it can be reviewed.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" coverage
+
+      - name: Measure branch coverage
+        env:
+          QT_QPA_PLATFORM: offscreen
+          MPLBACKEND: Agg
+        run: |
+          coverage run --branch --source=neurostim -m pytest -q
+          coverage json -o coverage.json
+
+      - name: Enforce the branch-point floor
+        # Baseline at the start of the repair. Raised as the phases land; the exit
+        # target is 80 % total with a 60 % per-module floor for modules of >= 4 points.
+        run: python scripts/branch_floor.py --json coverage.json --min 48.0
 
   literature:
     name: Literature provenance
