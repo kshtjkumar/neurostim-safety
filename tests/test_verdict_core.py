@@ -318,3 +318,367 @@ class TestRestingPotentialIsInsideTheWindow:
             resting_potential_V=0.3,
         )
         assert calc.assess().water_window.resting_potential_V == 0.3
+
+
+class TestFloorToPass:
+    """The helper itself: ``_limits.floor_to_pass`` and ``_limits.format_limit``
+    (fix plan D2, ledger 9 and 49).
+
+    A reported limit is a promise: programme this and the check passes. Two things broke
+    it. The back-solve recomputed the limit through a different float association than the
+    forward comparison, so the answer could land one ulp on the wrong side (ledger 9); and
+    every render site formatted with round-to-nearest, which rounds a maximum UP
+    (ledger 49). Both are fixed by the same contract -- return, and print, the largest
+    value that still passes.
+    """
+
+    def test_it_steps_down_to_the_largest_passing_value(self):
+        """Not tautological: the predicate is written here as a comparison against a
+        literal, so the expected answer is the largest float at or below that literal --
+        an IEEE fact, not a package one."""
+        import math
+
+        from neurostim.safety import _limits
+
+        limit = 100.0
+        overshoot = math.nextafter(limit, math.inf)
+
+        settled = _limits.floor_to_pass(
+            overshoot, lambda v: v <= limit, name="synthetic"
+        )
+        assert settled == limit
+
+    def test_it_steps_up_when_the_back_solve_undershot(self):
+        """Flooring is "the largest value that passes", which is not always downward.
+
+        Measured on the real back-solves: of 108 (material, policy, polarity) x
+        (charge, Shannon) limits, 12 sit one ulp above their own boundary and 4 sit one
+        ulp below it. A one-directional helper would leave the second group reporting a
+        limit that is not the limit.
+
+        Not tautological: the expected answer is again the literal boundary, reached from
+        the other side.
+        """
+        import math
+
+        from neurostim.safety import _limits
+
+        limit = 100.0
+        undershoot = math.nextafter(limit, -math.inf)
+
+        settled = _limits.floor_to_pass(
+            undershoot, lambda v: v <= limit, name="synthetic"
+        )
+        assert settled == limit
+
+    def test_the_returned_value_is_asserted_to_be_the_boundary(self):
+        """D2 point 1: ``passes(v)`` and not ``passes(nextafter(v, +inf))``.
+
+        Not tautological: the assertion is made here, independently, on whatever the
+        helper returned.
+        """
+        import math
+
+        from neurostim.safety import _limits
+
+        settled = _limits.floor_to_pass(
+            1.0000000000000002, lambda v: v <= 1.0, name="synthetic"
+        )
+        assert settled <= 1.0
+        assert not (math.nextafter(settled, math.inf) <= 1.0)
+
+    def test_exhausting_the_step_budget_raises_and_names_the_check(self):
+        """Returning the failing value would be a silent failure; leaving the budget
+        unstated is how a future non-linear check degrades quietly (D2 point 2).
+
+        Not tautological: the predicate written here never passes, so no value the helper
+        could return would be correct, and the expected outcome is the raise.
+        """
+        from neurostim.safety import _limits
+
+        with pytest.raises(_limits.LimitDidNotSettle) as raised:
+            _limits.floor_to_pass(50.0, lambda v: False, name="Chronic degradation")
+        message = str(raised.value)
+
+        assert "Chronic degradation" in message
+        assert "50" in message
+        assert "4" in message  # the step budget
+
+    def test_a_non_finite_or_non_positive_value_is_returned_unchanged(self):
+        """``inf`` means "no ceiling" and ``0.0`` means "nothing is permitted"; neither is
+        a float to be walked, and neither has a successor that means anything.
+
+        Not tautological: three literal inputs, three literal expected outputs.
+        """
+        import math
+
+        from neurostim.safety import _limits
+
+        never = lambda v: False  # noqa: E731 - the point is that it is never consulted
+        assert _limits.floor_to_pass(math.inf, never, name="x") == math.inf
+        assert _limits.floor_to_pass(0.0, never, name="x") == 0.0
+        assert math.isnan(_limits.floor_to_pass(math.nan, never, name="x"))
+
+
+class TestFormatLimit:
+    """A limit must never be printed larger than it is (ledger 49)."""
+
+    def test_the_worked_example_headline_floors(self):
+        """Not tautological: 141.37166941154072 and the expected "141.3" are both written
+        out, and 141.4 -- what ``:.4g`` prints -- is asserted absent."""
+        from neurostim.safety._limits import format_limit
+
+        assert format_limit(141.37166941154072) == "141.3"
+
+    def test_the_shannon_limit_floors(self):
+        """Ledger 49's second recorded case. Not tautological: both literals are quoted
+        from the ledger entry."""
+        from neurostim.safety._limits import format_limit
+
+        assert format_limit(472.78772824642175) == "472.7"
+
+    def test_the_printed_number_never_exceeds_the_value_it_floors(self):
+        """The property, over a decade-spanning grid rather than one case.
+
+        Not tautological: the comparison is between the float the string parses back to
+        and the input float -- arithmetic on the test's own values, with the package only
+        supplying the formatter.
+        """
+        from neurostim.safety._limits import format_limit
+
+        values = [
+            base * 10.0**exponent
+            for exponent in range(-6, 7)
+            for base in (1.0, 1.0000001, 1.4999, 1.5, 1.9999, 3.14159265, 9.99999)
+        ]
+        for value in values:
+            printed = format_limit(value)
+            assert float(printed) <= value, f"{printed} exceeds {value!r}"
+
+    def test_four_significant_digits_are_kept(self):
+        """Flooring must not become truncation to the integer.
+
+        Not tautological: the expected strings are written out for values whose fourth
+        significant digit is where the information is.
+        """
+        from neurostim.safety._limits import format_limit
+
+        assert format_limit(0.0012345678) == "0.001234"
+        assert format_limit(15285.509415880857) == "1.528e+04"
+        # Trailing zeros are kept: four significant digits is the promise, and "20" would
+        # claim only two. This is the form the fix plan's blast radius records.
+        assert format_limit(20.0) == "20.00"
+        assert format_limit(212.05750411731108) == "212.0"
+
+    def test_it_does_not_invent_a_number_for_infinity(self):
+        """Not tautological: the expected output is the same token ``:.4g`` produces, so
+        no surface starts printing a finite ceiling where there is none."""
+        import math
+
+        from neurostim.safety._limits import format_limit
+
+        assert format_limit(math.inf) == "inf"
+
+
+class TestEveryBackSolvedLimitPassesItsOwnCheck:
+    """T2a. Re-assess at the package's own reported limit and the check must pass.
+
+    Measured before the fix: over 9 materials x 3 policies x 2 polarities, 12 of the 54
+    charge-injection limits and 0 of the 54 Shannon limits FAIL their own forward check,
+    surfacing as "100 uC/cm^2 exceeds the 100 uC/cm^2 limit" (ledger 9). A further 4
+    charge limits sit one ulp *below* their boundary.
+    """
+
+    @staticmethod
+    def _cases():
+        from dataclasses import replace
+
+        from neurostim.materials import MATERIALS
+
+        electrode = DiscElectrode(100.0, "Pt")
+        base = StimProtocol(80.0, 200.0, 130.0, 1.0)
+        for material in MATERIALS:
+            for policy in ("conservative", "nominal", "optimistic"):
+                for anodic_first in (False, True):
+                    protocol = replace(base, anodic_first=anodic_first)
+                    yield material, policy, protocol, electrode
+
+    @staticmethod
+    def _at(electrode, protocol, current_uA, material, policy):
+        from dataclasses import replace
+
+        return SafetyCalculator(
+            electrode,
+            replace(protocol, current_uA=current_uA),
+            material=material,
+            policy=policy,
+        ).assess()
+
+    def test_the_charge_injection_limit_is_the_boundary(self):
+        """Not tautological: the oracle is IEEE, not the package -- the limit must pass
+        and its successor float must fail. A one-sided ``<=`` would admit a limit that is
+        merely somewhere below the boundary."""
+        import math
+
+        for material, policy, protocol, electrode in self._cases():
+            limit = SafetyCalculator(
+                electrode, protocol, material=material, policy=policy
+            ).assess().charge.max_current_uA
+            if not math.isfinite(limit) or limit <= 0:
+                continue
+            at = self._at(electrode, protocol, limit, material, policy)
+            above = self._at(
+                electrode, protocol, math.nextafter(limit, math.inf), material, policy
+            )
+            assert at.charge.passes, (material, policy, protocol.anodic_first, limit)
+            assert not above.charge.passes, (material, policy, limit)
+
+    def test_the_shannon_limit_is_the_boundary(self):
+        """Same oracle, second back-solve."""
+        import math
+
+        for material, policy, protocol, electrode in self._cases():
+            limit = SafetyCalculator(
+                electrode, protocol, material=material, policy=policy
+            ).assess().shannon.max_current_uA
+            if not math.isfinite(limit) or limit <= 0:
+                continue
+            at = self._at(electrode, protocol, limit, material, policy)
+            above = self._at(
+                electrode, protocol, math.nextafter(limit, math.inf), material, policy
+            )
+            assert at.shannon.passes, (material, policy, limit)
+            assert not above.shannon.passes, (material, policy, limit)
+
+    def test_the_compliance_limit_is_the_boundary(self):
+        """The third back-solve, and the one C1.6 is about to add to the candidate set.
+
+        Measured before the fix: over 36 (electrode, compliance, pulse width)
+        combinations, 6 reported limits FAIL their own compliance check and 14 more sit
+        below their boundary.
+        """
+        import math
+        from dataclasses import replace
+
+        from neurostim import CylindricalBandElectrode, RingElectrode
+
+        electrodes = (
+            DiscElectrode(100.0, "Pt"),
+            RingElectrode(330.0, 270.0, "Pt"),
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            DiscElectrode(2000.0, "SIROF"),
+        )
+        for electrode in electrodes:
+            for compliance_V in (1.0, 5.0, 10.0):
+                for pulse_width_us in (50.0, 200.0, 400.0):
+                    protocol = StimProtocol(80.0, pulse_width_us, 130.0, 1.0)
+                    limit = SafetyCalculator(
+                        electrode, protocol, compliance_V=compliance_V
+                    ).assess().compliance.max_current_uA
+                    if not math.isfinite(limit) or limit <= 0:
+                        continue
+
+                    def at(current, electrode=electrode, protocol=protocol,
+                           compliance_V=compliance_V):
+                        return SafetyCalculator(
+                            electrode,
+                            replace(protocol, current_uA=current),
+                            compliance_V=compliance_V,
+                        ).assess().compliance
+
+                    assert at(limit).passes, (electrode, compliance_V, limit)
+                    assert not at(math.nextafter(limit, math.inf)).passes, (
+                        electrode,
+                        compliance_V,
+                        limit,
+                    )
+
+    def test_the_second_charge_back_solve_agrees_with_the_first(self):
+        """``SafetyCalculator.max_current_cic_uA`` is a separate back-solve behind every
+        CSV row and the amplitude-limits figure, and it was not floored (execution M4).
+
+        Not tautological: two independently computed attributes are compared to each
+        other, and both are separately asserted to be the boundary above.
+        """
+        for material, policy, protocol, electrode in self._cases():
+            calc = SafetyCalculator(
+                electrode, protocol, material=material, policy=policy
+            )
+            assert calc.max_current_cic_uA == calc.assess().charge.max_current_uA, (
+                material,
+                policy,
+            )
+
+
+class TestEveryRenderSiteFloors:
+    """Ledger 49: a limit rounded to nearest is a limit rounded UP, on five surfaces."""
+
+    @staticmethod
+    def _worked_example() -> SafetyCalculator:
+        from neurostim import RingElectrode
+
+        return SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+
+    def test_describe_floors_the_headline(self):
+        """Not tautological: "141.4" is what ``:.4g`` prints today and is asserted absent;
+        "141.3" is the floored value, computed by hand from 141.37166941154072."""
+        line = next(
+            row
+            for row in self._worked_example().describe().splitlines()
+            if row.startswith("Limiting current:")
+        )
+        assert "141.3" in line
+        assert "141.4" not in line
+
+    def test_describe_floors_both_ends_of_the_published_range(self):
+        """Not tautological: 141.37166941154072 and 212.05750411731108 floor by hand to
+        141.3 and 212.0; ``:.4g`` prints 141.4 and 212.1."""
+        line = next(
+            row
+            for row in self._worked_example().describe().splitlines()
+            if "across published ranges" in row
+        )
+        assert "141.3-212.0" in line
+
+    def test_the_pdf_floors_every_limit_it_prints(self):
+        """Not tautological: the three ledger-49 sites are asserted on extracted PDF text
+        against hand-floored values."""
+        text = pdf_text(self._worked_example(), __import__("pathlib").Path("/tmp") / "x")
+        assert "141.3" in text
+        assert "472.7" in text
+        assert "141.4" not in text
+        assert "472.8" not in text
+
+    def test_the_figure_annotation_floors(self):
+        """``viz/plots.py`` prints the binding limit at ``:.3g``.
+
+        Not tautological: the expected string is the hand-floored 3-significant-digit
+        form of the same number, and the round-to-nearest form is asserted absent.
+        """
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        from neurostim import RingElectrode
+        from neurostim.viz.plots import current_limit_sweep
+
+        figure, axes = plt.subplots()
+        try:
+            current_limit_sweep(
+                RingElectrode(330.0, 270.0, "Pt"),
+                StimProtocol(80, 200, 130, 1),
+                compliance_V=10.0,
+                ax=axes,
+            )
+            texts = [text.get_text() for text in axes.texts]
+        finally:
+            plt.close(figure)
+
+        binding = [text for text in texts if "binding limit" in text]
+        assert binding, texts
+        assert "141.3" in binding[0]

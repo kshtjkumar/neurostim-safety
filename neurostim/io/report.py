@@ -30,6 +30,7 @@ from reportlab.platypus import (
 from .. import _repro
 from ..references import cite
 from ..safety import SafetyCalculator
+from ..safety._limits import format_limit
 from ..safety.assessment import SafetyAssessment, Status
 
 _STATUS_HEX = {
@@ -231,7 +232,7 @@ def build_report(
             f"Overall assessment: {verdict}"
             + (f" {not_evaluated}" if not_evaluated else "")
             + f" &middot; limiting current "
-            f"<b>{assessment.limiting_current_uA:.4g} &micro;A</b> "
+            f"<b>{format_limit(assessment.limiting_current_uA)} &micro;A</b> "
             f"({assessment.limiting_mechanism})",
             styles["body"],
         )
@@ -304,7 +305,7 @@ def build_report(
                 ),
                 (
                     "Shannon current limit",
-                    f"{assessment.shannon.max_current_uA:.4g} &micro;A",
+                    f"{format_limit(assessment.shannon.max_current_uA)} &micro;A",
                 ),
                 (
                     "Charge-injection limit",
@@ -313,7 +314,7 @@ def build_report(
                 ),
                 (
                     "Charge-injection current limit",
-                    f"{assessment.charge.max_current_uA:.4g} &micro;A",
+                    f"{format_limit(assessment.charge.max_current_uA)} &micro;A",
                 ),
                 (
                     "Peak electrode potential",

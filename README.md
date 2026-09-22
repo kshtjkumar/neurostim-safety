@@ -39,8 +39,8 @@ print(calc.describe())
 
 ```
 Overall: FAIL (1 check not evaluated: Shannon criterion)
-Limiting current: 141.4 uA (Pt charge-injection limit)
-  across published ranges: 141.4-212.1 uA (Shannon k 1.5-2.0, full material range)
+Limiting current: 141.3 uA (Pt charge-injection limit)
+  across published ranges: 141.3-212.0 uA (Shannon k 1.5-2.0, full material range)
 
 [NOT_EVALUATED] Shannon criterion: not applicable: 0.000283 cm^2 is below the macro/micro boundary (k would read -0.04)
 [      CAUTION] Charge injection limit: 56.59 uC/cm^2 of 100 uC/cm^2 (57 % used)
@@ -144,14 +144,18 @@ Published limits are ranges, not numbers. Cogan gives platinum as a factor of th
 Rather than hide that behind the `policy` setting, the assessment reports both:
 
 ```
-Limiting current: 70.69 uA (Pt charge-injection limit)
-  across published ranges: 70.69-212.1 uA (Shannon k 1.5-2.0, full material range)
+Limiting current: 141.3 uA (Pt charge-injection limit)
+  across published ranges: 141.3-212.0 uA (Shannon k 1.5-2.0, full material range)
 ```
 
 ```python
-assessment.limiting_current_interval_uA     # Interval(70.69, 212.1)
+assessment.limiting_current_interval_uA     # Interval(141.37167, 212.05750)
 assessment.charge.limit_interval_uC_cm2     # Interval(50.0, 150.0)
 ```
+
+Both ends of a limit interval are printed **floored** to four significant digits, not
+rounded to nearest: rounding a maximum to nearest rounds it up, and programming the
+printed figure would then fail the check it is the maximum for.
 
 This is interval arithmetic, not uncertainty quantification: it assumes inputs can sit
 at their extremes simultaneously and does not track correlation. A wide result is not a

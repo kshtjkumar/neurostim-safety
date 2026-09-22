@@ -37,8 +37,33 @@ from ..data import gabriel1996
 from ..geometry.base import Electrode
 from ..materials import Material, get_material
 from ..protocol import StimProtocol
+from ..units import charge_uC
+from ._limits import floor_to_pass, format_limit
 from .charge import charge_density_uC_cm2
 from .water_window import effective_capacitance_uF_cm2, polarisation_V
+
+
+def required_voltage_V(
+    current_uA: float,
+    *,
+    total_resistance_ohm: float,
+    pulse_width_us: float,
+    area_cm2: float,
+    capacitance_uF_cm2: float,
+) -> float:
+    """Voltage the stimulator must supply to deliver ``current_uA`` into this load.
+
+    One expression, used both to report the requirement and to back-solve the limit. The
+    back-solve used to scale the requested current by the voltage ratio, which is exact in
+    real arithmetic and not in floating point: of 36 measured (electrode, compliance,
+    pulse width) combinations, 6 reported limits FAILed their own compliance check and 14
+    more sat below the boundary. Sharing the expression is what makes
+    :attr:`ComplianceResult.max_current_uA` an inverse of :attr:`ComplianceResult.passes`
+    rather than an approximation of one.
+    """
+    ohmic = (current_uA * 1e-6) * total_resistance_ohm
+    density = charge_density_uC_cm2(charge_uC(current_uA, pulse_width_us), area_cm2)
+    return ohmic + polarisation_V(density, capacitance_uF_cm2)
 
 
 @dataclass(frozen=True)
@@ -55,6 +80,9 @@ class ComplianceResult:
     available_V: float | None
     resistance_source: str
     access_resistance_is_exact: bool
+    pulse_width_us: float
+    area_cm2: float
+    capacitance_uF_cm2: float
     conductivity_note: str = ""
 
     @property
@@ -91,11 +119,26 @@ class ComplianceResult:
         """Largest current the stimulator can actually drive into this load.
 
         Solves ``V = I*R + (I*W/A)/C_dl`` for ``I``; because both terms are linear in
-        current, this reduces to scaling the requested current by the voltage ratio.
+        current, that reduces to scaling the requested current by the voltage ratio -- and
+        then the answer is settled onto the boundary of the *forward* comparison, which
+        recomputes the voltage rather than scaling it. The two differ by up to an ulp and
+        the difference is a reported maximum that fails its own check (ledger 9).
         """
         if self.available_V is None or self.required_V <= 0:
             return math.inf
-        return self.current_uA * (self.available_V / self.required_V)
+        available_V = self.available_V
+        return floor_to_pass(
+            self.current_uA * (available_V / self.required_V),
+            lambda current_uA: required_voltage_V(
+                current_uA,
+                total_resistance_ohm=self.total_resistance_ohm,
+                pulse_width_us=self.pulse_width_us,
+                area_cm2=self.area_cm2,
+                capacitance_uF_cm2=self.capacitance_uF_cm2,
+            )
+            <= available_V,
+            name="Compliance voltage",
+        )
 
     def describe(self) -> str:
         """Multi-line summary."""
@@ -125,7 +168,8 @@ class ComplianceResult:
             if not self.passes:
                 lines.append(
                     f"  the source will drop out of regulation above "
-                    f"{self.max_current_uA:.4g} uA; delivered current will be lower "
+                    f"{format_limit(self.max_current_uA)} uA; delivered current will "
+                    f"be lower "
                     f"than commanded"
                 )
         return "\n".join(lines)
@@ -202,9 +246,18 @@ def evaluate(
         total_resistance_ohm=total_r,
         ohmic_drop_V=ohmic,
         polarisation_V=polar,
-        required_V=ohmic + polar,
+        required_V=required_voltage_V(
+            protocol.current_uA,
+            total_resistance_ohm=total_r,
+            pulse_width_us=protocol.pulse_width_us,
+            area_cm2=electrode.area_cm2,
+            capacitance_uF_cm2=capacitance_uF_cm2,
+        ),
         available_V=compliance_V,
         resistance_source=source,
         access_resistance_is_exact=is_exact,
+        pulse_width_us=protocol.pulse_width_us,
+        area_cm2=electrode.area_cm2,
+        capacitance_uF_cm2=capacitance_uF_cm2,
         conductivity_note=conductivity_note,
     )

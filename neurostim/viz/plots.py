@@ -20,6 +20,7 @@ from ..models import thermal as thermal_mod
 from ..protocol import StimProtocol
 from ..safety import SafetyCalculator
 from ..safety import shannon as shannon_mod
+from ..safety._limits import format_limit
 from .style import (
     DOUBLE_COLUMN_MM,
     PALETTE,
@@ -208,7 +209,7 @@ def current_limit_sweep(
     crossing = binding[0]
     ax.axhline(crossing, color=PALETTE["fail"], linewidth=0.7, linestyle="-", alpha=0.6)
     ax.annotate(
-        f"binding limit {crossing:.3g} µA",
+        f"binding limit {format_limit(crossing)} µA",
         xy=(currents[0], crossing),
         xytext=(2, 3),
         textcoords="offset points",

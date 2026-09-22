@@ -39,6 +39,9 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..units import charge_uC
+from ._limits import floor_to_pass, format_limit
+
 if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance
     from ..uncertainty import Interval
 
@@ -217,11 +220,20 @@ def shannon_k(charge_per_phase_uC: float, area_cm2: float) -> float:
 
 
 def shannon_max_charge_uC(area_cm2: float, k: float = K_DEFAULT) -> float:
-    """Maximum charge per phase at a given ``k``: ``Q_max = sqrt(A * 10^k)``."""
+    """Maximum charge per phase at a given ``k``: ``Q_max = sqrt(A * 10^k)``.
+
+    Settled onto the boundary of the forward metric: ``sqrt`` is not the bit-exact inverse
+    of ``log10(Q^2/A)``, so the closed form can land one ulp on either side of the largest
+    charge that still satisfies ``shannon_k(Q, A) <= k`` (ledger 9).
+    """
     validate_k(k)
     if not math.isfinite(area_cm2) or area_cm2 <= 0:
         raise ValueError(f"area_cm2 must be finite and > 0, got {area_cm2!r}")
-    return math.sqrt(area_cm2 * 10.0**k)
+    return floor_to_pass(
+        math.sqrt(area_cm2 * 10.0**k),
+        lambda charge_uC_: shannon_k(charge_uC_, area_cm2) <= k,
+        name="Shannon criterion",
+    )
 
 
 def shannon_max_charge_density_uC_cm2(
@@ -239,12 +251,22 @@ def shannon_max_charge_density_uC_cm2(
 def shannon_max_current_uA(
     area_cm2: float, pulse_width_us: float, k: float = K_DEFAULT
 ) -> float:
-    """Maximum leading-phase current at a given area, pulse width and ``k``."""
+    """Maximum leading-phase current at a given area, pulse width and ``k``.
+
+    Settled onto the boundary of the forward check rather than returned as computed: the
+    back-solve divides where :func:`shannon_k` multiplies and takes a log, so the two are
+    not bit-exact inverses and the answer can land one ulp on either side (ledger 9).
+    """
     if not math.isfinite(pulse_width_us) or pulse_width_us <= 0:
         raise ValueError(
             f"pulse_width_us must be finite and > 0, got {pulse_width_us!r}"
         )
-    return shannon_max_charge_uC(area_cm2, k) / (pulse_width_us * 1e-6)
+    return floor_to_pass(
+        shannon_max_charge_uC(area_cm2, k) / (pulse_width_us * 1e-6),
+        lambda current_uA: shannon_k(charge_uC(current_uA, pulse_width_us), area_cm2)
+        <= k,
+        name="Shannon criterion",
+    )
 
 
 @dataclass(frozen=True)
@@ -286,9 +308,9 @@ class ShannonResult:
                 f"Shannon k = {self.k_metric:.3f} vs threshold {self.k_threshold:.2f} "
                 f"-> {verdict}",
                 f"  charge/phase    {self.charge_per_phase_uC:.4g} uC "
-                f"(limit {self.max_charge_uC:.4g} uC)",
+                f"(limit {format_limit(self.max_charge_uC)} uC)",
                 f"  charge density  {self.charge_density_uC_cm2:.4g} uC/cm^2",
-                f"  current limit   {self.max_current_uA:.4g} uA "
+                f"  current limit   {format_limit(self.max_current_uA)} uA "
                 f"({self.current_margin:.2f}x requested)",
             ]
         )

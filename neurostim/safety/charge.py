@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from ..data import cogan2016
 from ..materials import Material, Policy, get_material
 from ..uncertainty import Interval
+from ..units import charge_uC
+from ._limits import floor_to_pass, format_limit
 
 PULSE_WIDTH_TOLERANCE = 2.0
 """Fold-difference in pulse width beyond which the CIC condition mismatch is flagged."""
@@ -63,13 +65,27 @@ def cic_max_current_uA(
     policy: Policy = "conservative",
     anodic_first: bool | None = None,
 ) -> float:
-    """Maximum leading-phase current the material supports."""
+    """Maximum leading-phase current the material supports.
+
+    Settled onto the boundary of the forward check (ledger 9). This is a *second*
+    back-solve, separate from the one :func:`evaluate` performs and reached through
+    ``SafetyCalculator.max_current_cic_uA``, so it sits behind every batch CSV row and the
+    amplitude-limits figure. Flooring it here is what keeps the two agreeing; a test
+    asserts they do.
+    """
     if not math.isfinite(pulse_width_us) or pulse_width_us <= 0:
         raise ValueError(
             f"pulse_width_us must be finite and > 0, got {pulse_width_us!r}"
         )
-    return cic_max_charge_uC(material, area_cm2, policy, anodic_first) / (
-        pulse_width_us * 1e-6
+    mat = material if isinstance(material, Material) else get_material(material)
+    limit = mat.cic_uC_cm2(policy, anodic_first)
+    return floor_to_pass(
+        cic_max_charge_uC(mat, area_cm2, policy, anodic_first) / (pulse_width_us * 1e-6),
+        lambda current_uA: charge_density_uC_cm2(
+            charge_uC(current_uA, pulse_width_us), area_cm2
+        )
+        <= limit,
+        name="Charge injection limit",
     )
 
 
@@ -135,7 +151,7 @@ class ChargeResult:
             f"  applied   {self.charge_density_uC_cm2:.4g} uC/cm^2",
             f"  limit     {self.cic_limit_uC_cm2:.4g} uC/cm^2 "
             f"({self.utilisation * 100:.1f} % used)",
-            f"  max current {self.max_current_uA:.4g} uA",
+            f"  max current {format_limit(self.max_current_uA)} uA",
         ]
         if self.limit_is_a_range:
             assert self.limit_interval_uC_cm2 is not None
@@ -144,7 +160,7 @@ class ChargeResult:
             lines.append(
                 f"  published range {lo:.4g}-{hi:.4g} uC/cm^2 "
                 f"({self.limit_interval_uC_cm2.fold_range:.1f}x) "
-                f"-> {self.max_current_interval_uA.describe('uA')}"
+                f"-> {self.max_current_interval_uA.describe('uA', floor=True)}"
             )
         if self.derating_applied != 1.0:
             lines.append(
@@ -252,8 +268,22 @@ def evaluate(
         charge_per_phase_uC=charge_per_phase_uC,
         charge_density_uC_cm2=density,
         cic_limit_uC_cm2=limit,
-        max_charge_uC=limit * area_cm2,
-        max_current_uA=(limit * area_cm2) / (pulse_width_us * 1e-6),
+        max_charge_uC=floor_to_pass(
+            limit * area_cm2,
+            lambda charge_uC_: charge_density_uC_cm2(charge_uC_, area_cm2) <= limit,
+            name="Charge injection limit",
+        ),
+        # Floored against this result's own forward comparison -- `density <= limit`,
+        # with the same `limit` the derating and policy above produced, not the material's
+        # raw value. See _limits.floor_to_pass and ledger 9.
+        max_current_uA=floor_to_pass(
+            (limit * area_cm2) / (pulse_width_us * 1e-6),
+            lambda current_uA: charge_density_uC_cm2(
+                charge_uC(current_uA, pulse_width_us), area_cm2
+            )
+            <= limit,
+            name="Charge injection limit",
+        ),
         policy=policy,
         polarity=(
             "unspecified"

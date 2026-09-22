@@ -57,6 +57,7 @@ from ..geometry import (
 from ..materials import Policy, list_materials
 from ..protocol import StimProtocol, Waveform
 from ..safety import SafetyCalculator, shannon
+from ..safety._limits import format_limit
 from ..safety.assessment import Status
 from ..viz.plots import shannon_safe_operating_area
 from ..viz.style import STATUS_COLOURS, apply_style
@@ -335,7 +336,8 @@ class SafetyWindow(QMainWindow):
             f"{assessment.status.value}"
             + (f" {not_evaluated}" if not_evaluated else "")
             + f" - limiting current "
-            f"{assessment.limiting_current_uA:.4g} uA ({assessment.limiting_mechanism})"
+            f"{format_limit(assessment.limiting_current_uA)} uA "
+            f"({assessment.limiting_mechanism})"
         )
         self.headline.setStyleSheet(f"color: {colour};")
 

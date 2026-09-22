@@ -37,6 +37,7 @@ from . import current_density as jd_mod
 from . import envelope as envelope_mod
 from . import shannon as shannon_mod
 from . import water_window as ww_mod
+from ._limits import format_limit
 from .shannon import K_BOUNDS
 
 CAUTION_MARGIN = 2.0
@@ -219,10 +220,10 @@ class SafetyAssessment:
             self.protocol.describe(),
             "",
             f"Overall: {self.status.value}{_suffix(self.not_evaluated_note())}",
-            f"Limiting current: {self.limiting_current_uA:.4g} uA "
+            f"Limiting current: {format_limit(self.limiting_current_uA)} uA "
             f"({self.limiting_mechanism})",
             f"  across published ranges: "
-            f"{self.limiting_current_interval_uA.describe('uA')} "
+            f"{self.limiting_current_interval_uA.describe('uA', floor=True)} "
             f"(Shannon k {K_BOUNDS[0]}-{K_BOUNDS[1]}, full material range)",
             "",
         ]
@@ -284,7 +285,7 @@ def _shannon_check(
             status=Status.FAIL,
             summary=(
                 f"k = {result.k_metric:.2f} exceeds the {k:.2f} threshold; "
-                f"max {result.max_current_uA:.4g} uA"
+                f"max {format_limit(result.max_current_uA)} uA"
             ),
             detail=detail,
             margin=result.current_margin,
@@ -331,7 +332,7 @@ def _charge_check(result: charge_mod.ChargeResult) -> Check:
             summary=(
                 f"{result.charge_density_uC_cm2:.4g} uC/cm^2 exceeds the "
                 f"{result.cic_limit_uC_cm2:.4g} uC/cm^2 limit for "
-                f"{result.material_key}; max {result.max_current_uA:.4g} uA"
+                f"{result.material_key}; max {format_limit(result.max_current_uA)} uA"
             ),
             detail=result.describe(),
             margin=result.margin,

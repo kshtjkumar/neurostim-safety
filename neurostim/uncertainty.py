@@ -152,12 +152,32 @@ class Interval:
 
     # --- rendering ------------------------------------------------------------
 
-    def describe(self, unit: str = "", fmt: str = ".4g") -> str:
-        """Human-readable rendering, collapsing to one number when exact."""
+    def describe(self, unit: str = "", fmt: str = ".4g", *, floor: bool = False) -> str:
+        """Human-readable rendering, collapsing to one number when exact.
+
+        ``floor`` is for intervals whose ends are *limits*. ``:.4g`` rounds to nearest,
+        which rounds a maximum up: the worked example's limiting-current interval printed
+        "141.4-212.1 uA" for ends of 141.37167 and 212.05750, and programming either
+        printed figure FAILs the check it is the maximum for (ledger 49). With ``floor``
+        both ends go through ``safety._limits.format_limit`` instead, giving
+        "141.3-212.0 uA". It is opt-in because most intervals here are measurements or
+        published ranges, and rounding a measurement down is not more conservative -- it
+        is just wrong.
+        """
         suffix = f" {unit}" if unit else ""
+
+        def render(value: float) -> str:
+            if not floor:
+                return f"{value:{fmt}}"
+            # Imported here, not at module scope: `neurostim.safety` imports this module,
+            # so a top-level import would close the cycle.
+            from .safety._limits import format_limit
+
+            return format_limit(value)
+
         if self.is_exact:
-            return f"{self.low:{fmt}}{suffix}"
-        return f"{self.low:{fmt}}-{self.high:{fmt}}{suffix}"
+            return f"{render(self.low)}{suffix}"
+        return f"{render(self.low)}-{render(self.high)}{suffix}"
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return self.describe()
