@@ -74,6 +74,8 @@ def newman_disc_resistance_ohm(conductivity_S_per_m: float, radius_m: float) -> 
         raise ValueError(
             f"conductivity_S_per_m must be > 0, got {conductivity_S_per_m!r}"
         )
+    if radius_m <= 0.0:
+        raise ValueError(f"radius_m must be > 0, got {radius_m!r}")
     return 1.0 / (4.0 * conductivity_S_per_m * radius_m)
 
 

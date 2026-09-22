@@ -312,19 +312,40 @@ class TestFailCeiling:
         Skipped until it does -- there is nothing to compare against yet. After it lands,
         a check added to or dropped from the package's set without the oracle following
         fails here, rather than leaving the oracle quietly computing a different quantity.
+
+        The skip is tied to an observable marker rather than to the absence it is testing
+        for. C1.3 also gives ``Check`` a ``kind`` field; if that has appeared and
+        ``LIMIT_BEARING`` has not been found, this test has been left pointing at the
+        wrong module and the seven hand-written names have silently lost their only drift
+        guard -- so it fails rather than skipping on.
         """
+        import dataclasses
         import importlib
 
+        from neurostim.safety.assessment import Check
+
         package_set = None
-        for module_name in ("neurostim.safety", "neurostim.safety.assessment"):
+        for module_name in (
+            "neurostim.safety",
+            "neurostim.safety.assessment",
+            "neurostim.safety.limits",
+            "neurostim.safety._limits",
+            "neurostim.safety.checks",
+        ):
             try:
                 module = importlib.import_module(module_name)
-            except ImportError:  # pragma: no cover - the package ships both today
+            except ImportError:
                 continue
             package_set = getattr(module, "LIMIT_BEARING", None)
             if package_set is not None:
                 break
+
         if package_set is None:
+            assert "kind" not in {field.name for field in dataclasses.fields(Check)}, (
+                "Check has grown `kind`, so C1.3 has landed, but LIMIT_BEARING was not "
+                "found in any module this test looks in -- point it at the right one "
+                "instead of letting the oracle's seven names go unguarded"
+            )
             pytest.skip("C1.3 has not landed: the package exposes no LIMIT_BEARING yet")
         assert set(package_set) == set(fail_ceiling.LIMIT_BEARING)
 
@@ -453,22 +474,25 @@ class TestDiscSurfacePotential:
     def test_a_wrong_resistance_makes_todays_field_model_look_correct(self) -> None:
         """Why the pin may not take R as an input: a shared error cancels exactly.
 
-        Feed the resistance-taking form an R that is wrong by a factor of two and
-        today's unrepaired full-space field model scores 0.999983 against it -- the very
-        number that is supposed to mean "the field model has been repaired". A C3.1 test
-        written as ``disc_surface_potential_V(I, electrode.access_resistance_ohm, ...)``
-        would therefore be satisfied by a package that halved its access resistance and
-        left the field alone. The self-contained form has no parameter to feed.
+        Feed the resistance-taking form an R that is wrong by a factor of two and a
+        full-space field model scores 0.999983 against it -- the very number that is
+        supposed to mean "the field model has been repaired". A C3.1 test written as
+        ``disc_surface_potential_V(I, electrode.access_resistance_ohm, ...)`` would
+        therefore be satisfied by a package that halved its access resistance and left
+        the field alone. The self-contained form has no parameter to feed.
+
+        The wrong field is written out here as the full-space point source rather than
+        read from the package, so this keeps demonstrating the hazard after C3.1 repairs
+        the package and the hazard becomes the thing being guarded against.
         """
         import inspect
 
-        from neurostim import DiscElectrode
-        from neurostim.models import field
-
-        electrode = DiscElectrode(2.0 * self.RADIUS_M * 1e6, "Pt")
         distance = 100.0 * self.RADIUS_M
-        today_V = field.potential_V(
-            self.CURRENT_A * 1e6, distance * 1e6, self.SIGMA, electrode=electrode
+        today_V = disc_field.point_source_potential_V(
+            self.CURRENT_A,
+            self.SIGMA,
+            distance,
+            geometry_factor=disc_field.FULL_SPACE_FACTOR,
         )
         half_resistance = 0.5 * disc_field.newman_disc_resistance_ohm(
             self.SIGMA, self.RADIUS_M
@@ -543,6 +567,15 @@ class TestDiscSurfacePotential:
     def test_inside_the_disc_is_a_domain_error(self) -> None:
         with pytest.raises(ValueError, match="must be >= radius_m"):
             disc_field.disc_surface_potential_V(1e-4, 1000.0, 250e-6, 100e-6)
+
+    def test_a_non_physical_geometry_is_a_domain_error(self) -> None:
+        """A negative radius returned a negative resistance, silently."""
+        with pytest.raises(ValueError, match="radius_m must be > 0"):
+            disc_field.newman_disc_resistance_ohm(0.35, -250e-6)
+        with pytest.raises(ValueError, match="conductivity_S_per_m must be > 0"):
+            disc_field.newman_disc_resistance_ohm(0.0, 250e-6)
+        with pytest.raises(ValueError, match="radius_m must be > 0"):
+            disc_field.disc_potential_V(1e-4, 0.35, -250e-6, 1e-3)
 
 
 class TestDriftTime:
