@@ -1915,3 +1915,217 @@ class TestBothSidesOfEveryBoundary:
         assert math.isfinite(ceiling)
         assert water_window_at(ceiling).status is not Status.FAIL
         assert water_window_at(math.nextafter(ceiling, math.inf)).status is Status.FAIL
+
+
+class TestMoreCurrentIsNeverSafer:
+    """T15. The one property every reader assumes without being told (ledger 69, §4.1).
+
+    The existing guard was ``test_gui.py::test_raising_current_lowers_the_headroom``, which
+    asserts only that a *string* changed.
+    """
+
+    @staticmethod
+    def _configurations():
+        from neurostim import CylindricalBandElectrode, RingElectrode
+
+        yield DiscElectrode(500.0, "Pt"), {"compliance_V": 10.0}
+        yield RingElectrode(330.0, 270.0, "Pt"), {"compliance_V": 10.0}
+        yield CylindricalBandElectrode(1270.0, 1500.0, "PtIr"), {"compliance_V": 10.0}
+        yield DiscElectrode(2000.0, "SIROF"), {}
+        yield DiscElectrode(100.0, "TiN"), {"compliance_V": 5.0, "policy": "nominal"}
+
+    def test_the_overall_verdict_never_improves_as_current_rises(self):
+        """Not tautological: the ordering is over ``Status.rank``, whose values are pinned
+        separately by ``TestStatusRank``, and the comparison is between two independently
+        built assessments five decades apart."""
+        for electrode, settings in self._configurations():
+            previous = None
+            for current_uA in (1.0, 10.0, 100.0, 1000.0, 10000.0):
+                assessment = SafetyCalculator(
+                    electrode,
+                    StimProtocol(current_uA, 200.0, 50.0, 1.0),
+                    **settings,  # type: ignore[arg-type]
+                ).assess()
+                if previous is not None:
+                    assert assessment.status.rank >= previous.status.rank, (
+                        electrode,
+                        current_uA,
+                    )
+                previous = assessment
+
+    def test_no_check_gains_margin_as_current_rises(self):
+        """Not tautological: margins are compared across two assessments, with no
+        tolerance -- ``margin`` is ``ceiling / current`` and the ceiling does not move, so
+        the relation is exact and a tolerance would only hide a real inversion."""
+        for electrode, settings in self._configurations():
+            previous = None
+            for current_uA in (1.0, 10.0, 100.0, 1000.0, 10000.0):
+                assessment = SafetyCalculator(
+                    electrode,
+                    StimProtocol(current_uA, 200.0, 50.0, 1.0),
+                    **settings,  # type: ignore[arg-type]
+                ).assess()
+                if previous is not None:
+                    for check, before in zip(
+                        assessment.checks, previous.checks, strict=True
+                    ):
+                        assert check.name == before.name
+                        assert check.margin <= before.margin, (
+                            electrode,
+                            check.name,
+                            current_uA,
+                        )
+                previous = assessment
+
+    def test_a_ceiling_does_not_depend_on_the_amplitude_that_asked_for_it(self):
+        """The stronger statement behind the two above, and the one that makes the
+        limiting current meaningful: a ceiling is a property of the electrode, material and
+        protocol shape, not of the amplitude requested.
+
+        Not tautological: equality is asserted bit-for-bit across five decades of
+        amplitude, which no rescaling of the reported value could satisfy by accident.
+        """
+        for electrode, settings in self._configurations():
+            previous = None
+            for current_uA in (1.0, 10.0, 100.0, 1000.0, 10000.0):
+                ceilings = {
+                    c.name: c.ceiling_uA
+                    for c in SafetyCalculator(
+                        electrode,
+                        StimProtocol(current_uA, 200.0, 50.0, 1.0),
+                        **settings,  # type: ignore[arg-type]
+                    )
+                    .assess()
+                    .checks
+                }
+                if previous is not None:
+                    assert ceilings == previous, (electrode, current_uA)
+                previous = ceilings
+
+    def test_the_limiting_current_does_not_depend_on_the_amplitude_requested(self):
+        """The same property at the headline.
+
+        Not tautological: the headline is recomputed from scratch at five amplitudes and
+        compared with itself, which a limit derived from the requested current -- as a
+        ``headroom``-style reading would be -- could not satisfy.
+        """
+        for electrode, settings in self._configurations():
+            limits = {
+                SafetyCalculator(
+                    electrode,
+                    StimProtocol(current_uA, 200.0, 50.0, 1.0),
+                    **settings,  # type: ignore[arg-type]
+                )
+                .assess()
+                .limiting_current_uA
+                for current_uA in (1.0, 10.0, 100.0, 1000.0, 10000.0)
+            }
+            assert len(limits) == 1, (electrode, limits)
+
+
+class TestDimensionalConsistency:
+    """T11. Invariants that hold by dimensional analysis, so they can be written down
+    without consulting the code (ledger 69, §4.5).
+
+    Each expected value is an identity -- a quantity times its own unit conversion, or the
+    sphere volume formula written out -- not a second call into the module under test.
+    """
+
+    def test_charge_density_times_area_is_charge(self):
+        """Not tautological: the identity ``(Q/A) x A == Q`` is arithmetic, and the two
+        factors are read from different attributes of the result."""
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(300.0, 200.0, 50.0, 1.0)
+        )
+        charge = calc.assess().charge
+
+        assert charge.charge_density_uC_cm2 * calc.e.area_cm2 == pytest.approx(
+            charge.charge_per_phase_uC
+        )
+
+    def test_the_charge_limit_and_the_current_limit_are_the_same_limit(self):
+        """``I_max x W`` must be ``Q_max``: the two are one limit in two units.
+
+        Not tautological: the conversion ``uA x us x 1e-6 = uC`` is written out here, and
+        the two limits are separate attributes back-solved independently. ``rel=1e-12``
+        rather than exact because both ends are floored onto their own boundary and the two
+        boundaries are one float apart at most.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(300.0, 200.0, 50.0, 1.0)
+        )
+        charge = calc.assess().charge
+
+        assert charge.max_current_uA * 200.0 * 1e-6 == pytest.approx(
+            charge.max_charge_uC, rel=1e-12
+        )
+
+    def test_current_density_times_area_is_current(self):
+        """Not tautological: ``A/cm^2 x cm^2 = A``, then ``x 1e6`` to microamps -- the
+        conversion chain is written out and compared against the input."""
+        from neurostim.safety import current_density as jd
+
+        area_cm2 = DiscElectrode(500.0, "Pt").area_cm2
+        applied = jd.average_current_density_A_per_cm2(300.0, area_cm2)
+
+        assert applied * area_cm2 * 1e6 == pytest.approx(300.0)
+
+    def test_the_activated_volume_is_the_sphere_of_the_activation_radius(self):
+        """Not tautological: ``(4/3) pi r^3`` is written out here with the um-to-mm
+        conversion, rather than read back from ``vta``. It is the assertion that catches a
+        dropped unit conversion in either method, which a ratio between them cannot."""
+        import math
+
+        from neurostim.models import vta
+
+        model = vta.CurrentDistanceModel()
+        for current_uA in (10.0, 100.0, 1000.0):
+            radius_mm = model.activation_radius_um(current_uA) * 1e-3
+            assert model.activated_volume_mm3(current_uA) == pytest.approx(
+                (4.0 / 3.0) * math.pi * radius_mm**3
+            )
+
+    def test_the_activation_radius_inverts_the_current_distance_law(self):
+        """``I_th = I_0 + k r^2``, written out, against the radius the model returns.
+
+        Not tautological: the law is restated here from the model's two stored
+        coefficients, and a dropped ``1e3`` in either direction breaks it.
+        """
+        from neurostim.models import vta
+
+        model = vta.CurrentDistanceModel()
+        for current_uA in (10.0, 100.0, 1000.0):
+            radius_mm = model.activation_radius_um(current_uA) * 1e-3
+            assert (
+                model.threshold_offset_uA + model.k_uA_per_mm2 * radius_mm**2
+            ) == pytest.approx(current_uA)
+
+
+class TestIntervalContainmentAcrossPoliciesAndK:
+    """T16 in the form ``audit_tests.md`` states it: the weak invariant, always true.
+
+    The strong form -- the point estimate equals the interval's low end -- is only true at
+    the default ``k`` and policy. Containment holds everywhere, and is what a reader
+    relies on.
+    """
+
+    def test_containment_holds_across_every_policy_and_k(self):
+        """Not tautological: 9 combinations of two independent inputs, with the interval
+        and the point estimate computed by different code from different ranges."""
+        from neurostim import RingElectrode
+
+        electrode = RingElectrode(330.0, 270.0, "Pt")
+        protocol = StimProtocol(80.0, 200.0, 130.0, 1.0)
+        for policy in ("conservative", "nominal", "optimistic"):
+            for k in (1.5, 1.7, 2.0):
+                assessment = SafetyCalculator(
+                    electrode,
+                    protocol,
+                    k=k,
+                    policy=policy,  # type: ignore[arg-type]
+                    compliance_V=10.0,
+                ).assess()
+
+                assert assessment.limiting_current_interval_uA.contains(
+                    assessment.limiting_current_uA
+                ), (policy, k)
