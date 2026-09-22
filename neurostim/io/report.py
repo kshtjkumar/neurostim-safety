@@ -10,7 +10,6 @@ section, which is why the conditions column is not optional here.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
 from reportlab.lib import colors
@@ -28,6 +27,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from .. import _repro
 from ..references import cite
 from ..safety import SafetyCalculator
 from ..safety.assessment import SafetyAssessment, Status
@@ -214,7 +214,7 @@ def build_report(
     story: list = []
 
     story.append(Paragraph(title, styles["title"]))
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    stamp = _repro.build_time().strftime("%Y-%m-%d %H:%M UTC")
     byline = f"Generated {stamp}" + (f" &middot; {author}" if author else "")
     story.append(Paragraph(byline, styles["small"]))
     story.append(Spacer(1, 4 * mm))
@@ -410,5 +410,9 @@ def build_report(
         bottomMargin=16 * mm,
         title=title,
         author=author or "neurostim",
+        # Pins reportlab's /CreationDate, /ModDate and document id when the build date is
+        # pinned, so a committed report diffs to nothing. Left off otherwise, because
+        # invariant mode would stamp a fixed, false date on an ordinary report.
+        invariant=1 if _repro.is_pinned() else 0,
     ).build(story)
     return out

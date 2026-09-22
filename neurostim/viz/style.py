@@ -26,6 +26,8 @@ from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+from .. import _repro
+
 MM = 1.0 / 25.4
 """Millimetres to inches, for journal column widths."""
 
@@ -158,6 +160,10 @@ def save_publication(
     ``path`` may carry an extension or not; it is stripped and each requested format
     appended. SVG and PDF keep text editable for a typesetter; TIFF is the raster
     fallback at ``dpi``. The written files are never opened.
+
+    Output is byte-reproducible: element ids are salted from a fixed string rather than a
+    per-process ``uuid4``, matplotlib's own version is kept out of the file, and the
+    embedded date follows ``SOURCE_DATE_EPOCH`` when it is set. See :mod:`neurostim._repro`.
     """
     base = Path(path)
     if base.suffix:
@@ -165,10 +171,12 @@ def save_publication(
     base.parent.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
-    for fmt in formats:
-        out = base.with_suffix(f".{fmt}")
-        fig.savefig(out, format=fmt, dpi=dpi, bbox_inches="tight")
-        written.append(out)
+    with mpl.rc_context({"svg.hashsalt": _repro.SVG_HASH_SALT}):
+        for fmt in formats:
+            out = base.with_suffix(f".{fmt}")
+            metadata = _repro.VECTOR_METADATA.get(fmt)
+            fig.savefig(out, format=fmt, dpi=dpi, bbox_inches="tight", metadata=metadata)
+            written.append(out)
     if close:
         plt.close(fig)
     return written
