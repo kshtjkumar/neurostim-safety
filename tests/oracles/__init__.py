@@ -26,7 +26,9 @@ numerical method that shares no code with the package:
 ``fail_ceiling``
     Binary search over amplitude, reading nothing but ``assess().failed`` -- the set of
     checks in a FAIL state. It never reads ``limiting_current_uA``, ``margin``, or any
-    other quantity it is used to check.
+    other quantity it is used to check. The monotonicity bisection needs is sampled across
+    the whole bracket before the search runs, so a predicate that breaks it raises
+    ``NonMonotonePredicate`` instead of returning the edge of one passing band.
 ``disc_field``
     The exact half-space disc solution ``V(r) = (2/pi) I R arcsin(a/r)``, a closed form
     from the literature, evaluated with the standard library alone.
@@ -43,12 +45,19 @@ oracle that silently starts agreeing with the code is itself caught.
 
 from .disc_field import disc_surface_potential_V
 from .drift import drift_time_s, drift_time_s_closed_form
-from .fail_ceiling import fail_ceiling_uA, no_check_fails
+from .fail_ceiling import (
+    NonMonotonePredicate,
+    brackets_the_ceiling,
+    fail_ceiling_uA,
+    no_check_fails,
+)
 from .fd_band import CLINICAL_DBS_ASPECT, FD_BAND_REFERENCE
 
 __all__ = [
     "CLINICAL_DBS_ASPECT",
     "FD_BAND_REFERENCE",
+    "NonMonotonePredicate",
+    "brackets_the_ceiling",
     "disc_surface_potential_V",
     "drift_time_s",
     "drift_time_s_closed_form",

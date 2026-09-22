@@ -14,10 +14,35 @@ the highest amplitude at which nothing fails. A test written against the package
 
 The search is over floats, not over a fixed tolerance: it narrows until the bracket is one
 ulp wide, so it returns the exact boundary float rather than something near it.
+
+The monotonicity assumption, and what happens when it is false
+--------------------------------------------------------------
+Bisection answers "the highest amplitude at which nothing fails" only if the passing
+amplitudes are an interval reaching the bottom of the bracket: FAIL states do not un-fail
+as amplitude rises. That is a property of the package's checks, not of this module, and it
+is **not** always true. ``resting_potential_V = 0.9 V`` puts a Pt interface outside its own
++0.8 V window at rest, so a small cathodic pulse pulls it back INTO the window while a
+large one breaches the charge limits: FAIL, then PASS, then FAIL. A reviewer's sweep of
+6 804 configurations found 88 (1.3 %) with that shape.
+
+So the bracket is **sampled before it is bisected**. ``fail_ceiling_uA`` walks a geometric
+ladder across the whole bracket and requires the passing probes to be a prefix of it. They
+are not, and it raises :class:`NonMonotonePredicate` naming the amplitudes and the checks,
+rather than bisecting one band and presenting its edge as the ceiling. The answer it does
+return is then re-checked by :func:`brackets_the_ceiling` before it leaves the function.
+
+This is what keeps ``0.0`` honest, and ``0.0`` is the one value that has to be. Under the
+convention settled in ledger 84 it is the *correct* answer for an amplitude-independent
+failure -- ``Charge balance`` FAILs at every amplitude on a monophasic protocol, being a
+property of the waveform -- so it cannot simply be turned into an error. It now means "no
+probe anywhere in the bracket passes", established across every decade of it, and never
+"the lowest probe failed". A caller that needs to tell the two apart asks
+:func:`brackets_the_ceiling`, which reports ``False`` for ``0.0`` instead of raising.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import replace
 from typing import Any
 
@@ -28,6 +53,24 @@ _DEFAULT_UPPER_uA = 1e6
 # StimProtocol rejects a zero amplitude, so the bracket starts at a femtoamp instead. A
 # protocol that already FAILs there has no usable amplitude at all, and the answer is 0.
 _DEFAULT_LOWER_uA = 1e-12
+
+# Probes per decade of the bracket. The default bracket spans 18 decades, so this is 73
+# assessments before any bisection -- about 20 ms, against ~60 assessments for the
+# bisection itself. It is the resolution at which a non-monotone band is visible: the
+# 0.9 V resting-potential case passes over [9.83, 19.61] uA, a third of a decade, and is
+# caught by two probes. A band narrower than one step can still hide between probes, which
+# is the honest limit of sampling and not a bound this module can assert away.
+_PROBES_PER_DECADE = 4
+
+
+class NonMonotonePredicate(AssertionError):
+    """``assess().failed`` does not have the assumed shape, so no ceiling can be reported.
+
+    Raised rather than returned: a bisection through a non-monotone predicate produces a
+    plausible finite number that is not the ceiling, and a Phase 1 test asserting against
+    it would pass for the wrong reason. An ``AssertionError`` because it is exactly the
+    assumption this module documents itself as asserting.
+    """
 
 
 def rebuild_at(calculator: Any, current_uA: float) -> Any:
@@ -63,6 +106,39 @@ def no_check_fails(calculator: Any, current_uA: float) -> bool:
     return not rebuild_at(calculator, current_uA).assess().failed
 
 
+def failed_names(calculator: Any, current_uA: float) -> tuple[str, ...]:
+    """The names of the checks in a FAIL state at ``current_uA``.
+
+    For diagnostics only -- a name is not a number, and no expected value is derived from
+    one. It is what makes :class:`NonMonotonePredicate` say *which* check un-fails.
+    """
+    return tuple(check.name for check in rebuild_at(calculator, current_uA).assess().failed)
+
+
+def probe_ladder(
+    lower_uA: float = _DEFAULT_LOWER_uA,
+    upper_uA: float = _DEFAULT_UPPER_uA,
+    *,
+    per_decade: int = _PROBES_PER_DECADE,
+) -> list[float]:
+    """Geometric probe amplitudes across ``[lower_uA, upper_uA]``, both ends included.
+
+    Geometric rather than linear because the bracket spans eighteen decades and the
+    interesting amplitudes are microamps: a linear ladder would put every probe above
+    100 kuA and see nothing.
+    """
+    if not (math.isfinite(lower_uA) and lower_uA > 0.0):
+        raise ValueError(f"lower_uA must be finite and > 0, got {lower_uA!r}")
+    if not (math.isfinite(upper_uA) and upper_uA > lower_uA):
+        raise ValueError(f"upper_uA must be finite and > lower_uA, got {upper_uA!r}")
+
+    steps = max(1, math.ceil(math.log10(upper_uA / lower_uA) * per_decade))
+    ratio = (upper_uA / lower_uA) ** (1.0 / steps)
+    ladder = [lower_uA * ratio**step for step in range(steps)]
+    ladder.append(upper_uA)
+    return ladder
+
+
 def fail_ceiling_uA(
     calculator: Any,
     *,
@@ -71,29 +147,51 @@ def fail_ceiling_uA(
 ) -> float:
     """Largest amplitude at which ``assess().failed`` is empty.
 
-    Returns ``0.0`` when even an infinitesimal amplitude FAILs, and ``inf`` when nothing
-    fails anywhere up to ``upper_uA`` -- an honest "no ceiling found", never a quiet
-    fallback to the bracket's end.
-
-    The predicate is assumed monotone: FAIL states do not un-fail as amplitude rises. That
-    assumption is asserted at the answer by :func:`brackets_the_ceiling`, so a check that
-    breaks it is reported rather than silently bisected through.
+    Returns ``0.0`` when no probe anywhere in the bracket passes -- which under the ledger
+    84 convention is the correct answer for an amplitude-independent failure, and is the
+    only thing ``0.0`` now means. Returns ``inf`` when nothing fails anywhere up to
+    ``upper_uA`` -- an honest "no ceiling found", never a quiet fallback to the bracket's
+    end. Raises :class:`NonMonotonePredicate` when the passing amplitudes are not a prefix
+    of the probe ladder, or when the boundary it finds does not survive
+    :func:`brackets_the_ceiling`.
     """
-    low = lower_uA
-    if not no_check_fails(calculator, low):
+    ladder = probe_ladder(lower_uA, upper_uA)
+    passes = [no_check_fails(calculator, amplitude) for amplitude in ladder]
+
+    first_fail = passes.index(False) if False in passes else len(passes)
+    recovery = next(
+        (index for index in range(first_fail + 1, len(passes)) if passes[index]), None
+    )
+    if recovery is not None:
+        raise NonMonotonePredicate(
+            f"FAIL states do not un-fail as amplitude rises, but these do: nothing passes "
+            f"at {ladder[first_fail]:.6g} uA ({', '.join(failed_names(calculator, ladder[first_fail]))}) "
+            f"while {ladder[recovery]:.6g} uA passes. Bisecting this bracket would return "
+            f"the edge of one passing band and hide the others, so there is no ceiling to "
+            f"report."
+        )
+
+    if first_fail == 0:
         return 0.0
-    if no_check_fails(calculator, upper_uA):
+    if first_fail == len(passes):
         return float("inf")
 
-    high = upper_uA
+    low, high = ladder[first_fail - 1], ladder[first_fail]
     while True:
         middle = low + (high - low) / 2.0
         if middle <= low or middle >= high:
-            return low
+            break
         if no_check_fails(calculator, middle):
             low = middle
         else:
             high = middle
+
+    if not brackets_the_ceiling(calculator, low):
+        raise NonMonotonePredicate(
+            f"the bisection settled on {low!r} uA, which is not a boundary: it does not "
+            f"both pass and fail one ulp above. The predicate changed under the search."
+        )
+    return low
 
 
 def brackets_the_ceiling(calculator: Any, ceiling_uA: float) -> bool:
@@ -101,10 +199,13 @@ def brackets_the_ceiling(calculator: Any, ceiling_uA: float) -> bool:
 
     A finiteness assertion is not enough. The naive ``headroom / excursion`` reading of the
     water-window margin is -21.095 uA on the plan's own case -- finite, and wrong.
-    """
-    import math
 
-    if not math.isfinite(ceiling_uA):
+    Total on every float, including the ones ``fail_ceiling_uA`` itself returns. ``0.0``
+    and ``inf`` are answers, not boundaries, and a caller asking whether one brackets the
+    ceiling must be told ``False`` rather than handed the ``ValueError`` that constructing
+    a protocol at a non-positive amplitude raises.
+    """
+    if not math.isfinite(ceiling_uA) or ceiling_uA <= 0.0:
         return False
     return no_check_fails(calculator, ceiling_uA) and not no_check_fails(
         calculator, math.nextafter(ceiling_uA, math.inf)

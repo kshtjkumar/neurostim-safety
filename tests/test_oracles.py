@@ -88,6 +88,65 @@ class TestFailCeiling:
         for forbidden in ("limiting_current_uA", "limiting_mechanism", ".margin"):
             assert forbidden not in body, f"the oracle reads {forbidden}, which it must not"
 
+    def test_a_non_monotone_predicate_is_reported_not_bisected(self) -> None:
+        """The shape the module's docstring promises to report, and used to answer 0.0 on.
+
+        ``resting_potential_V = 0.9 V`` is already outside Pt's +0.8 V window at rest, so a
+        small cathodic pulse pulls the interface back INTO the window while a large one
+        breaches the charge limits. ``assess().failed`` is therefore non-empty at 1e-12 uA,
+        empty across roughly [9.83, 19.61] uA, and non-empty again above -- FAIL, PASS,
+        FAIL. The true ceiling is 19.6 uA and the oracle used to return 0.0, which is also
+        what it returns for a protocol that is unsafe at every amplitude.
+        """
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, PULSE_WIDTH_US, 130.0, 1.0),
+            compliance_V=10.0,
+            resting_potential_V=0.9,
+        )
+        # The band is real, and it does not reach the bottom of the bracket.
+        assert fail_ceiling.no_check_fails(calc, 15.0)
+        assert not fail_ceiling.no_check_fails(calc, 1e-12)
+
+        with pytest.raises(fail_ceiling.NonMonotonePredicate, match="Water window"):
+            fail_ceiling.fail_ceiling_uA(calc)
+
+    def test_zero_means_no_amplitude_in_the_bracket_passes(self) -> None:
+        """0.0 is the right answer for an amplitude-independent failure -- and only that.
+
+        Ledger 84: Charge balance FAILs at every amplitude on a monophasic protocol,
+        being a property of the waveform. 0.0 must therefore stay reachable, but it must
+        mean "no probe anywhere in the bracket passes", not "the lower bracket failed".
+        """
+        from neurostim import CylindricalBandElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+            compliance_V=10.0,
+        )
+        assert {check.name for check in calc.assess().failed} == {"Charge balance"}
+        assert fail_ceiling.fail_ceiling_uA(calc) == 0.0
+        # And the answer is distinguishable from a ceiling at the call site.
+        assert not fail_ceiling.brackets_the_ceiling(calc, 0.0)
+
+    def test_a_non_positive_ceiling_never_brackets(self, worked_example) -> None:
+        """``brackets_the_ceiling`` must report, not raise. -21.095 is the naive margin."""
+        for value in (0.0, -21.095, -math.inf, math.inf, math.nan):
+            assert not fail_ceiling.brackets_the_ceiling(worked_example, value)
+
+    def test_the_answer_is_checked_before_it_is_returned(
+        self, worked_example, monkeypatch
+    ) -> None:
+        """The docstring's guarantee, made testable rather than asserted in prose."""
+        monkeypatch.setattr(
+            fail_ceiling, "brackets_the_ceiling", lambda *args, **kwargs: False
+        )
+        with pytest.raises(fail_ceiling.NonMonotonePredicate):
+            fail_ceiling.fail_ceiling_uA(worked_example)
+
     def test_a_protocol_that_never_fails_reports_no_ceiling(self) -> None:
         """``inf`` is an honest answer; the bracket's upper end presented as one is not."""
         from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
