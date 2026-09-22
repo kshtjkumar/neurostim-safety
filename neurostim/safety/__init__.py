@@ -38,6 +38,7 @@ from .water_window import (
     WaterWindowResult,
     max_charge_density_in_window_uC_cm2,
     polarisation_V,
+    validate_resting_potential_V,
 )
 
 __all__ = [
@@ -67,5 +68,6 @@ __all__ = [
     "shannon_k",
     "shannon_max_charge_uC",
     "shannon_max_current_uA",
+    "validate_resting_potential_V",
     "water_window",
 ]

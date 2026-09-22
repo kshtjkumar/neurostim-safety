@@ -194,3 +194,127 @@ class TestUnevaluatedChecksAreDisclosed:
             if line.startswith("Overall:")
         )
         assert "not evaluated" not in overall
+
+
+class TestRestingPotentialIsInsideTheWindow:
+    """An electrode already outside its own water window at rest is rejected, not
+    assessed (ledger 14, fix plan D2 point 3).
+
+    Two reasons, and the second is why this lands here rather than six commits later.
+    The visible one: ``max_charge_density_in_window_uC_cm2("Pt",
+    resting_potential_V=5.0)`` returns 1400 uC/cm^2 "allowed" for an interface 4.2 V past
+    its anodic limit before any current flows. The structural one: the water-window
+    predicate is non-monotone in current for exactly these inputs -- a small cathodic
+    pulse pulls the interface back INTO the window while a large one breaches the charge
+    limits, so the verdict runs FAIL, PASS, FAIL -- and the next commit introduces
+    ``floor_to_pass``, which is only correct for a monotone-decreasing predicate. Phase 0b
+    swept 1824 configurations: every non-monotone case was an out-of-window resting
+    potential, and across 630 in-window configurations there were none. Rejecting the
+    input makes the precondition true rather than merely asserted.
+    """
+
+    def test_the_calculator_refuses_a_resting_potential_past_the_anodic_limit(self):
+        """Not tautological: 0.9 V and Pt's +0.8 V anodic limit are both literals here,
+        the second quoted from the material database's stored window, and the expected
+        outcome is a raise rather than any number the package computes."""
+        with pytest.raises(ValueError, match=r"resting_potential_V"):
+            SafetyCalculator(
+                DiscElectrode(100.0, "Pt"),
+                StimProtocol(80, 200, 130, 1),
+                compliance_V=10.0,
+                resting_potential_V=0.9,
+            )
+
+    def test_the_message_names_the_window_it_is_outside(self):
+        """Not tautological: the three quantities the message must carry are written out
+        here -- the offending value, the material, and both window bounds."""
+        with pytest.raises(ValueError) as raised:
+            SafetyCalculator(
+                DiscElectrode(100.0, "Pt"),
+                StimProtocol(80, 200, 130, 1),
+                resting_potential_V=0.9,
+            )
+        message = str(raised.value)
+
+        assert "0.9" in message
+        assert "Pt" in message
+        assert "-0.6" in message and "0.8" in message
+
+    def test_the_calculator_refuses_a_resting_potential_past_the_cathodic_limit(self):
+        """The other side. Not tautological: -0.7 V against Pt's stored -0.6 V."""
+        with pytest.raises(ValueError, match=r"resting_potential_V"):
+            SafetyCalculator(
+                DiscElectrode(100.0, "Pt"),
+                StimProtocol(80, 200, 130, 1),
+                resting_potential_V=-0.7,
+            )
+
+    def test_a_resting_potential_on_the_boundary_is_accepted(self):
+        """The window is closed: ``WaterWindow.contains`` is inclusive at both ends, and
+        the rejection must use the same inclusivity or it contradicts the check it
+        protects.
+
+        Not tautological: +0.8 is Pt's stored anodic limit, written out, and the assertion
+        is that construction succeeds -- the opposite outcome from the tests above.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            resting_potential_V=0.8,
+        )
+        assert calc.resting_potential_V == 0.8
+
+    def test_a_material_with_no_window_on_record_accepts_any_resting_potential(self):
+        """Ta2O5 has no water window in the database, so there is nothing to be outside
+        of and the check itself reports NOT_EVALUATED.
+
+        Not tautological: Ta2O5 is named literally, 5.0 V is a value every windowed
+        material would reject, and the expected outcome is construction plus a
+        NOT_EVALUATED water-window check.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Ta2O5"),
+            StimProtocol(80, 200, 130, 1),
+            resting_potential_V=5.0,
+        )
+        window = next(
+            c for c in calc.assess().checks if c.name == "Water window"
+        )
+        assert window.status is Status.NOT_EVALUATED
+
+    def test_the_module_function_refuses_what_it_used_to_answer(self):
+        """Ledger 14's own reproduction.
+
+        Not tautological: the expected outcome is a raise where the recorded defect is the
+        specific number 1400.0, so the test would fail both before the fix and under any
+        fix that kept returning a charge density.
+        """
+        from neurostim.safety import water_window as ww
+
+        with pytest.raises(ValueError, match=r"resting_potential_V"):
+            ww.max_charge_density_in_window_uC_cm2("Pt", resting_potential_V=5.0)
+
+    def test_the_evaluate_entry_point_refuses_it_too(self):
+        """``evaluate`` is exported and callable directly, so the guard cannot live only
+        in the calculator.
+
+        Not tautological: the raise is asserted at a second entry point with its own
+        signature, not inferred from the first.
+        """
+        from neurostim.safety import water_window as ww
+
+        with pytest.raises(ValueError, match=r"resting_potential_V"):
+            ww.evaluate("Pt", 10.0, resting_potential_V=0.9)
+
+    def test_an_in_window_resting_potential_still_works(self):
+        """The guard must not reject the case it exists to protect.
+
+        Not tautological: +0.3 V is inside Pt's window and the assertion is on the
+        assessment running to completion and reporting that potential back.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            resting_potential_V=0.3,
+        )
+        assert calc.assess().water_window.resting_potential_V == 0.3

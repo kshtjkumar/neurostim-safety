@@ -14,7 +14,7 @@ be quietly reshaped to agree with whatever the fix happens to produce.
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -28,6 +28,139 @@ from oracles import disc_field, drift, fail_ceiling, fd_band
 RING_OUTER_UM = 330.0
 RING_INNER_UM = 270.0
 PULSE_WIDTH_US = 200.0
+
+
+# --- a calculator whose verdicts are written here, not computed ----------------------
+#
+# Two of the guards below are about the SHAPE of ``assess().failed`` across amplitude --
+# FAIL, then PASS, then FAIL -- rather than about any package verdict. Until C1.2 they
+# were driven by a real calculator at ``resting_potential_V = 0.9`` / ``0.95`` on Pt,
+# which is exactly the input class C1.2 refuses at construction, for exactly this reason.
+# Scripting the shape keeps the guards alive after the input that produced it is gone,
+# and makes the expected ``NonMonotonePredicate`` a property of the script rather than of
+# the package.
+#
+# The script travels in the ``electrode`` slot, so it survives ``rebuild_at``'s explicit
+# forwarding like any other construction argument, and the oracle is exercised whole --
+# ladder, per-check suffix invariant and all -- rather than monkeypatched out of the way.
+
+SCRIPTED_SETTINGS = {
+    # Every carried argument at a value that is NOT its constructor default, so a
+    # forwarding defect shows up as a TypeError here instead of being absorbed silently
+    # (the fixture rule the rebuild_at mutant earned).
+    "k": 1.75,
+    "material": "SIROF",
+    "policy": "optimistic",
+    "medium": "pbs",
+    "tissue_conductivity_S_per_m": 0.27,
+    "lead_resistance_ohm": 123.0,
+    "compliance_V": 7.5,
+    "measured_impedance_ohm": 4321.0,
+    "resting_potential_V": 0.11,
+    "capacitance_uF_cm2": 37.5,
+}
+
+
+@dataclass(frozen=True)
+class ScriptedProtocol:
+    """All of a protocol that ``rebuild_at`` touches: an amplitude it can ``replace``."""
+
+    current_uA: float
+
+
+@dataclass(frozen=True)
+class ScriptedCheck:
+    """All of a check that the oracle reads: its name."""
+
+    name: str
+
+
+@dataclass(frozen=True)
+class ScriptedAssessment:
+    """All of an assessment that the oracle reads: ``checks`` and ``failed``."""
+
+    checks: tuple[ScriptedCheck, ...]
+    failed: tuple[ScriptedCheck, ...]
+
+
+class ScriptedCalculator:
+    """A calculator whose failing checks come from a callable, not from any physics.
+
+    The constructor signature is ``SafetyCalculator``'s, argument for argument, because
+    ``rebuild_at`` names all twelve and checks them against
+    ``fail_ceiling.CARRIED_ARGUMENTS`` before it builds anything. Each carried value is
+    asserted on arrival against :data:`SCRIPTED_SETTINGS`, so a forward that is quietly
+    dropped fails the test instead of scripting the same answer anyway.
+    """
+
+    def __init__(
+        self,
+        electrode,
+        protocol,
+        k=1.5,
+        *,
+        material=None,
+        policy="conservative",
+        medium="saline",
+        tissue_conductivity_S_per_m=0.35,
+        lead_resistance_ohm=0.0,
+        compliance_V=None,
+        measured_impedance_ohm=None,
+        resting_potential_V=0.0,
+        capacitance_uF_cm2=None,
+    ) -> None:
+        self.e = electrode  # the script
+        self.p = protocol
+        self.k = k
+        self.material = material
+        self.policy = policy
+        self.medium = medium
+        self.tissue_conductivity_S_per_m = tissue_conductivity_S_per_m
+        self.lead_resistance_ohm = lead_resistance_ohm
+        self.compliance_V = compliance_V
+        self.measured_impedance_ohm = measured_impedance_ohm
+        self.resting_potential_V = resting_potential_V
+        self.capacitance_uF_cm2 = capacitance_uF_cm2
+        for name, expected in SCRIPTED_SETTINGS.items():
+            assert getattr(self, name) == expected, (
+                f"{name} did not survive the rebuild: {getattr(self, name)!r} "
+                f"against {expected!r}"
+            )
+
+    def assess(self) -> ScriptedAssessment:
+        failing = self.e(self.p.current_uA)
+        checks = tuple(ScriptedCheck(name) for name in sorted(SCRIPTED_CHECK_NAMES))
+        return ScriptedAssessment(
+            checks=checks,
+            failed=tuple(check for check in checks if check.name in failing),
+        )
+
+
+SCRIPTED_CHECK_NAMES = frozenset(
+    {"Water window", "Charge injection limit", "Shannon criterion"}
+)
+"""The names a scripted assessment emits. Real check names, so ``names=`` still resolves."""
+
+def scripted_calculator(
+    script, monkeypatch, *, current_uA: float = 1.0
+) -> ScriptedCalculator:
+    """A :class:`ScriptedCalculator` whose failing checks at an amplitude are ``script``.
+
+    ``rebuild_at`` imports ``SafetyCalculator`` from ``neurostim`` at call time and builds
+    that class, which is the whole reason it can be asserted about. So the substitution is
+    made where the oracle looks, for the duration of one test, rather than by teaching the
+    oracle a second construction path it would then carry into production use.
+
+    ``_assert_constructor_is_frozen`` still runs, against
+    :class:`ScriptedCalculator`'s own signature -- which is why that signature repeats
+    ``SafetyCalculator``'s argument for argument.
+    """
+    import neurostim
+
+    monkeypatch.setattr(neurostim, "SafetyCalculator", ScriptedCalculator)
+    return ScriptedCalculator(
+        script, ScriptedProtocol(current_uA=current_uA), **SCRIPTED_SETTINGS
+    )
 
 
 @pytest.fixture
@@ -89,24 +222,27 @@ class TestFailCeiling:
         for forbidden in ("limiting_current_uA", "limiting_mechanism", ".margin"):
             assert forbidden not in body, f"the oracle reads {forbidden}, which it must not"
 
-    def test_a_non_monotone_predicate_is_reported_not_bisected(self) -> None:
+    def test_a_non_monotone_predicate_is_reported_not_bisected(self, monkeypatch) -> None:
         """The shape the module's docstring promises to report, and used to answer 0.0 on.
 
-        ``resting_potential_V = 0.9 V`` is already outside Pt's +0.8 V window at rest, so a
-        small cathodic pulse pulls the interface back INTO the window while a large one
-        breaches the charge limits. ``assess().failed`` is therefore non-empty at 1e-12 uA,
-        empty across roughly [9.83, 19.61] uA, and non-empty again above -- FAIL, PASS,
-        FAIL. The true ceiling is 19.6 uA and the oracle used to return 0.0, which is also
-        what it returns for a protocol that is unsafe at every amplitude.
-        """
-        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        Driven by a scripted calculator rather than by a real one. The case this used to
+        use -- ``resting_potential_V = 0.9 V``, already outside Pt's +0.8 V window at rest
+        -- is refused at construction from C1.2 onward, precisely because it is the input
+        class that makes the water-window verdict non-monotone. Leaving the test pointed
+        at it would have turned this guard into dead code, and the guard has to stay live:
+        C2.3 moves the DC-drift verdict onto Water window, which can legitimately
+        reintroduce amplitude dependence there.
 
-        calc = SafetyCalculator(
-            DiscElectrode(100.0, "Pt"),
-            StimProtocol(80.0, PULSE_WIDTH_US, 130.0, 1.0),
-            compliance_V=10.0,
-            resting_potential_V=0.9,
-        )
+        Not tautological: the FAIL / PASS / FAIL script is written here, so the expected
+        ``NonMonotonePredicate`` is a property of the script rather than of any package
+        verdict. The band [9, 22] uA straddles the real case's [9.83, 19.61].
+        """
+
+        def script(current_uA: float) -> frozenset[str]:
+            outside_the_window_at_rest = current_uA < 9.0 or current_uA > 22.0
+            return frozenset({"Water window"}) if outside_the_window_at_rest else frozenset()
+
+        calc = scripted_calculator(script, monkeypatch)
         # The band is real, and it does not reach the bottom of the bracket.
         assert fail_ceiling.no_check_fails(calc, 15.0)
         assert not fail_ceiling.no_check_fails(calc, 1e-12)
@@ -135,23 +271,35 @@ class TestFailCeiling:
         # 0.0 carries its witness: the check that FAILs at every sampled amplitude.
         assert fail_ceiling.amplitude_independent_failures(calc) == ("Charge balance",)
 
-    def test_a_band_narrower_than_one_probe_step_is_reported(self) -> None:
+    def test_a_band_narrower_than_one_probe_step_is_reported(self, monkeypatch) -> None:
         """The hole a passing-probe prefix leaves open, and a per-check suffix closes.
 
-        ``resting_potential_V = 0.95`` on Pt gives a passing band of [59.91, 77.85] uA --
-        a factor of 1.30, narrower than the ladder's 1.78 step, so every probe fails and
-        the prefix rule concludes "no amplitude passes". It is wrong: the ceiling is
-        78.54 uA. What is visible at the probes is that Water window FAILs at 56.2 uA and
-        does NOT fail at 100 uA, which no monotone predicate may do.
-        """
-        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        Scripted for the same reason as the non-monotone test above: the real case,
+        ``resting_potential_V = 0.95`` on Pt, stops being constructible at C1.2. The
+        script reproduces its shape exactly -- Water window FAILing below the band,
+        Charge injection limit FAILing above it, and nothing failing in between.
 
-        calc = SafetyCalculator(
-            DiscElectrode(100.0, "Pt"),
-            StimProtocol(80.0, 50.0, 130.0, 3600.0),
-            compliance_V=10.0,
-            resting_potential_V=0.95,
-        )
+        The band [60, 78] uA is chosen to fall between two consecutive ladder probes.
+        The default ladder is ``1e-12 * 10**(n/4)``, so its neighbours here are 56.23 and
+        100 uA and no probe lands inside: every probe fails, and a rule that only asked
+        for the passing probes to be a prefix would conclude "no amplitude passes" when
+        the ceiling is 78. What is visible at the probes is that Water window FAILs at
+        56.23 uA and does NOT fail at 100 uA, which no monotone predicate may do.
+
+        Not tautological: both thresholds and the band are literals in the script, and the
+        expected ``NonMonotonePredicate`` follows from them and from the ladder's own
+        geometry, neither of which the package computes.
+        """
+
+        def script(current_uA: float) -> frozenset[str]:
+            failing = set()
+            if current_uA < 60.0:
+                failing.add("Water window")
+            if current_uA > 78.0:
+                failing.add("Charge injection limit")
+            return frozenset(failing)
+
+        calc = scripted_calculator(script, monkeypatch)
         assert fail_ceiling.no_check_fails(calc, 65.0)  # the band is real
         assert not fail_ceiling.no_check_fails(calc, 56.234)  # and no probe lands in it
         assert not fail_ceiling.no_check_fails(calc, 100.0)

@@ -90,6 +90,57 @@ def effective_capacitance_uF_cm2(
     return limit / available_V
 
 
+def validate_resting_potential_V(
+    material: Material | str, resting_potential_V: float
+) -> None:
+    """Raise unless the electrode is inside its own window before any current flows.
+
+    Two things go wrong when it is not, and the second is the reason this is a rejection
+    rather than a caveat.
+
+    The visible one is that the answers stop meaning anything:
+    ``max_charge_density_in_window_uC_cm2("Pt", resting_potential_V=5.0)`` used to report
+    1400 uC/cm^2 "allowed" for an interface already 4.2 V past its anodic limit at rest
+    (ledger 14). The negative direction was caught only incidentally, by the
+    ``available_V <= 0`` guard.
+
+    The structural one is that the water-window verdict stops being monotone in current.
+    From outside the anodic limit a small cathodic pulse pulls the interface back INTO the
+    window while a large one breaches it on the other side, so the check reads FAIL, PASS,
+    FAIL as amplitude rises. Every reported limit in this package is produced by
+    "the largest value that still passes", which is the wrong question for a predicate
+    with two boundaries -- and it is the precondition ``_limits.floor_to_pass`` declares
+    and asserts. Phase 0b measured the scope: over 1824 swept configurations *every*
+    non-monotone case was an out-of-window resting potential, and across 630 in-window
+    configurations there were none. Rejecting the input makes the precondition true rather
+    than merely asserted.
+
+    A material with no window on record is not validated: there is nothing to be outside
+    of, and the check reports NOT_EVALUATED.
+
+    Inclusive at both ends, matching :meth:`WaterWindow.contains`, so the rejection cannot
+    disagree with the check it protects about the boundary itself.
+    """
+    if not math.isfinite(resting_potential_V):
+        raise ValueError(
+            f"resting_potential_V must be finite, got {resting_potential_V!r}"
+        )
+    mat = material if isinstance(material, Material) else get_material(material)
+    window = mat.water_window
+    if window is None or window.contains(resting_potential_V):
+        return
+    raise ValueError(
+        f"resting_potential_V = {resting_potential_V:g} V is outside {mat.key}'s water "
+        f"window [{window.cathodic_V:g}, {window.anodic_V:g}] V ({window.scale}). "
+        f"An electrode already outside its window at rest is in irreversible "
+        f"electrolysis before the pulse begins, so no charge-injection limit computed "
+        f"here applies to it; and the water-window verdict is then non-monotone in "
+        f"current, which every reported limit in this package assumes it is not. "
+        f"Supply the electrode's measured open-circuit potential on the window's own "
+        f"scale."
+    )
+
+
 def polarisation_V(
     charge_density_uC_cm2: float,
     capacitance_uF_cm2: float = DOUBLE_LAYER_CAPACITANCE_uF_cm2,
@@ -184,8 +235,12 @@ def evaluate(
         resting potential depends on its history and on any applied interpulse bias --
         several materials in the database reach their quoted charge-injection limit
         *only* under a positive bias, which this parameter is how you represent.
+
+        Must lie inside the material's own window; a value outside it raises
+        ``ValueError``. See :func:`validate_resting_potential_V`.
     """
     mat = material if isinstance(material, Material) else get_material(material)
+    validate_resting_potential_V(mat, resting_potential_V)
     if capacitance_uF_cm2 is None:
         capacitance_uF_cm2 = effective_capacitance_uF_cm2(
             mat, anodic_first=anodic_first_for_capacitance
@@ -215,9 +270,13 @@ def max_charge_density_in_window_uC_cm2(
 ) -> float:
     """Charge density that just reaches the window boundary under the capacitive model.
 
-    Returns ``inf`` when the material has no window on record.
+    Returns ``inf`` when the material has no window on record. Raises ``ValueError`` when
+    ``resting_potential_V`` is outside the material's window -- this function used to
+    answer 1400 uC/cm^2 "allowed" for a platinum interface resting 4.2 V past its anodic
+    limit (ledger 14). See :func:`validate_resting_potential_V`.
     """
     mat = material if isinstance(material, Material) else get_material(material)
+    validate_resting_potential_V(mat, resting_potential_V)
     if mat.water_window is None:
         return math.inf
     if capacitance_uF_cm2 is None:

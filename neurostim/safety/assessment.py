@@ -729,6 +729,11 @@ class SafetyCalculator:
         self.material = (
             chosen if isinstance(chosen, Material) else get_material(str(chosen))
         )
+        # At construction, not at assess(): an electrode outside its own window at rest
+        # makes the water-window verdict non-monotone in current, and every reported
+        # limit here is "the largest amplitude that still passes". See
+        # water_window.validate_resting_potential_V for the measurement behind it.
+        ww_mod.validate_resting_potential_V(self.material, resting_potential_V)
 
     # --- 0.1.0 compatible surface --------------------------------------------
 
