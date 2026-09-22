@@ -14,6 +14,7 @@ be quietly reshaped to agree with whatever the fix happens to produce.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -131,6 +132,76 @@ class TestFailCeiling:
         assert fail_ceiling.fail_ceiling_uA(calc) == 0.0
         # And the answer is distinguishable from a ceiling at the call site.
         assert not fail_ceiling.brackets_the_ceiling(calc, 0.0)
+        # 0.0 carries its witness: the check that FAILs at every sampled amplitude.
+        assert fail_ceiling.amplitude_independent_failures(calc) == ("Charge balance",)
+
+    def test_a_band_narrower_than_one_probe_step_is_reported(self) -> None:
+        """The hole a passing-probe prefix leaves open, and a per-check suffix closes.
+
+        ``resting_potential_V = 0.95`` on Pt gives a passing band of [59.91, 77.85] uA --
+        a factor of 1.30, narrower than the ladder's 1.78 step, so every probe fails and
+        the prefix rule concludes "no amplitude passes". It is wrong: the ceiling is
+        78.54 uA. What is visible at the probes is that Water window FAILs at 56.2 uA and
+        does NOT fail at 100 uA, which no monotone predicate may do.
+        """
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 50.0, 130.0, 3600.0),
+            compliance_V=10.0,
+            resting_potential_V=0.95,
+        )
+        assert fail_ceiling.no_check_fails(calc, 65.0)  # the band is real
+        assert not fail_ceiling.no_check_fails(calc, 56.234)  # and no probe lands in it
+        assert not fail_ceiling.no_check_fails(calc, 100.0)
+        assert "Water window" in fail_ceiling.failing_checks(calc, 56.234)
+        assert "Water window" not in fail_ceiling.failing_checks(calc, 100.0)
+
+        with pytest.raises(fail_ceiling.NonMonotonePredicate, match="Water window"):
+            fail_ceiling.fail_ceiling_uA(calc)
+
+    def test_the_forwarded_construction_arguments_survive_the_rebuild(self) -> None:
+        """rebuild_at names every argument; this asserts it also passes them.
+
+        The signature guard catches an argument the constructor grew. It cannot catch one
+        the call site stopped forwarding -- and dropping ``compliance_V`` alone moves the
+        limit-bearing ceiling of a SIROF macroelectrode from 1397.01 to 2491.81 uA, a
+        78 % error, with every other test still green.
+        """
+        from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(250.0, "PtIr"),
+            StimProtocol(37.0, 150.0, 90.0, 12.0),
+            1.75,
+            material="PtIr",
+            policy="optimistic",
+            medium="pbs",
+            tissue_conductivity_S_per_m=0.27,
+            lead_resistance_ohm=123.0,
+            compliance_V=7.5,
+            measured_impedance_ohm=4321.0,
+            resting_potential_V=0.11,
+            capacitance_uF_cm2=37.5,
+        )
+        rebuilt = fail_ceiling.rebuild_at(calc, 1.0)
+        assert rebuilt.p.current_uA == 1.0
+        for attribute in (
+            "e",
+            "k",
+            "material",
+            "policy",
+            "medium",
+            "tissue_conductivity_S_per_m",
+            "lead_resistance_ohm",
+            "compliance_V",
+            "measured_impedance_ohm",
+            "resting_potential_V",
+            "capacitance_uF_cm2",
+        ):
+            assert getattr(rebuilt, attribute) == getattr(calc, attribute), attribute
+        assert replace(rebuilt.p, current_uA=calc.p.current_uA) == calc.p
 
     def test_a_non_positive_ceiling_never_brackets(self, worked_example) -> None:
         """``brackets_the_ceiling`` must report, not raise. -21.095 is the naive margin."""
@@ -199,10 +270,10 @@ class TestFailCeiling:
         assert fail_ceiling.brackets_the_ceiling(
             calc, ceiling, names=fail_ceiling.LIMIT_BEARING
         )
-        assert fail_ceiling.failed_names(calc, math.nextafter(ceiling, math.inf)) == (
+        assert fail_ceiling.failing_checks(calc, math.nextafter(ceiling, math.inf)) == {
             "Shannon criterion",
             "Charge balance",
-        )
+        }
 
     def test_restricting_the_predicate_changes_nothing_when_nothing_is_excluded(
         self, worked_example

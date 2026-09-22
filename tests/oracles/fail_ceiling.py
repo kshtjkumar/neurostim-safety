@@ -43,17 +43,35 @@ large one breaches the charge limits: FAIL, then PASS, then FAIL. A reviewer's s
 6 804 configurations found 88 (1.3 %) with that shape.
 
 So the bracket is **sampled before it is bisected**. ``fail_ceiling_uA`` walks a geometric
-ladder across the whole bracket and requires the passing probes to be a prefix of it. They
-are not, and it raises :class:`NonMonotonePredicate` naming the amplitudes and the checks,
-rather than bisecting one band and presenting its edge as the ceiling. The answer it does
-return is then re-checked by :func:`brackets_the_ceiling` before it leaves the function.
+ladder across the whole bracket and holds it to the invariant **per check**: the probes at
+which a given check FAILs must be a *suffix* of the ladder, because a check that fails at
+one amplitude must fail at every higher one. A check that un-fails raises
+:class:`NonMonotonePredicate` naming it and both amplitudes, rather than bisecting one band
+and presenting its edge as the ceiling.
+
+Per check, and not merely "the passing probes are a prefix", because the weaker form misses
+a passing band narrower than one ladder step. Measured: ``resting_potential_V = 0.95`` on Pt
+at 50 us passes over [59.91, 77.85] uA, a factor of 1.30 against the ladder's 1.78, so every
+probe fails and the prefix rule concludes "no amplitude passes" when the ceiling is 78.54 uA.
+The per-check form sees it anyway, because Water window FAILs at 56.2 uA and does not fail
+at 100 uA. Over 1 152 swept configurations, 756 of which answer ``0.0``, the per-check form
+catches **all 90** hidden bands a fine scan finds; the prefix form catches none of them.
 
 This is what keeps ``0.0`` honest, and ``0.0`` is the one value that has to be. Under the
 ledger 84 convention it is the *correct* answer for an amplitude-independent failure, so it
-cannot simply be turned into an error. It now means "no probe anywhere in the bracket
-passes", established across every decade of it, and never "the lowest probe failed". A
-caller that needs to tell the two apart asks :func:`brackets_the_ceiling`, which reports
-``False`` for ``0.0`` instead of raising.
+cannot simply be turned into an error. Under the per-check invariant it now carries a
+witness: a probe that fails at the bottom of the bracket fails because some check fails
+there, and that check's FAIL set being a suffix containing the first index means it fails at
+**every** probe. :func:`amplitude_independent_failures` names it, so a caller can assert on
+the check rather than on a bare zero. A caller that needs to tell ``0.0`` from a ceiling asks
+:func:`brackets_the_ceiling`, which reports ``False`` for it instead of raising.
+
+What the sampling cannot do is prove a negative: a band hiding between two probes with the
+same checks failing on both sides would still be missed, and no finite ladder closes that.
+The sweep above found no such case. The :func:`brackets_the_ceiling` call at the end of the
+search is likewise not a second proof of monotonicity -- it re-evaluates the two probes the
+bisection already established and so confirms boundary-ness, not maximality. It is there to
+catch a predicate that changed under the search.
 """
 
 from __future__ import annotations
@@ -77,8 +95,9 @@ _DEFAULT_LOWER_uA = 1e-12
 # assessments before any bisection -- about 20 ms, against ~60 assessments for the
 # bisection itself. It is the resolution at which a non-monotone band is visible: the
 # 0.9 V resting-potential case passes over [9.83, 19.61] uA, a third of a decade, and is
-# caught by two probes. A band narrower than one step can still hide between probes, which
-# is the honest limit of sampling and not a bound this module can assert away.
+# caught by two probes. A band narrower than one step is caught by the per-check invariant
+# instead -- see the module docstring -- unless the same checks fail on both sides of it,
+# which is the honest limit of sampling and not a bound this module can assert away.
 _PROBES_PER_DECADE = 4
 
 LIMIT_BEARING: frozenset[str] = frozenset(
@@ -174,38 +193,61 @@ def rebuild_at(calculator: Any, current_uA: float) -> Any:
     )
 
 
-def no_check_fails(
+def failing_checks(
     calculator: Any, current_uA: float, *, names: Collection[str] | None = None
-) -> bool:
-    """Whether the assessment at ``current_uA`` has no FAILing check among ``names``.
+) -> frozenset[str]:
+    """The names of the checks in a FAIL state at ``current_uA``, restricted to ``names``.
 
     ``names = None`` means every check the assessment emits; pass :data:`LIMIT_BEARING`
     for the quantity ledger 84's D3(i) names. A name the assessment does not emit is a
     ``ValueError`` and not an empty restriction, because a misspelling would otherwise
     weaken the predicate to "never fails" and the search would answer ``inf``.
 
-    The only property of the package this oracle reads.
+    Names, never numbers: this and :func:`no_check_fails` are the whole of what the oracle
+    reads from the package.
     """
     assessment = rebuild_at(calculator, current_uA).assess()
-    if names is None:
-        return not assessment.failed
+    if names is not None:
+        emitted = {check.name for check in assessment.checks}
+        unknown = sorted(set(names) - emitted)
+        if unknown:
+            raise ValueError(
+                f"no such check: {unknown}; this assessment emits {sorted(emitted)}"
+            )
+    return frozenset(
+        check.name
+        for check in assessment.failed
+        if names is None or check.name in names
+    )
 
-    emitted = {check.name for check in assessment.checks}
-    unknown = sorted(set(names) - emitted)
-    if unknown:
-        raise ValueError(
-            f"no such check: {unknown}; this assessment emits {sorted(emitted)}"
-        )
-    return not any(check.name in names for check in assessment.failed)
+
+def no_check_fails(
+    calculator: Any, current_uA: float, *, names: Collection[str] | None = None
+) -> bool:
+    """Whether nothing among ``names`` is in a FAIL state at ``current_uA``."""
+    return not failing_checks(calculator, current_uA, names=names)
 
 
-def failed_names(calculator: Any, current_uA: float) -> tuple[str, ...]:
-    """The names of the checks in a FAIL state at ``current_uA``.
+def amplitude_independent_failures(
+    calculator: Any,
+    *,
+    lower_uA: float = _DEFAULT_LOWER_uA,
+    upper_uA: float = _DEFAULT_UPPER_uA,
+    names: Collection[str] | None = None,
+) -> tuple[str, ...]:
+    """Checks that FAIL at every probe across the bracket, sorted.
 
-    For diagnostics only -- a name is not a number, and no expected value is derived from
-    one. It is what makes :class:`NonMonotonePredicate` say *which* check un-fails.
+    The witness for a ceiling of ``0.0``. Ledger 84's case -- ``Charge balance`` on a
+    monophasic protocol -- is exactly this: a verdict that is a property of the waveform
+    rather than of the amplitude. Asserting on the name is a far stronger statement than
+    asserting on the zero, which is why ``fail_ceiling_uA`` never returns ``0.0`` without
+    one of these existing.
     """
-    return tuple(check.name for check in rebuild_at(calculator, current_uA).assess().failed)
+    ladder = probe_ladder(lower_uA, upper_uA)
+    always = frozenset.intersection(
+        *(failing_checks(calculator, amplitude, names=names) for amplitude in ladder)
+    )
+    return tuple(sorted(always))
 
 
 def probe_ladder(
@@ -254,23 +296,15 @@ def fail_ceiling_uA(
     :func:`brackets_the_ceiling`.
     """
     ladder = probe_ladder(lower_uA, upper_uA)
-    passes = [no_check_fails(calculator, amplitude, names=names) for amplitude in ladder]
+    failing = [failing_checks(calculator, amplitude, names=names) for amplitude in ladder]
+    _assert_each_check_fails_upwards(ladder, failing)
 
+    passes = [not names_here for names_here in failing]
     first_fail = passes.index(False) if False in passes else len(passes)
-    recovery = next(
-        (index for index in range(first_fail + 1, len(passes)) if passes[index]), None
-    )
-    if recovery is not None:
-        failing = _failing_among(calculator, ladder[first_fail], names)
-        raise NonMonotonePredicate(
-            f"FAIL states do not un-fail as amplitude rises, but these do: "
-            f"{', '.join(failing)} fails at {ladder[first_fail]:.6g} uA while "
-            f"{ladder[recovery]:.6g} uA passes. Bisecting this bracket would return the "
-            f"edge of one passing band and hide the others, so there is no ceiling to "
-            f"report."
-        )
-
     if first_fail == 0:
+        # The invariant makes this a statement, not a shrug: the checks failing at the
+        # bottom of the bracket have suffix FAIL sets containing index 0, so they fail at
+        # every probe. amplitude_independent_failures names them.
         return 0.0
     if first_fail == len(passes):
         return float("inf")
@@ -333,9 +367,29 @@ def _assert_constructor_is_frozen(calculator_class: type) -> None:
     )
 
 
-def _failing_among(
-    calculator: Any, current_uA: float, names: Collection[str] | None
-) -> tuple[str, ...]:
-    """``failed_names`` restricted to ``names``, for diagnostic messages."""
-    failing = failed_names(calculator, current_uA)
-    return failing if names is None else tuple(n for n in failing if n in names)
+def _assert_each_check_fails_upwards(
+    ladder: list[float], failing: list[frozenset[str]]
+) -> None:
+    """Every check's FAIL set must be a suffix of the ladder, or there is no ceiling.
+
+    Stronger than requiring the passing probes to be a prefix, and the difference is the
+    whole point: a passing band narrower than one ladder step leaves every probe failing,
+    so the prefix form sees nothing, while the check that un-fails across the band is
+    visible at the probes on either side of it.
+    """
+    for name in sorted(frozenset().union(*failing) if failing else frozenset()):
+        fails_at = [name in here for here in failing]
+        first = fails_at.index(True)
+        recovered = next(
+            (index for index in range(first + 1, len(fails_at)) if not fails_at[index]),
+            None,
+        )
+        if recovered is None:
+            continue
+        raise NonMonotonePredicate(
+            f"{name} FAILs at {ladder[first]:.6g} uA and does not FAIL at "
+            f"{ladder[recovered]:.6g} uA. A check that fails at one amplitude must fail "
+            f"at every higher one, so this bracket holds more than one passing band and "
+            f"bisecting it would return the edge of whichever one the search landed in. "
+            f"There is no ceiling to report."
+        )

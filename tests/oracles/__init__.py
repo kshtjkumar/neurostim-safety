@@ -28,7 +28,9 @@ numerical method that shares no code with the package:
     checks in a FAIL state. It never reads ``limiting_current_uA``, ``margin``, or any
     other quantity it is used to check. The monotonicity bisection needs is sampled across
     the whole bracket before the search runs, so a predicate that breaks it raises
-    ``NonMonotonePredicate`` instead of returning the edge of one passing band. ``names``
+    ``NonMonotonePredicate`` instead of returning the edge of one passing band -- the
+    invariant is held per check, which catches a passing band narrower than one probe
+    step. ``names``
     restricts the predicate to a set of checks -- ``LIMIT_BEARING`` for the quantity
     ledger 84's D3(i) names -- and that set is written out here rather than imported from
     the package that also defines it.
@@ -53,6 +55,7 @@ from .drift import drift_time_s, drift_time_s_closed_form
 from .fail_ceiling import (
     LIMIT_BEARING,
     NonMonotonePredicate,
+    amplitude_independent_failures,
     brackets_the_ceiling,
     fail_ceiling_uA,
     no_check_fails,
@@ -64,6 +67,7 @@ __all__ = [
     "FD_BAND_REFERENCE",
     "LIMIT_BEARING",
     "NonMonotonePredicate",
+    "amplitude_independent_failures",
     "brackets_the_ceiling",
     "disc_potential_V",
     "disc_surface_potential_V",
