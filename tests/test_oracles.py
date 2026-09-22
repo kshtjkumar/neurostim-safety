@@ -172,10 +172,12 @@ class TestFailCeiling:
         from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
 
         calc = SafetyCalculator(
-            DiscElectrode(250.0, "PtIr"),
+            DiscElectrode(250.0, "Pt"),
             StimProtocol(37.0, 150.0, 90.0, 12.0),
             1.75,
-            material="PtIr",
+            # Deliberately not the electrode's own material: an argument whose value
+            # equals the default it would fall back to cannot detect not being passed.
+            material="SIROF",
             policy="optimistic",
             medium="pbs",
             tissue_conductivity_S_per_m=0.27,
