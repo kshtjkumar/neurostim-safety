@@ -30,3 +30,6 @@ papers_stim_calc_ref/
 # surface is the generated transcript block in README.md, which the same script owns and
 # `--check` gates in CI.
 example_output/
+
+# transient hook scratch file
+_history_inprogress.tmp
