@@ -68,7 +68,6 @@ def test_the_example_writes_the_artifacts_we_think_it_does(two_runs: tuple[Path,
         "figure_strength_duration.svg",
         "figure_summary.pdf",
         "figure_summary.svg",
-        "figure_summary.tiff",
         "safety_report.pdf",
     ]
 

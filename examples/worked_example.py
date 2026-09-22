@@ -162,7 +162,11 @@ def main(output_dir: Path) -> int:
     print(f"  JSON            {json_path}")
 
     fig, _ = safety_summary(calc)
-    for path in save_publication(fig, output_dir / "figure_summary", close=True):
+    # SVG and PDF only. The 600 dpi TIFF `save_publication` also offers is 47 MB of
+    # uncompressed RGBA for this figure, and the vector formats are the deliverable.
+    for path in save_publication(
+        fig, output_dir / "figure_summary", formats=("svg", "pdf"), close=True
+    ):
         print(f"  figure          {path}")
 
     strength_duration(fit.rheobase_uA, fit.chronaxie_us)

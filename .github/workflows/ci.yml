@@ -82,6 +82,12 @@ jobs:
       - name: Mypy
         run: mypy neurostim
 
+      - name: Generated README transcript is current
+        # The README quick-start block is output, not prose. It was stale by a whole
+        # release at the audit baseline: five checks and 70.69 uA against the nine checks
+        # and 141.4 uA the package prints.
+        run: python scripts/regenerate_example_output.py --check
+
   coverage:
     name: Branch-point coverage floor
     runs-on: ubuntu-latest

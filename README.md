@@ -35,16 +35,28 @@ calc = SafetyCalculator(electrode, protocol, compliance_V=10.0)
 print(calc.describe())
 ```
 
+<!-- BEGIN GENERATED: quickstart-transcript -->
+
 ```
 Overall: FAIL
-Limiting current: 70.69 uA (Pt charge-injection limit)
+Limiting current: 141.4 uA (Pt charge-injection limit)
+  across published ranges: 141.4-212.1 uA (Shannon k 1.5-2.0, full material range)
 
-[         PASS] Shannon criterion: k = -0.04 at threshold 1.70, 7.44x headroom
-[         FAIL] Charge injection limit: 56.59 uC/cm^2 exceeds the 50 uC/cm^2 limit for Pt
-[         FAIL] Water window: peak -2.83 V leaves the window by 2.23 V
+[NOT_EVALUATED] Shannon criterion: not applicable: 0.000283 cm^2 is below the macro/micro boundary (k would read -0.04)
+[      CAUTION] Charge injection limit: 56.59 uC/cm^2 of 100 uC/cm^2 (57 % used)
+[         PASS] Water window: peak -0.23 V, 0.37 V headroom
+[      CAUTION] Validated envelope: frequency 2.6x outside the fit conditions in a direction that reduces margin
+[      CAUTION] Current density: 0.2829 A/cm^2 of the 0.3057 A/cm^2 electroporation threshold (92.6 % used, chick-tissue derived)
+[         FAIL] Microelectrode charge/phase: 16 nC/phase exceeds the 4 nC/phase microelectrode damage threshold
+[         FAIL] Chronic degradation: 56.59 uC/cm^2 exceeds the 50 uC/cm^2 platinum dissolution threshold
 [         PASS] Charge balance: biphasic, fully charge-balanced
-[         PASS] Compliance voltage: 3.43 V of 10.00 V (34 % used)
+[         PASS] Compliance voltage: 0.83 V of 10.00 V (8 % used)
 ```
+
+Each check also prints the conditions its limit was measured under and the
+source it came from; that detail is elided above.
+
+<!-- END GENERATED: quickstart-transcript -->
 
 The `report()` dictionary from the 0.1.0 prototype still works and returns a superset of
 its original keys.
@@ -179,7 +191,7 @@ the honest state of affairs: it is your measurement, not a published one.
 ## Tests
 
 ```bash
-pytest -q                              # 220 tests
+pytest -q                              # the full suite
 ruff check neurostim tests examples    # clean
 mypy neurostim                         # clean
 python scripts/provenance_audit.py     # provenance status report

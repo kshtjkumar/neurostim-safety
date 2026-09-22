@@ -192,3 +192,111 @@ def test_ci_runs_the_branch_point_gate() -> None:
     assert not any("--cov-fail-under" in line for line in executable), (
         "the blended line+branch total is not the gate"
     )
+
+
+# --- the generated README transcript -------------------------------------------------
+
+
+REGENERATE = REPO_ROOT / "scripts" / "regenerate_example_output.py"
+README = REPO_ROOT / "README.md"
+
+
+def _load_regenerate() -> Any:
+    spec = importlib.util.spec_from_file_location("regenerate_example_output", REGENERATE)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["regenerate_example_output"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestGeneratedReadmeTranscript:
+    """The README transcript is output, not prose, so a script owns it.
+
+    At the audit baseline the committed block showed five checks and a limiting current
+    of 70.69 uA where the package prints nine checks and 141.4 uA -- stale by a release,
+    and the first thing a reviewer checks.
+    """
+
+    def test_the_regeneration_script_is_committed(self) -> None:
+        assert REGENERATE.is_file()
+
+    def test_the_readme_carries_the_generated_markers(self) -> None:
+        text = README.read_text(encoding="utf-8")
+        module = _load_regenerate()
+        assert module.BEGIN_MARKER in text
+        assert module.END_MARKER in text
+
+    def test_the_committed_transcript_is_what_the_package_prints(self) -> None:
+        module = _load_regenerate()
+        _, existing, _ = module.split_readme(README.read_text(encoding="utf-8"))
+        assert existing == module.readme_block(module.quickstart_transcript())
+
+    def test_every_transcript_line_appears_verbatim_in_describe(self) -> None:
+        """The elision rule may drop lines; it may never invent or reword one."""
+        from neurostim import RingElectrode, SafetyCalculator, StimProtocol
+
+        module = _load_regenerate()
+        printed = set(
+            SafetyCalculator(
+                RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1), compliance_V=10.0
+            )
+            .describe()
+            .splitlines()
+        )
+        for line in module.quickstart_transcript().splitlines():
+            assert line in printed, f"transcript line is not in describe(): {line!r}"
+
+    def test_the_transcript_reports_every_check(self) -> None:
+        module = _load_regenerate()
+        headlines = [
+            line for line in module.quickstart_transcript().splitlines() if line.startswith("[")
+        ]
+        from neurostim import RingElectrode, SafetyCalculator, StimProtocol
+
+        assessment = SafetyCalculator(
+            RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1), compliance_V=10.0
+        ).assess()
+        assert len(headlines) == len(assessment.checks)
+
+    def test_check_exits_zero_on_the_committed_readme(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(REGENERATE), "--check"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_check_exits_non_zero_when_the_transcript_drifts(self, tmp_path: Path) -> None:
+        """The gate must be able to fail, or it gates nothing."""
+        module = _load_regenerate()
+        original = README.read_text(encoding="utf-8")
+        backup = tmp_path / "README.md.bak"
+        backup.write_text(original, encoding="utf-8")
+        try:
+            README.write_text(original.replace("Overall: FAIL", "Overall: PASS"), encoding="utf-8")
+            assert "Overall: PASS" in README.read_text(encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(REGENERATE), "--check"],
+                capture_output=True,
+                text=True,
+                cwd=REPO_ROOT,
+                check=False,
+            )
+            assert result.returncode == 1, result.stdout + result.stderr
+            assert "Overall: PASS" in result.stderr
+        finally:
+            README.write_text(backup.read_text(encoding="utf-8"), encoding="utf-8")
+        assert README.read_text(encoding="utf-8") == original
+        assert module.BEGIN_MARKER in original
+
+    def test_the_example_no_longer_writes_a_47_megabyte_tiff(self, tmp_path: Path) -> None:
+        """600 dpi uncompressed RGBA. Vector output is the deliverable here."""
+        module = _load_regenerate()
+        target = tmp_path / "example_output"
+        module.regenerate_example_output(target)
+        written = sorted(p.name for p in target.iterdir())
+        assert not [n for n in written if n.endswith(".tiff")]
+        assert max(p.stat().st_size for p in target.iterdir()) < 1_000_000

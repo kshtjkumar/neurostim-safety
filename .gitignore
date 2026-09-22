@@ -22,4 +22,11 @@ dist/
 
 # large local assets (kept on disk, not in version control)
 papers_stim_calc_ref/
+
+# example_output/ is generated, not authored: `python scripts/regenerate_example_output.py`
+# rebuilds it byte-for-byte from the package. Deliberately untracked -- every numeric
+# commit in the repair rewrites all of it, and a few hundred kilobytes of binary churn per
+# commit buys nothing that regenerating on demand does not. The tracked, byte-compared
+# surface is the generated transcript block in README.md, which the same script owns and
+# `--check` gates in CI.
 example_output/
