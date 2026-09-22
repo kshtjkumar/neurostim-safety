@@ -88,6 +88,11 @@ jobs:
         # and 141.4 uA the package prints.
         run: python scripts/regenerate_example_output.py --check
 
+      - name: Mistakes ledger parses and is fully scheduled
+        # Rows 8 and 46 once carried unescaped pipes and split into 11 and 9 fields
+        # against the header's 7, so two defects had silently left the record.
+        run: python scripts/ledger_check.py
+
   coverage:
     name: Branch-point coverage floor
     runs-on: ubuntu-latest

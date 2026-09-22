@@ -300,3 +300,176 @@ class TestGeneratedReadmeTranscript:
         written = sorted(p.name for p in target.iterdir())
         assert not [n for n in written if n.endswith(".tiff")]
         assert max(p.stat().st_size for p in target.iterdir()) < 1_000_000
+
+
+# --- the mistakes ledger --------------------------------------------------------------
+
+
+LEDGER_CHECK = REPO_ROOT / "scripts" / "ledger_check.py"
+LEDGER = REPO_ROOT / "CODE_MISTAKES_LOG.md"
+FIX_PLAN = REPO_ROOT / "docs" / "audit" / "FIX_PLAN_v2.md"
+
+
+def _load_ledger_check() -> Any:
+    spec = importlib.util.spec_from_file_location("ledger_check", LEDGER_CHECK)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["ledger_check"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_LEDGER_HEADER = (
+    "| # | Date | Severity | File:line | Defect | Fix | Commit |\n"
+    "|---|------|----------|-----------|--------|-----|--------|\n"
+)
+_PLAN_SECTION_9 = (
+    "## 9. Ledger coverage\n\n"
+    "| # | sev | v1 verdict | v2 commit(s) | note |\n"
+    "|---|---|---|---|---|\n"
+    "| 1 | HIGH | OK | C1.4 | |\n"
+    "| 2 | LOW | OK | C2.1 | |\n\n"
+    "## 10. Exit criteria\n"
+)
+
+
+def _write_pair(tmp_path: Path, rows: str, section_9: str = _PLAN_SECTION_9) -> tuple[Path, Path]:
+    ledger = tmp_path / "CODE_MISTAKES_LOG.md"
+    plan = tmp_path / "FIX_PLAN_v2.md"
+    ledger.write_text("# log\n\n" + _LEDGER_HEADER + rows, encoding="utf-8")
+    plan.write_text(section_9, encoding="utf-8")
+    return ledger, plan
+
+
+def _run_ledger(ledger: Path, plan: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(LEDGER_CHECK), "--ledger", str(ledger), "--plan", str(plan)],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        check=False,
+    )
+
+
+class TestLedgerGate:
+    """The ledger is the record of what was wrong; a row that does not parse is lost.
+
+    Rows 8 and 46 once carried unescaped pipes inside ``min(|cathodic|,|anodic|)``, which
+    split them into 11 and 9 fields against the header's 7. Markdown renders the overflow
+    as extra columns and every table reader -- including any future script that tries to
+    audit this file -- silently misreads the row.
+    """
+
+    def test_the_gate_script_is_committed(self) -> None:
+        assert LEDGER_CHECK.is_file()
+
+    def test_the_committed_ledger_and_plan_pass(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(LEDGER_CHECK)],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            check=False,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_the_committed_ledger_has_uniform_rows(self) -> None:
+        module = _load_ledger_check()
+        table = module.parse_table(LEDGER.read_text(encoding="utf-8"))
+        assert table.header == ["#", "Date", "Severity", "File:line", "Defect", "Fix", "Commit"]
+        assert [row.number for row in table.entries] == list(range(1, len(table.entries) + 1))
+
+    def test_an_unescaped_pipe_is_caught(self, tmp_path: Path) -> None:
+        """The exact shape of the original defect."""
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | pending | pending |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | min(|cathodic|,|anodic|) is wrong | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 1, result.stdout + result.stderr
+        # Four extra pipes in one cell: 11 fields against the header's 7. (The fix plan
+        # quotes 13 and 11 for rows 8 and 46; that count includes the leading and
+        # trailing empty tokens of a bare str.split("|"), i.e. 11 and 9 real fields.)
+        assert "11 fields against the header's 7" in result.stderr
+        assert "unescaped" in result.stderr
+
+    def test_an_entry_missing_from_the_plan_is_caught(self, tmp_path: Path) -> None:
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | pending | pending |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+            "| 3 | 2026-09-22 | LOW | c.py:3 | never scheduled | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "3" in result.stderr
+        assert "section 9" in result.stderr.lower()
+
+    def test_a_sub_lettered_plan_row_counts_as_coverage(self, tmp_path: Path) -> None:
+        """The plan breaks 61, 62, 67, 77 and 78 out into sub-findings."""
+        rows = "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | pending | pending |\n"
+        section = _PLAN_SECTION_9.replace("| 1 | HIGH | OK | C1.4 | |", "| 1/M3 | HIGH | OK | C1.4 | |")
+        ledger, plan = _write_pair(tmp_path, rows, section)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_a_plan_defect_row_needs_no_plan_coverage(self, tmp_path: Path) -> None:
+        """Entries 79-83 are defects in the plan itself, disposed of in its section 1b."""
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | pending | pending |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+            "| 3 | 2026-09-22 | (plan defect) | FIX_PLAN.md D4 | a plan blocker | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_a_fabricated_commit_hash_is_caught(self, tmp_path: Path) -> None:
+        """A row may not claim a fix landed in a commit that does not exist."""
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | done | 0000000000000000000000000000000000000000 |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "0000000" in result.stderr
+
+    def test_a_real_commit_hash_is_accepted(self, tmp_path: Path) -> None:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=REPO_ROOT, check=True
+        ).stdout.strip()
+        rows = (
+            f"| 1 | 2026-09-22 | HIGH | a.py:1 | ok | done | {head} |\n"
+            "| 2 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_a_duplicated_entry_number_is_caught(self, tmp_path: Path) -> None:
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | pending | pending |\n"
+            "| 1 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        ledger, plan = _write_pair(tmp_path, rows)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "duplicate" in result.stderr.lower()
+
+    def test_a_gap_in_the_numbering_is_caught(self, tmp_path: Path) -> None:
+        """A gap means an entry was deleted; the ledger says never delete."""
+        rows = (
+            "| 1 | 2026-09-22 | HIGH | a.py:1 | ok | pending | pending |\n"
+            "| 3 | 2026-09-22 | LOW | b.py:2 | ok | pending | pending |\n"
+        )
+        section = _PLAN_SECTION_9.replace("| 2 | LOW | OK | C2.1 | |", "| 3 | LOW | OK | C2.1 | |")
+        ledger, plan = _write_pair(tmp_path, rows, section)
+        result = _run_ledger(ledger, plan)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "2" in result.stderr
+
+    def test_a_missing_ledger_is_an_error_not_a_pass(self, tmp_path: Path) -> None:
+        result = _run_ledger(tmp_path / "absent.md", tmp_path / "also-absent.md")
+        assert result.returncode == 2, result.stdout + result.stderr

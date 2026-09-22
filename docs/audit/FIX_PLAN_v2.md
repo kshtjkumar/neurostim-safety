@@ -1,0 +1,906 @@
+# FIX_PLAN v2 — sequenced repair of neurostim-safety before submission
+
+Supersedes `docs/audit/FIX_PLAN.md` (v1), which failed two adversarial reviews:
+`critique_physics.md` (5 BLOCKER, 7 MAJOR, 6 MINOR) and `critique_blast.md` (8 BLOCKER,
+13 MAJOR, 7 MINOR, plus a 94-row coverage mapping). Ledger entries 79–83 are v1's own
+defects.
+
+Baseline: HEAD `7a0515b` (docs-only commits above `bfca95d`; both green). Verified in this
+session: **522 passed in 22.78 s**, ruff clean, mypy clean, source byte-untouched.
+Evidence: `CODE_MISTAKES_LOG.md` (78 package defects + 5 plan defects) and
+`docs/audit/*.md` (six audits, two critiques).
+
+Target: JOSS/SoftwareX. Mandate unchanged: no calculation errors, no silent failures, no
+unsourced numbers, no doc drift. Fixes may change reported numbers.
+
+**This plan sequences the 78 package defects into 8 phases and 59 commits.** v1 claimed 41
+and enumerated 50; v2's count is stated and enumerated below (§5.9).
+
+Every number in this document was produced this session by running
+`./.venv/bin/python`. Verification scripts are
+in `$SCRATCH/v2_inv.py`, `v2_kg.py`, `v2_checks.py`, `v2_surfaces.py`, `v2_s2.py`,
+`v2_therm.py`, `v2_mono.py`, `v2_pinmatrix.py`; the FD Laplace solve was re-run from the
+physics reviewer's `p2_fd.py` and reproduced to the digit.
+
+---
+
+## 1. What changed from v1, and why
+
+### 1a. Kept unchanged — endorsed by the physics review, do not relitigate
+
+D1's rank change · D4's **space assignment** (half_space for flush planar + hemisphere,
+full_space for immersed) · D2's 4-ulp bound (unbroken over ~43 000 cases in three paths,
+worst observed 2) · D3's core claim (an independent binary search returns exactly 20.0 µA
+on the worked example) · D5's *diagnosis* · D6's bijective parameterisation · all five
+§5 refusals including Shannon-on-non-disc. The seven-phase structure, the tests-first rule,
+and most of v1's sequencing survive; v2 adds a Phase 0 commit and reorders three edges.
+
+### 1b. The 13 blockers — disposition
+
+| # | v1 | v2 decision | §  |
+|---|---|---|---|
+| P1 | `V(r=a) == I·R_access` as the pin for D4 | **Replaced by two pins that jointly admit exactly one fix**: the exact half-space disc oracle `V(r) = (2/π)·I·R·arcsin(a/r)` evaluated at `r = 100a` (cross-module, external closed form), and the surface identity at the **physical** radius for sphere and hemisphere (exact today; a per-geometry guard against double-correction). Verified: the four (factor × R) combinations give 0.499992 / 0.785385 / 1.570770 / **0.999983** — only (2π, Newman) passes. | §2 D4, §5.3 |
+| P2 | `ln(2L/r)/(2πσL)` override for band and microwire | **Rejected. Equal-area sphere `1/(4πσa)` for both**, flagged inexact, accuracy stated. Re-ran the FD solve: 335.1 Ω at clinical DBS aspect vs sphere 329.5 (−1.7 %), eq-disc 517.5 (+54.5 %), v1's form 470.7 (+40.5 %). v1's form is also **negative** below aspect ≈0.25 (−399.5 Ω at 0.2), returns 496.3681 Ω for aspect 0.5 *and* 1.0, and steps 38.6 % at its own switch. | §2 D4, §5.3 |
+| P3 | `TestKuncelGrill2004` as R2's second pin | **Withdrawn as a pin; the test is rewritten to what it can honestly assert.** Today's 2 % is a coincidence of two errors. At Kuncel & Grill's own stated σ = 0.2 S/m the equal-area sphere gives 578.8 Ω against an FD-true 586.4 Ω (1.3 %) and against their *assumed* 500 Ω (+15.8 %); their own numbers back-solve to 508.8 Ω. The replacement pins are P1's two. | §5.3, §7 R2 |
+| P4 | T4 `mono < bi`; charge-injection and water-window → NOT_EVALUATED | **Monophasic FAILs with a computable drift time.** Charge injection stays NOT_EVALUATED (no source transfers a biphasic CIC); the water window is *evaluated* by DC drift, which yields a **lower** limit. Verified: v1's design produces 110 inversions over 1134 cases; v2's produces **6**, all Ta2O5, the one material with no window on record — closed by a monotonicity cap (`mono ≤ bi` by construction) plus `limits_incomplete`. | §2 D5, §5.2 |
+| P5 | Re-reference the pulse-duty excursion to 0.04 | **Deleted.** Verified `duty_fold ≡ pw_fold × f_fold` (100 µs/200 Hz: duty_fold 1.000 against a product of 16.00; 600 µs/75 Hz: 2.250 both). Reachability of `EnvelopeResult.inside` is restored by the deletion, not by the re-reference: verified `inside` becomes True for the fit protocol with the duty excursion removed. The **train** duty excursion replaces it and is wired into the thermal path. | §2 D5, §5.2 |
+| B1 | `limiting_current_interval_uA` fixed by no commit | **New commit C1.6** widens the interval through the same per-check machinery, scheduled *before* T16. Verified 18/18 failures today. | §5.1 |
+| B2 | `viz.current_limit_sweep` keeps the three-check minimum | **C5.1 rebuilds `binding` from `assess().limiting_current_uA`.** Verified the artist annotates `binding limit 141 µA` beside a headline that becomes 20.00. | §5.5 |
+| B3 | T2 asserts whole-assessment cleanliness at C1.2 | **Split.** T2a (charge + Shannon round-trip, the float half) lands at C1.2; T2b (`not at_limit.failed`) lands at C1.4. The v1 dependency row is inverted and corrected. | §5.1, §4 |
+| B4 | T1, T2's second line, T19 are tautologies | **New Phase 0 commit C0.6** adds `tests/oracles/` — an independently written binary-search FAIL ceiling, the arcsin disc oracle, a pulse-by-pulse drift integrator, and the FD band reference. Every later assertion is against an oracle, never against the code path under test. | §5.0, §5.1, §5.6 |
+| B5 | Finiteness-only margin test admits −21.1 µA | **`margin` is defined as the FAIL ceiling ratio**, asserted equal to the oracle's binary search to `rel=1e-9`; T1 becomes `== approx(20.0)` **and** `> 0`. Verified the naive `headroom/excursion` reading gives −21.095 / 13.266 / −50.548 µA where truth is 58.905 / 93.266 / 29.452. | §2 D3, §5.1 |
+| B6 | Exit criteria 2, 3, 5, 6 broken | **All four restated; 12 criteria, each individually achievable.** T18 scheduled into C3.5; mutation restated as 42/42 named + ≥90 % of a ≥150-mutant generated set; coverage gated on branch **points** by a committed script, not `--cov-fail-under`; criterion 6 restated so no material's `verified` flag may move. | §10 |
+| B7 | §3 omits ten moving surfaces; thermal moves twice | **§6 rebuilt with 31 rows**, including all ten, and the thermal rise is booked **once**, in C6.3, at the post-C3.1 value. Verified: today 5.3961 mK → **8.0612 mK**; v1's 24.060 mK was the unperfused analytic value at the *old* access resistance, wrong on both counts. | §6 |
+| B8 | "41 commits", 50 enumerated | **59 commits, enumerated and counted.** | §5.9 |
+
+### 1c. MAJOR and MINOR findings adopted
+
+Physics M1(a) `Check.kind` separates tissue / electrode-chronic / electrode-acute /
+instrument limits · M1(b) `margin` is margin-to-FAIL, stated · M1(c) handled by `kind`, not
+by a train-duration gate (no source supports a cut-off) · M2 `floor_to_pass` gets a checked
+contract (declared monotone-decreasing, asserted at the returned point; exhaustion raises;
+`resting_potential_V` validated against the window at construction) · M3 renamed
+`charge_recovery_ratio`, and the imbalance FAIL cliff is replaced by the same DC-drift
+criterion the monophasic fix uses · M4 counter-electrode default becomes CAUTION and the
+mutual term is modelled · M5 `environment` is an instance field, set explicitly on the five
+disc-substituted presets · M6 folded into P4 · M7 `train_duty_cycle` wired into
+`average_current_uA`, `rms_current_uA` and `n_pulses` · m1 the D1→D3 edge is soft · m2 the
+D2→D3 reason restated · m3 C1.5's value change booked in §6 · m4 the C3.1 consumers are
+`io/fem.py` and `viz/plots.py`, and `compare_with_point_source` gets the electrode threaded
+through · m5, m6 editorial.
+
+Execution M2 C1.7 raises at construction and catches per row · M4 `cic_max_current_uA`
+floored explicitly · M5 GUI, figure annotation and `Interval.describe` routed through
+`format_limit` · M6 ledger rows 8 and 46 repaired in C0.5; C4.2 split out of C4.3 · M7 the
+five listed-only entries get commits (28/29 → C3.4, 30 → C4.1 with its own assertion,
+38 → C6.2, 41 → C6.5) · M8 §6 row added · M9 C1.1 lands the renderer edits in the same
+commit · M11 C1.2/C1.3 trigger artifact regeneration · M12 C3.2's signature change named ·
+M13 C0.4's script emits the README transcript and runs on every numeric commit · m2 the
+baseline is named · m3, m4, m5, m6, m7 corrected.
+
+**Rejected:** nothing from either review was rejected outright. Three thresholds were
+changed rather than adopted verbatim — see §10.
+
+---
+
+## 2. Seven conventions settled up front
+
+**D1 — `NOT_EVALUATED` sits *below* `PASS`. Unchanged from v1.**
+`Status.rank` becomes `NOT_EVALUATED: 0, PASS: 1, CAUTION: 2, FAIL: 3`. `SafetyAssessment`
+gains a `not_evaluated` tuple and `describe()` prints
+`Overall: PASS (2 checks not evaluated: ...)`. **v2 change:** that disclosure lands in
+`report_to_json`, the PDF header and the GUI headline **in the same commit**, not in
+Phase 5 — otherwise ~30 commits ship a bare `PASS` that is strictly less informative than
+today's `NOT_EVALUATED` (execution M9). Closes 11, unblocks 67(c).
+
+**D2 — a reported limit always floors; the forward inequality stays exact. Unchanged in
+principle; the contract is completed.**
+`neurostim/safety/_limits.py` gains `floor_to_pass(value, passes)` and
+`format_limit(value, sig=4)`. The 4-ulp budget survives — I did not attempt to re-break
+what the physics review already failed to break over ~43 000 cases. **v2 additions
+(physics M2):**
+
+1. Every predicate handed to `floor_to_pass` must be **declared monotone-decreasing in
+   current**, asserted at the returned point (`passes(v)` and not
+   `passes(nextafter(v, +inf))`).
+2. Exhausting the 4-step budget **raises** a named error carrying the check, the value and
+   the step count. Returning the failing value would be a silent failure; leaving it
+   unstated is how a future non-linear check degrades quietly.
+3. `resting_potential_V` is validated against the material's window **at construction**.
+   Without it the water-window predicate is two-sided and non-monotone (False–True–False),
+   and "largest float ≤ value that passes" is not the safe answer.
+4. `charge.cic_max_current_uA` — a *second*, separate back-solve behind
+   `SafetyCalculator.max_current_cic_uA`, hence behind every CSV row and the figure — is
+   floored explicitly and asserted equal to `a.charge.max_current_uA` (execution M4).
+5. Render sites: `io/report.py`, `assessment.py`, `charge.py` **plus** `gui/app.py:332`
+   (`:.4g`), `viz/plots.py:211` (`:.3g`, verified output `binding limit 141 µA`) and
+   `uncertainty.Interval.describe` (execution M5).
+
+Closes 9, 49.
+
+**D3 — the limiting current is the minimum over every check that produces a limit.**
+Core claim unchanged and independently confirmed: the worked example reports
+141.37166941154072 µA while `Microelectrode charge/phase` and `Chronic degradation` both
+FAIL; the binary search returns exactly 20.0 µA (ratio 7.0686). Only 4 of 9 checks expose a
+finite margin today, so every limit-bearing check must first be given one.
+
+**v2 decisions the reviews forced:**
+
+- **`margin` is the ratio of the FAIL ceiling to the applied current**, not the CAUTION
+  ceiling and not `headroom/excursion`. Verified the difference matters: for
+  `DiscElectrode(100,"Pt")` at 200 µs the chronic FAIL ceiling is 19.635 µA and the CAUTION
+  ceiling 7.854 µA; on the worked-example ring, 70.686 vs 28.274. And the naive
+  headroom reading of the water-window margin is **negative** at `resting_potential_V = 0`
+  (−21.095 µA against a true 58.905 µA), which a finiteness test and a one-sided `<= 20.0`
+  both admit (execution B4).
+- **`LIMIT_BEARING` is defined**: Shannon (when evaluated), Charge injection, Current
+  density, Microelectrode charge/phase, Compliance, Chronic degradation, Water window —
+  seven. Validated envelope and Charge balance impose no current ceiling and stay `inf`.
+- **`Check` gains `kind`** (`tissue` / `electrode-chronic` / `electrode-acute` /
+  `instrument`) **and `provisional: bool`**. The scalar headline stays a single minimum over
+  all seven — programming above the compliance limit means the protocol is not delivered as
+  specified, which invalidates every other margin — but `limiting_current_by_kind` is
+  reported alongside, and the docstring stops saying "the number to programme against"
+  (physics M1a, M1c, m6). `provisional` travels with the margin so a caveated limit is
+  visible when it binds (physics m6).
+- **`limits_incomplete: bool`** is True whenever a limit-bearing check is NOT_EVALUATED for
+  the protocol as given, and is rendered by `describe()`, `report_to_json`, the PDF and the
+  GUI. A limit over a knowingly-incomplete candidate set is ledger 1 in a new place
+  (physics B4.2).
+- **"Limiting current" means the highest amplitude at which no check FAILs**, stated
+  explicitly. `CAUTION_MARGIN = 2.0` is a downgrade factor, not a limit.
+
+Closes 1, 66; needs D2 first (see §4 for the corrected reason).
+
+**D4 — one space convention per geometry, declared on the electrode.**
+`Electrode` gains `environment: Literal["half_space", "full_space"]`. **v2 change (physics
+M5): an instance field with a class-appropriate default, not a class property**, because
+five shipped presets model immersed, non-planar electrodes as equal-area discs
+(`mccreery_microelectrode`, `mccreery2010_chronic`, `beebe_iridium_wire`, `weiland_tin`, and
+`rose_robblee_typeA` which genuinely is planar). They are tagged explicitly in the same
+commit that flips their `access_resistance_is_exact` to False (ledger 21).
+
+Flush planar (Disc, Ring, Rectangular) and Hemispherical → `half_space`; immersed
+volumetric (CylindricalBand, Microwire, Sphere) → `full_space`. Both
+`models/field._geometry_factor` (2π vs 4π) and `geometry/base.access_resistance_ohm` read
+that one property.
+
+**v2 change (physics B2): no cylinder override.** Band and microwire use the equal-area
+sphere `1/(4πσa_sphere)`, `access_resistance_is_exact = False`, with the measured accuracy
+in the docstring. Re-run FD Laplace solve (converged to 0.1 %, σ = 0.35 S/m, d = 1270 µm):
+
+| aspect h/d | FD true | eq-sphere | eq-disc (today) | v1's `ln(2L/r)` |
+|---|---|---|---|---|
+| 0.200 | 739.9 | 800.6 (+8.2 %) | 1257.6 | **−399.5** |
+| 0.390 | 559.8 | 573.3 (+2.4 %) | 900.6 | 408.3 |
+| 0.500 | 502.2 | 506.4 (+0.8 %) | 795.4 | 496.4 |
+| 1.000 | 363.7 | 358.1 (−1.5 %) | 562.4 | 496.4 |
+| 1.181 | 335.1 | 329.5 (−1.7 %) | 517.5 | 470.7 (+40.5 %) |
+| 2.000 | 255.0 | 253.2 (−0.7 %) | 397.7 | 372.3 |
+| 10.00 | 96.3 | 113.2 (+17.5 %) | 177.9 | 132.1 |
+
+v1's form is negative below aspect ≈0.25, returns **496.3681 Ω for both aspect 0.5 and
+1.0**, peaks at aspect 0.679, and jumps 38.6 % at its own `L/r = 2` switch. Ledger 20
+supersedes ledger 16 and v2 follows it. Ledger 16 stays open as a documented limitation.
+
+**v2 change (physics B1): the pin is not `V(r=a) == I·R_access`.** That identity is false
+for disc/ring/rectangle by a **legitimate** π/2 (the point source is the disc's asymptote,
+not its surface field; verified `V_exact(a) = 285.714286 mV = I·R` exactly while the 2π
+point source gives 181.891 mV, ratio 2/π). Enforcing 1.0000 would force
+`1/(4σa) → 1/(2πσa)`, a 57 % error manufactured by a test. The two pins that replace it are
+in §5.3 C3.1, with the verified matrix showing they admit exactly one fix.
+
+Closes 17, 20, 21; 16 documented.
+
+**D5 — the pulse-duty excursion is deleted; the train duty cycle is a new, wired field.**
+v1's diagnosis is right and is kept: McCreery 2010's duty is a train on/off schedule, so
+comparing a pulse duty against it is a category error, and `EnvelopeResult.inside` is
+unreachable today (verified: the *fit protocol itself*, 400 µs at 50 Hz, reports
+duty fold 25.0 and `inside = False`).
+
+v1's repair is wrong (physics B5). `duty = 2·PW·f·1e-6` for a symmetric biphasic pulse, so
+`duty_fold ≡ pw_fold · f_fold` **exactly**. Verified: 100 µs at 200 Hz (4× outside on both
+real axes) gives duty_fold 1.000; 600 µs at 75 Hz (inside on both) gives 2.250 and would
+fabricate a Shannon CAUTION. v2:
+
+- **Delete the pulse-duty excursion.** Verified this alone restores reachability:
+  `inside` becomes True for `StimProtocol(50, 400, 50, 7*3600)` at area 0.1 cm². The
+  module docstring states why — at fixed waveform symmetry it is the product of two
+  excursions already reported with their own sourced directions, and no source in this
+  bibliography gives it an independent basis.
+- **Add `StimProtocol.train_duty_cycle: float = 1.0`** (continuous), feed it to
+  `mccreery2010.duty_cycle_note`, and add a *train* duty excursion against McCreery 2010's
+  continuous protocol — the comparison that source actually supports. At the default the
+  fold is 1.0, so `inside` stays reachable.
+- **Wire it into the models that claim to consume it** (physics M7): `average_current_uA`
+  × train_duty, `rms_current_uA` × √train_duty, `n_pulses` × train_duty. `StimProtocol`'s
+  own docstring already says duty cycle "governs average power dissipation, which is what
+  the thermal model integrates"; a field only the citation string reads is a new silent
+  failure one commit after C2.1's note warns against exactly that. Default 1.0 leaves every
+  existing number byte-identical.
+
+Also eliminates execution M3's percent-vs-fraction unit trap, since no numeric duty
+reference remains.
+
+Closes 6 and both its symptoms; 67(a).
+
+**D6 — charge imbalance is expressible, and the FAIL is sourced.**
+The parameterisation is bijective, not redundant, and survives. **v2 change (physics M3):
+the field is `charge_recovery_ratio: float = 1.0`**, not `return_phase_amplitude_ratio`.
+Under v1's own formula the return charge is `I·W·r_a`, so `r_a` is the fraction of charge
+recovered; "amplitude ratio" reads as amplitude-to-amplitude and is only that when
+`return_phase_ratio == 1`. A user setting `return_phase_ratio=0.25,
+return_phase_amplitude_ratio=0.9` intending "return at 90 % amplitude" would get `3.6·I`.
+The new name is what every downstream consumer actually reads.
+
+**v2 change: the revived FAIL branch gets a sourced criterion.** A binary FAIL at
+`abs(net) > tol` turns a float tolerance into a safety threshold — at 80 µA/200 µs/130 Hz a
+0.1 % imbalance is 2.1 nA of net DC, below anything this bibliography treats as damaging.
+Instead, imbalance is scored by the **same DC-drift model** the monophasic fix uses (D5
+below is separate; see C2.3): FAIL when the accumulated DC drives the electrode out of its
+water window within `train_duration_s`, CAUTION otherwise with the net DC current and DC
+current density reported. One mechanism, two consumers.
+
+`is_charge_balanced` switches to a tolerance relative to `charge_per_phase_uC` (closes 15).
+Closes 3, unblocks 4.
+
+**D7 — the counter electrode is an explicit input, and the default is visible.**
+`SafetyCalculator` gains `counter_electrode: Electrode | None = None` and, when supplied,
+`counter_separation_um: float` (required). **v2 change (physics M4):** `None` keeps today's
+arithmetic — v1 is right to refuse silent doubling — but the compliance check returns
+**CAUTION**, not PASS, with "monopolar single-interface budget assumed; supply
+`counter_electrode` for a two-terminal estimate". Under-estimating `required_V` is the
+anti-conservative direction and `compliance.py`'s own docstring says the stimulator drops
+out of regulation silently; everywhere else this package downgrades for exactly this
+(unverified CIC → CAUTION, non-disc Shannon → CAUTION).
+
+**And the two-terminal ohmic term is not `2 × R`.** First-order superposition for two
+compact electrodes of equivalent radius `a` at separation `d` gives
+`R = (1/(2πσ))·(1/a − 1/d)`. For two adjacent Medtronic-3389 contacts that is 431.7 Ω
+against 659.0 Ω for the naive series sum — the mutual term removes 34.5 %. Polarisation
+terms *do* double (interfaces do not couple through the medium). The test is
+`1.0 < ratio <= 2.0 + tol` with an exact `→ 2.0` assertion at large separation, never
+"exactly double".
+
+Closes 5.
+
+---
+
+## 3. Coverage verdict — the two measurements are both right, of different units
+
+The contradiction is resolved, not adjudicated. Measured this session from the two existing
+harnesses in the scratchpad (nothing installed; `coverage` and `pytest-cov` are absent from
+`.venv` and stay absent):
+
+| measurement | unit | result |
+|---|---|---|
+| test audit, `sys.monitoring` harness, PEP-649 phantoms excluded | **bytecode conditional-jump sites with both sides exercised** | **338 / 724 = 46.69 %** |
+| execution review, `coverage.py` 7.16.1 default report | **source-level branch *arcs* taken** | **548 / 766 = 71.54 %** |
+| `coverage.py`'s own data, re-aggregated to branch **points** | **source-level branch points with both exits exercised** | **185 / 383 = 48.30 %** |
+
+Method: I read `coverage.py`'s per-file `executed_branches` / `missing_branches` arc lists,
+grouped them by source line, and counted a point covered only when it had no missing arc —
+the same rule the audit harness applies to jump sites. The result, **48.30 %**, is within
+1.6 points of the audit's 46.69 %.
+
+**Verdict: neither number is wrong and neither refutes the other.** The audit measured
+decision points fully exercised; `coverage.py`'s headline measures arcs taken, which counts
+a branch half-covered as half-credit. The denominators differ (724 vs 383) because the audit
+counts bytecode jumps — `and`/`or` short-circuits, comprehension and loop exits — while
+`coverage.py` counts AST branch statements; that difference cancels in the ratio.
+
+The execution review's per-module refutations do not survive the same recasting:
+
+| module | audit (jump points) | coverage.py points | coverage.py arcs |
+|---|---|---|---|
+| `safety/current_density.py` | 1 / 11 | **1 / 6** | 7 / 12 (58.3 %) |
+| `safety/assessment.py` | 47 / 67 | **26 / 30** | 56 / 60 (93.3 %) |
+| `units.py` | 0 / 2 | **0 / 1** | 0 / 2 |
+| `models/vta.py` | 2 / 20 | **0 / 12** | 12 / 24 |
+| `sensitivity.py` | 8 / 12 | **0 / 2** | 1 / 4 |
+
+`current_density.py` has exactly **one** fully-exercised decision under both point metrics;
+"58.3 %" is the arc figure and does not contradict the audit's finding. `assessment.py`'s
+"93.3 %" is likewise arcs.
+
+**What gates.** Branch **points**, computed by a committed `scripts/branch_floor.py` that
+reads `coverage json` and re-aggregates arcs to points exactly as above. Not
+`--cov-fail-under`, which the execution review correctly showed gates the blended
+line+branch total (88.15 % on day one against a 46.7 floor — 41 points of slack, and it can
+never ratchet). Baseline **48.30 %**; exit floor **80 %**, with a **60 % per-module floor**
+for every module with ≥ 4 branch points. An 80 % point floor implies ≥ 87 % arcs, so the
+execution review's proposed 85 % arc floor is subsumed rather than rejected.
+
+Where the 198 uncovered points live (top 12, coverage.py points):
+`models/thermal.py` 10/28 · `io/fem.py` 2/17 · `materials.py` 15/29 · `viz/plots.py` 6/20 ·
+`models/vta.py` 0/12 · `models/field.py` 3/14 · `safety/compliance.py` 5/13 ·
+`models/strength_duration.py` 1/9 · `safety/charge.py` 11/18 · `safety/water_window.py`
+6/13 · `geometry/arrays.py` 3/9 · `safety/current_density.py` 1/6. Every one of these is
+touched by a commit in §5.
+
+---
+
+## 4. Fix order and dependency graph
+
+```
+Phase 0  harness + oracles ───────────────────────────────────┐
+             │                                                │
+Phase 1  verdict core   D1 → margins → D2 → D3 → interval     │  (numbers move)
+             │                                                │
+Phase 2  data model     D6 → return-phase assessment          │  (numbers move)
+             │          drift model → monophasic              │
+             │          D5 → envelope repair                  │
+             │                                                │
+Phase 3  space/geometry D4 → current distribution → D7        │  (numbers move)
+             │                                                │
+Phase 4  provenance     materials → propagation → io → lit    │  (numbers move)
+             │                                                │
+Phase 5  io / viz / gui (consumes everything above)           │
+             │                                                │
+Phase 6  models (C6.3 depends on C3.1; rest parallelisable)   │
+             │                                                │
+Phase 7  release / docs / CI ─────────────────────────────────┘
+```
+
+| edge | reason | changed from v1? |
+|---|---|---|
+| C0.6 → every later test | The oracles must exist before the first assertion that needs one, or the tests get written against the code path they test. | **new** |
+| C0.3 → C0.4 | Determinism must be pinned before content is pinned. Verified: 5 of 8 artifacts differ between two identical runs (SVG `<dc:date>`, PDF `/CreationDate`, matplotlib's random `svg.hashsalt` — identical file lengths, only element ids differ). | **new** |
+| margins → D3 | Chronic degradation and water window carry no `margin` today, so the minimum cannot see them. Verified: `assessment.json` records `null` for 5 of 9. | unchanged |
+| **T2b → D3, not D2 → D3** | v1 has this backwards. Verified T2's stated parametrisation: 52/54 fail as *whole assessments* today, of which only 12 are the float bug (all ≤ 2 ulp) — the other 40 are structural and are cleared by C1.4, not by flooring. What C1.2 genuinely owes C1.4 is the **helper**: `floor_to_pass` cannot be applied to the four new limits until D3 defines their forward predicates, so the helper lands at C1.2 and its *application* to the new limits lands inside C1.4 (physics m2). | **corrected** |
+| D1 → D3 is **soft** | v1 calls it hard, claiming the rank change supplies the ran/did-not-run predicate. It does not — `c.status is not Status.NOT_EVALUATED` is available today at any rank order. C1.4 is not blocked if C1.1 proves contentious (physics m1). | **corrected** |
+| C2.3 → C2.4 and C2.1 | One DC-drift model serves both the monophasic water window and the unbalanced-biphasic FAIL criterion. | **new** |
+| D6 → 4 | Return-phase current density and compliance cannot be evaluated until imbalance and independent amplitude exist. | unchanged |
+| D5 ⇔ D6 | Both are `StimProtocol` fields; both ripple into `io/tabular.py`, `io/report.py`, `report_to_json` and the GUI form. Pay the ripple once. | unchanged |
+| D4 → D7 | The two-interface budget sums two access resistances; both must already be computed under one convention. | unchanged |
+| **C3.1 → C6.3** | `dT ∝ R_access²`. Verified: C3.1 moves the DBS band 517.5 → 329.5 Ω, which moves C6.3's headline by (329.5/517.5)² = 0.4054. Phase 6 is *not* fully parallel; C6.3 is a dependent. | **corrected** |
+| **C3.1 → C5.10, C3.1 → C7.3** | `io/fem.compare_with_point_source` calls `potential_V` with no `electrode=`, so after D4 it silently stays full-space while every planar assessment becomes half-space — inside the utility C7.3's FEM-validation claim rests on (physics m4). | **new** |
+| 19 → 60, 59 | One root cause, three surfaces. Fix the propagation, then the two renderers. | unchanged |
+| Phase 4 → C7.4 | README's PEDOT row (74) and the two inert-flag claims (76) can only be written truthfully after the materials and propagation fixes land. **But the transcript regenerates on every numeric commit**, not once at C7.4 (execution M13). | **corrected** |
+
+---
+
+## 5. Commits, tests-first
+
+Each commit lands the failing test(s) **first** in the same commit, then the fix, then the
+doc/artifact updates. `pytest -q` must be red on the test alone and green after.
+"Why not tautological" names what the expected value is derived from — it is never the code
+path under test.
+
+### 5.0 Phase 0 — harness and oracles (6 commits, no behaviour change)
+
+| # | subject | closes | test that must fail first | why it cannot pass tautologically |
+|---|---|---|---|---|
+| C0.1 | `build: gate branch-POINT coverage with a committed script; add Python 3.14 to CI` | 68 (partial), T23, T24 | `scripts/branch_floor.py --min 48.0` exits non-zero when fed a synthetic report below the floor; CI job absent today | The floor is computed from `coverage json` arcs re-aggregated to points by a script under review; the metric and the denominator are both in the repo, not in a flag. Baseline 48.30 %. |
+| C0.2 | `test: add tests/test_units.py and drop the grep subprocess` | 65, 69 (§8.1), T10, T20 | T10 — four unit-conversion mutants survive today; `units.py` has no importing test and 0 of 1 branch points covered | Expected values are SI identities written longhand (`1 µA × 1 µs = 1e-12 C = 1e-6 µC`; `1 mm² = 0.01 cm²`), not round-trips through the converters. |
+| C0.3 | `build: make every generated artifact byte-reproducible` | prerequisite for C0.4 | new: run `examples/worked_example.py` twice into clean directories and diff — 5 of 8 differ today (verified) | The assertion is a diff of two runs of unchanged code; nothing in it is computed by the code under test. Fix: `SOURCE_DATE_EPOCH`, `metadata={"Date": None, "Creator": None}` on every `savefig`, fixed `rcParams["svg.hashsalt"]`, `reportlab.rl_config.invariant = 1`. |
+| C0.4 | `build: generate example_output and the README transcript from one script` | 61/M12 (partial), enables 74, 76, 78/S-24 | new: `scripts/regenerate_example_output.py` output must equal what is committed, and must include the README quick-start block | Byte comparison against committed files. Load-bearing: the 47 MB uncompressed RGBA TIFF leaves the repo here, and every later numeric commit reruns one script instead of hand-editing eight surfaces. |
+| C0.5 | `build: repair and gate the mistakes ledger` | 69 (gate), execution M6 | new: `scripts/ledger_check.py` — rows 8 and 46 parse to 13 and 11 fields against the table's 9, because of unescaped `\|` in `min(\|cathodic\|,\|anodic\|)` | A parser over the markdown source; expected field count is the header's. Also asserts every entry number appears in §9 with a commit id present in `git log`. |
+| C0.6 | `test: add tests/oracles/ — independent expected-value generators` | prerequisite for B4's repairs | new: each oracle pinned to a hand-computed constant — the suite fails to import today | **This is the structural answer to "tests that pass for the wrong reason".** Four oracles: (a) `fail_ceiling(calc)` — binary search for the highest amplitude at which no check FAILs, written from `assess().failed` only, verified to return exactly **20.0** on the worked example; (b) `disc_surface_potential(I, R, a, r) = (2/π)·I·R·arcsin(a/r)` — the exact half-space disc solution, verified `V(a) = 285.714286 mV = I·R` exactly; (c) `drift_time_s` — pulse-by-pulse accumulation loop, verified to reproduce the closed form to within one pulse at **0.2558 s**; (d) `FD_BAND_REFERENCE` — the converged FD Laplace table above, generator committed at `scripts/fd_band_reference.py`. |
+
+### 5.1 Phase 1 — the verdict core (9 commits)
+
+| # | subject | closes | test that must fail first | why it cannot pass tautologically |
+|---|---|---|---|---|
+| C1.1 | `fix(safety): rank NOT_EVALUATED below PASS and surface unevaluated checks everywhere` | 11, 67(c), 61/M1 (headline half) | **T17** — `SafetyCalculator(DiscElectrode(2000.,"SIROF"), StimProtocol(20,400,50,3600)).assess().status is Status.PASS`; returns NOT_EVALUATED today for every macroelectrode | The expected status is named literally; the rank order is asserted as four explicit inequalities. Scope includes `report_to_json`, the PDF header and the GUI headline in this commit (execution M9). |
+| C1.2 | `fix(safety): floor every reported limit, at every render site` | 9, 49 | **T2a** — `at_limit.charge.passes and at_limit.shannon.passes` over 9 materials × 3 policies × 2 polarities; 12/54 fail today with `100.00000000000001 > 100.0` | The oracle is IEEE, not the code: `passes(limit)` true and `passes(nextafter(limit, +inf))` false. Plus a property test over random `(area, pulse_width, k)`. Scope adds `cic_max_current_uA`, the GUI, the figure annotation and `Interval.describe` (execution M4, M5). |
+| C1.3 | `fix(safety): give every limit-bearing check a margin, a kind and a provisional flag` | 1 (prerequisite), 30 (partial) | new: for each of the seven `LIMIT_BEARING` checks, `c.margin * p.current_uA == approx(oracles.fail_ceiling_for(check), rel=1e-9)` | The expected ceiling comes from C0.6's independently written binary search, not from `margin`. A finiteness assertion is explicitly **not** sufficient: the naive water-window margin is −21.095 µA and finite. |
+| C1.4 | `fix(safety): the limiting current is the minimum over every limit-bearing check` | 1, 66 | **T1** (rewritten) — `a.limiting_current_uA == approx(oracles.fail_ceiling(calc), rel=1e-9)`, `> 0`, and `== approx(20.0)` on the worked example; plus **T2b** (`not at_limit.failed`), moved here from C1.2 | The oracle is the binary search; the 20.0 is independently pinned to `cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE / 200 µs`. v1's `min(c.margin * I ...)` form is the implementation restated and is dropped. |
+| C1.5 | `fix(safety): limiting_mechanism must name a check that ran` | 1 (§9b.1) | **T3** — `DiscElectrode(40.,"PEDOT")` at 200 µs reports **99.6724 µA "(Shannon tissue-damage criterion)"** while that check is NOT_EVALUATED (verified) | The expected mechanism is derived from the check statuses, which C1.5 does not compute; the failing case is pinned to Cogan 2016's macro/micro boundary. This is a **value** change, not just a label — §6 has a row (physics m3). |
+| C1.6 | `fix(safety): widen the limiting-current interval to the same candidate set as the point estimate` | 1 (interval surface) | **T16**, pulled forward from v1's C1.8 — `a.limiting_current_interval_uA.contains(a.limiting_current_uA)`; **18 of 18** cases fail after C1.4 (verified: ring interval 141.37–212.06 against a point estimate of 20.0) | Containment is a property of two independently computed objects; the interval is built from published ranges (Shannon 1.5–2.0, the full material range) and per-check margins, not from the point estimate. |
+| C1.7 | `fix(safety): reject non-finite and out-of-window settings at construction, and record row errors` | 13, 14, 52 | new: `SafetyCalculator(..., compliance_V=float("nan"))` must raise `ValueError`; `resting_potential_V=5.0` on Pt must raise; a batch row that raises must appear with `status="ERROR"` and the message | The raise is asserted by type and message, and the row contract is asserted on the frame. **Resolves execution M2:** C1.6/v1 required a raise while C5.5 required a recorded row four phases later — both land here. |
+| C1.8 | `test: pin a FAIL and both boundary sides for every safety check` | 63, 64, 67(a,b) | **T8** (six reachable FAIL states, listed in `audit_tests.md` §10) + **T9** (`<=` vs `<` at the line) | Each threshold is pinned to its stored source sentence (Shannon k = 1.5; Pt CIC 50–150 µC/cm²; Pt window −0.6/+0.8 V; Pt dissolution 20–50 µC/cm²), and the boundary is approached from both sides by `nextafter`. Kills S3, C2, P3, A5, A3, A4. |
+| C1.9 | `test: pin monotonicity, interval containment and dimensional consistency` | 69 | **T15**, **T11**; T16 already landed at C1.6 | T11's expected values are dimensional identities (`Q/A × A == Q`; `(4/3)πr³` written out) — kills M4 and M5, which the existing ratio-only test cannot see. T15 asserts an ordering, not a value. |
+
+### 5.2 Phase 2 — data model (5 commits)
+
+| # | subject | closes | test that must fail first | why it cannot pass tautologically |
+|---|---|---|---|---|
+| C2.1 | `feat(protocol): make charge recovery an independent input` | 3, 15 | **T12** — `charge_recovery_ratio=0.9` gives `net_charge_per_pulse_uC ≈ 0.1 × charge_per_phase_uC`; today `net_charge ≡ 0` for every ratio | The expected 10 % residual is arithmetic on the inputs, not a call into the protocol's charge properties. Must include the consumer wiring — `io/tabular.py` (`asdict(calc.p)` and the batch aliases), `io/report.py`, `gui/app.py` — in this commit. |
+| C2.2 | `fix(safety): evaluate the return phase in current density and compliance` | 4 | **T13** — `return_phase_ratio=0.25` must give a worse current-density margin than symmetric; identical today (0.3183 A/cm² both) | The expected 4× is computed from `return_phase_current_uA`, a quantity the package already exposes and never reads. Plus a golden assertion that every **symmetric** protocol is byte-identical across this commit. |
+| C2.3 | `feat(safety): model DC drift out of the water window` | prerequisite for 2 and 3's criterion | new: for `StimProtocol(3000,90,130,1, waveform="monophasic")` on a 0.05985 cm² Pt band, the reported drift time is **0.2558 s** (verified: 0.6 V × 250 µF/cm² × 0.05985 cm² / 35.1 µA) | The oracle is C0.6's pulse-by-pulse accumulation loop — a numerical integration, independent of the closed form the code uses; they must agree to within one pulse. |
+| C2.4 | `fix(safety): stop applying biphasic-measured limits to monophasic protocols` | 2 | **T4** (rewritten, four assertions) — see below | See below. |
+| C2.5 | `fix(safety): delete the pulse-duty excursion; add and wire the train duty cycle` | 6, 67(a) | **T14** (rewritten) — `envelope.evaluate(StimProtocol(50,400,50,7*3600), 0.1).inside` is True (verified unreachable today, duty fold 25.0), **and** the excursion list contains no pulse-duty entry, **and** `StimProtocol(50,600,75,3600)` produces no concerning excursion | The deletion is pinned by the absence assertion — a re-referenced excursion would pass the first clause and fail the second. The 600 µs/75 Hz clause pins the fabrication case v1 would have created (verified duty_fold 2.25 with both real axes inside). Wiring is pinned by `rms_current_uA(train_duty=0.5) == approx(rms_current_uA(1.0)/√2)`. |
+
+**C2.4 in full.** v1's C2.4 is unsatisfiable *and* a regression: removing candidates from a
+minimum can only raise it, and v1's design produces **110 cases out of 1134** where the
+monophasic limit is strictly higher than the biphasic one (reproduced this session; e.g.
+`DiscElectrode(150,"SS316LVM")` at 200 µs, 17.67 → 20.00 µA). v2:
+
+1. **Charge injection → NOT_EVALUATED** with "every stored CIC was measured biphasic
+   (Merrill 2005); no source here validates it for monophasic delivery". Unchanged from v1
+   and endorsed by the physics review.
+2. **Water window → evaluated by DC drift** (C2.3), not NOT_EVALUATED. Ledger 2's finding
+   is that the answer is affirmatively wrong in the unsafe direction, and the correct
+   conservative answer is computable from quantities the package already holds. FAIL when
+   `t_exit < train_duration_s`; CAUTION with the time reported otherwise; never PASS. Its
+   current ceiling enters the candidate set — **0.0 for a continuous train**, which is the
+   honest answer under a capacitive-interface model and is consistent with the charge-balance
+   FAIL that a monophasic protocol carries regardless.
+3. **A monotonicity cap**: `limiting_current_uA` for a monophasic protocol is additionally
+   capped at what the same electrode and protocol would report biphasic. A strictly worse
+   waveform can never earn a higher limit.
+4. **`limits_incomplete = True`**, rendered everywhere.
+
+Verified: v2's design reduces the 110 inversions to **6**, all on Ta2O5 — the one shipped
+material with no water window on record, so no drift ceiling exists for it. The cap closes
+those 6 by construction.
+
+**T4's four assertions, none tautological:**
+(a) on the 110 cases v1 would have inverted, `mono.limiting_current_uA < bi.limiting_current_uA`
+**strictly**, with the expected value from C0.6's drift oracle — the cap alone would only give
+`≤`, so this clause fails if the drift model is not wired in;
+(b) `mono.status is Status.FAIL`;
+(c) `"Charge injection limit" in mono.not_evaluated` and `mono.limits_incomplete is True`
+for Ta2O5;
+(d) the ledger-2 case reports a drift time of 0.2558 s ± 1 %, against the integrator.
+
+### 5.3 Phase 3 — space convention, distribution, counter electrode (6 commits)
+
+| # | subject | closes | test that must fail first | why it cannot pass tautologically |
+|---|---|---|---|---|
+| C3.1 | `fix(geometry): settle one half-space/full-space convention per geometry` | 16 (documented), 17, 20, 21 | **T5** (rewritten, two pins) — see below | See below. |
+| C3.2 | `fix(safety): report the current distribution of the actual geometry` | 18 | new: a sphere and a flush hemisphere must report a **uniform** primary distribution, not the disc's `0.5/√(1−(r/a)²)` | The expected distribution is the analytic primary distribution for each geometry, written in the test. **Names the API change v1 hid** (execution M12): `current_density.evaluate` has no electrode parameter and needs one threaded from `assessment.py`. No margin or limit moves — the Butterwick comparison uses the average, not the peak. |
+| C3.3 | `fix(geometry): correct the direction of the equal-area substitution error` | 10 | new: pin against the exact elliptic-disc solution `R = K(e)/(2πσa)` — thin annulus w/b = 0.01: 50 634 Ω equal-area disc vs 11 682 Ω exact ring — asserting the substitution **over**estimates | The oracle is a closed-form elliptic integral written in the test, validated to 0.34 % against the exact disc in the geometry audit. A docstring direction is not testable; the inequality is. |
+| C3.4 | `fix(geometry): reject NaN pitch, coincident sites and contradictory tip parameters` | 28, 29 | new: `linear_array(disc,3,nan)` must raise; two sites at identical coordinates must raise; `MicrowireElectrode(50,0,"flat",999999.)` must raise | Separated from C3.3 (execution M7): C3.3's subject and oracle are the substitution *direction* and cannot fail for a NaN pitch. |
+| C3.5 | `feat(safety): model the counter electrode and the lead resistance in the voltage budget` | 5, 69 (T18) | new: `counter_electrode=None` byte-identical to today but the check is **CAUTION**; with a counter electrode, `1.0 < ratio <= 2.0 + tol`, and `→ 2.0` at large separation; **T18** — `lead_resistance_ohm=2000` must add `I·R` to `required_V` and lower `max_current_uA` | The two-terminal expected value is `(1/(2πσ))·(1/a − 1/d)` written in the test (431.7 Ω for two 3389 contacts at 2 mm, against 659.0 Ω naive). T18's expected value is Ohm's law on the inputs. **T18 was scheduled in no v1 commit, leaving mutant P1 alive** (execution B6); `lead_resistance_ohm` is non-zero nowhere in the 522-test suite today. |
+| C3.6 | `docs(safety): state Shannon's diameter-not-area finding where it applies` | 12 | new: a non-disc geometry must not return an unqualified PASS from the Shannon check, **and** its `Check.provisional` must be True so a caveated limit is visible when it binds | The status expectation is a literal; the `provisional` clause closes physics m6 — v1 changed the confidence but left an uncaveated Shannon limit free to bind the headline for a band or ring. The limit's *value* does not change (§6 says so). |
+
+**C3.1's two pins (replacing the false T5).** Verified matrix — ratio of the model to the
+oracle, disc radius 500 µm, σ = 0.35, r = 100a:
+
+| geometry factor | `access_resistance_ohm` | Pin A ratio |
+|---|---|---|
+| 4π (today) | Newman `1/(4σa)` | 0.499992 |
+| 4π | `1/(2πσa)` (the regression v1's T5 would force) | 0.785385 |
+| **2π** | **Newman `1/(4σa)`** | **0.999983** ✓ |
+| 2π | `1/(2πσa)` | 1.570770 |
+
+**Pin A — asymptotic identity against the exact half-space disc solution.** For Disc, Ring
+and Rectangular, `potential_V(I, 100a, σ, electrode=el)` must equal
+`(2/π)·I·R_access·arcsin(a/100a)` to `rel=1e-4` (and to `rel=1e-2` at `r = 10a`). This is
+cross-module, and the oracle is an analytic formula that appears nowhere in the package.
+Only one of the four combinations passes, so it cannot be made green by manufacturing the
+57 % error v1's T5 would have forced.
+
+**Pin B — surface identity at the *physical* radius, sphere and hemisphere.** Verified
+exact today (`1.000000000000` both). Under a uniform factor it breaks in opposite
+directions: at 4π the hemisphere reads 2.000000, at 2π the sphere reads 0.500000. So Pin B
+forces the assignment to be **per geometry** — precisely the double-correction failure mode
+R2 named and v1 then committed. v1 evaluated this at `equivalent_radius_um`, the equal-area
+*disc* radius, which is why it read 2.000 and 1.414.
+
+**Pin C — band and microwire against the FD Laplace table** (C0.6 oracle):
+`|R_eq-sphere / R_FD − 1| < 0.05` for aspect 0.39–2.0 and `< 0.20` to aspect 10.
+
+Scope also includes: `environment` as an instance field with the five presets tagged
+(physics M5); `access_resistance_is_exact = False` on those presets (ledger 21); and
+threading the electrode through `io/fem.compare_with_point_source`, which today calls
+`potential_V` with no `electrode=` and would otherwise become a new 2× inconsistency inside
+the utility C7.3's validation claim rests on (physics m4).
+
+**`TestKuncelGrill2004` is rewritten in this commit, not cited as a guard** (physics B3).
+It never calls `potential_V` and cannot detect the double-correction. Verified: today's 2 %
+agreement is a coincidence of two errors — at Kuncel & Grill's own stated σ = 0.2 S/m the
+equal-area sphere gives 578.8 Ω against an FD-true 586.4 Ω (1.3 %) and against their
+*conservatively assumed* 500 Ω (+15.8 %); their published 0.0993 A/cm² back-solves to
+508.8 Ω, an assumed clinical impedance, not a FEM spreading resistance. The test asserts
+that, and its docstring stops attributing 0.0993 A/cm² to their finite element model.
+
+### 5.4 Phase 4 — provenance (9 commits)
+
+| # | subject | closes | test that must fail first | why it cannot pass tautologically |
+|---|---|---|---|---|
+| C4.1 | `fix(materials): stop a user CIC inheriting another source's citations` | 24, 25, 30 | new: `with_measured_cic(Pt, 100).chronic_threshold` must not report Rose & Robblee's platinum-dissolution reference as its own; `MeasuredRange(low=1, high=nan)` must raise; **`ChronicThreshold` gains `verified` and it must roll into `Material.verified`, the JSON and the PDF provenance rows** | The expected reference key is the *absence* of `rose_robblee1990` on a user material — asserted against `references.py`, not against the material. Entry 30's data-model change is named explicitly (execution M7). |
+| C4.2 | `fix(safety): use the correct half-window and a single polarity convention` | 7, 8 | new: AIROF at its own CIC (1000 µC/cm²) must land **on** the window edge, not return +0.4286 V headroom; `anodic_first` and `anodic_first_for_capacitance` must not be independently settable | **Split out of v1's C4.2** (execution M6): v1 folded 7 and 8 into the provenance commit on a *location* argument, and neither of its named tests touches the half-window denominator or the polarity disagreement. Entry 8 is anti-conservative — the narrower half-window sits in the denominator of `C = limit/available_V`, so it enlarges C and understates the excursion. |
+| C4.3 | `fix(safety): propagate PROVISIONAL to every quantity derived from an unverified limit` | 19, 60 | **T7** — asserted on **every** check in the assessment, not a named three; today the water window returns a clean PASS with the excursion reduced 4× | The oracle is the provenance graph: every check whose value depends on `effective_capacitance_uF_cm2` must carry the flag. Asserted by dependency, not by enumeration. |
+| C4.4 | `fix(io): carry provenance and the audit record into the JSON and the PDF` | 54, 59 | new: two reports differing only in `resting_potential_V` (0.0 vs 0.35) must not render identical settings sections; `report_to_json` must carry `verified`, the reference key and the package version | The oracle is a byte diff of two reports plus a schema assertion. Verified: `assessment.json`'s `settings` block holds only `shannon_k`, `cic_policy`, `tissue_conductivity_S_per_m`, `compliance_V` — 4 of 11. `neurostim/audit.py` already builds the full record and `build_report` never calls it. Must also carry `counter_electrode` from C3.5. |
+| C4.5 | `fix(literature): use Leung's pulse-width-matched Pt in-vivo derating` | 71 | new: pin 3.2×–8.7× against Leung et al.'s own sentence; today 2–14× from a mismatched-pulse-width division | The expected bounds are quoted from the source text, on the existing `test_literature.py` pattern. |
+| C4.6 | `fix(literature): attribute the 316LVM 20 uC/cm2 figure to its real source` | 72, 73 | new: pin the quoted sentence; the figure is a tissue-damage number from a cited chapter, not Riedy & Walter's corrosion result, and it drives `recommended_policy` | Quoted source text. |
+| C4.7 | `fix(literature): repair seven condition and derivation defects` | 77 (S-6, S-7, S-8, S-10, S-11, S-12, S-13) | one assertion per item, each quoting its source sentence | Quoted source text. **Note:** entry 77's header says "Eight" but lists seven — S-9 belongs to entry 76 (execution m4). Reconciled here. |
+| C4.8 | `fix(references): resolve elwassif2006 to the paper the values were read from` | 45, 75, 78/S-19, 78/S-20 | new: the DOI, volume and pages in `references.py` must match the conference proceedings `data/elwassif2006.py` transcribes | The expected metadata is read from the PDF in `papers_stim_calc_ref/`. Also records ledger 45's discrepancy (`10 × √(185 × 210e-6) = 1.971 V`, not the paper's 1.56 V, which implies 131.5 µs) in the data module rather than "correcting" the source. |
+| C4.9 | `fix(literature): eleven lower-severity corrections` | 78 (S-14…S-18, S-21…S-23, S-25) | per item; S-14's zero-width `separating_k_range()` (both bounds 1.69897) is the one that changes a computed value | Each pinned to its source sentence; S-14 pinned to the k values the package actually uses. |
+
+### 5.5 Phase 5 — io, viz, gui (11 commits)
+
+| # | subject | closes | test that must fail first | why it cannot pass tautologically |
+|---|---|---|---|---|
+| C5.1 | `fix(viz): forward the calculator's settings AND its candidate set to every panel` | 48 | new, **two** assertions: at `k=1.2, σ=0.10` panel (b)'s annotated binding limit must equal the assessment's (6880 vs 4869.59 µA today); **and** `annotation_value == assessment.limiting_current_uA` for a microelectrode case | **Execution B3:** v1 fixed only the settings forwarding. `viz/plots.py:184-205` computes `binding = min(shannon, cic, compliance)` from the 0.1.0-compat properties, independently of `limiting_current_uA`. Verified the artist annotates `binding limit 141 µA` against a headline that becomes 20.00. The oracle is the assessment object, which the figure does not currently consult. |
+| C5.2 | `fix(viz): draw the separatrix that decided the verdict` | 55 | new: scrape the artists — a line at `calc.k` must exist | Artist scraping; the expected value is the calculator setting. |
+| C5.3 | `fix(viz): carry pass/fail in marker shape as well as colour` | 56 | new: pass and fail artists must differ in a non-colour property | Artist scraping. |
+| C5.4 | `fix(viz): stop save_publication truncating names at a decimal point` | 58 | new: `save_publication(fig,"shannon_k1.5")` and `"shannon_k1.8"` must not collide | Filesystem state. |
+| C5.5 | `fix(io): distinguish an empty batch from a clean batch` | 51, 61/M4, 61/M14 | new: a header-only CSV must raise or return a frame **with** `status`/`error` columns; an errored row must not be all-NaN; `df.min()` must not silently report the one good row; a read error must name the file | Frame schema assertions. The row-error contract itself landed at C1.7. |
+| C5.6 | `fix(io): print an applied value and its limit at distinguishable precision` | 50 | new: no rendered sentence may read `X exceeds the X limit` | A regex over rendered output; the expected relation is inequality of the two rendered strings. |
+| C5.7 | `fix(io): resolve every citation the report text names` | 53 | new: every author-year in the rendered body must appear in the bibliography; `brummer_turner1977` dangles today | Set difference between two independently produced sets. |
+| C5.8 | `fix(gui): surface every exception and update text and canvas atomically` | 57, 62/L3 | new: a raising plot call must leave the process alive and put the traceback in the results pane; today exit code 134 (SIGABRT) | Process exit code and pane contents. |
+| C5.9 | `fix(io): emit RFC 8259 JSON and a compressed TIFF` | 61/M12, 61/M13 | new: `json.loads` under a strict parser on output forced to contain a NaN; TIFF ≤ journal cap, no alpha channel | A third-party-grade parser and file metadata, not the emitter. |
+| C5.10 | `fix(io): repair the FEM import path` | 61/M5, M6, M7, M8, M9 | new, five assertions: `compare_with_point_source` must reject a 10⁶ potential error **and take the electrode** (C3.1 edge); `_match_column` must raise on ambiguous aliases; duplicate positions must raise; a single NaN must not collapse `describe()` to "nan to nan V"; `save_field`/`load_field` must round-trip `current_uA` and `note` | M5 and M9 lose data and are separated from the bundle. Round-trip asserted against the input values. |
+| C5.11 | `fix(io,viz): nine further io/viz defects` | 61/M1, M2, M3, M10, M11; 62/L1, L2, L4, L5 | one assertion each | M1's headline half already landed at C1.1; what remains here is the per-row caveat rendering. |
+
+### 5.6 Phase 6 — physical models (6 commits; C6.3 depends on C3.1)
+
+| # | subject | closes | test that must fail first | why it cannot pass tautologically |
+|---|---|---|---|---|
+| C6.1 | `fix(models): reject unphysical strength-duration fits and report their uncertainty` | 33, 37 | **T6** — `fit_weiss` on a negative-chronaxie design must raise; today returns `chronaxie_us=-60`, `tau=nan`, `rss=5.4e-22`. Plus: `curve_fit`'s covariance must reach the caller as an SE/CI | The design is generated from a known `t_c = −60 µs`, so the expected rejection is a property of the input. The CI is checked against a 4000-replicate synthetic recovery (sd 27 µs, 95 % CI [153, 258] at true 200 µs). |
+| C6.2 | `fix(models): reject a rank-deficient strength-duration design` | 38 | new: `fit_weiss([100,100,100],[40,41,39])` must raise rather than return `rheobase 20, chronaxie 100` behind a bare numpy RankWarning | **Split out of C6.1** (execution M7): the negative-chronaxie test takes a different path and cannot fail for a rank-deficient design. |
+| C6.3 | `fix(models): derive the thermal source radius from the electrode's own access resistance` | 32, 34 | new: `a_eff_um = 1e6/(4πσ·R_access)` — the electro-thermal analogy — and the printed rise must match Elwassif's reproduction, **not** any internal value | **T19 as v1 wrote it is a tautology** (execution M1): "matches `peak_temperature_rise_K` for the SAME geometry" holds for the equal-area disc radius, the equal-area sphere radius and the geometry-exact radius alike. The pin is Elwassif's own 0.8200 K, which the analytic solution reproduces to 1.2 % (0.8298 K) — the only external anchor the model has, and preserved by construction since `a_eff` reduces to `a` for a sphere. Verified: `a_eff` for the equal-area sphere equals the equal-area sphere radius exactly (690.11 µm), against today's 1380.22 µm — exactly 2×. |
+| C6.4 | `fix(models): make the transient step independent of the other requested times` | 35, 36, 42 | new: `t=1e-3` alone and `t=1e-3` inside `logspace(-3,3.5,60)` must agree to < 1 %; −15.0 % today. Make `max_cells` a parameter and warn loudly when it clamps | The oracle is the same time evaluated two ways; neither is the expected value of the other, and the agreement threshold is independent of both. |
+| C6.5 | `fix(models): surface the current-distance spread and stop clamping a fitted offset` | 39, 40, 41 | new: `evaluate(100).describe()` must carry the 300–27 000 µA/mm² k range (854× in volume); `sensitivity.analyse()` must cover thermal and VTA parameters or stop claiming "every limit"; a negative fitted offset must not be silently clamped to 0.0 | The k range is quoted from the docstring's own cited source. **Entry 41 moved here from v1's C6.1** — it lives in `models/vta.py` (execution M7). |
+| C6.6 | `fix(units,uncertainty): guard non-finite inputs and round intervals outward` | 23, 26, 27, 31, 43, 44 | **T10** extensions; `Interval(0.1,0.1)*3` must contain 0.3; `Interval(-1,1).square()` must be `[0,1]` | Containment of an exact decimal by a float interval is an IEEE property. Implement outward rounding as a one-ulp `math.nextafter` pad in `_binary` and add `square()`/`__pow__`; do **not** attempt general dependency tracking (§8). |
+
+### 5.7 Phase 7 — release, documentation, CI (7 commits)
+
+| # | subject | closes | test that must fail first |
+|---|---|---|---|
+| C7.1 | `chore: add the MIT LICENSE the metadata has always declared` | packaging (CRITICAL) | file presence; needs the real copyright holder and year from the user |
+| C7.2 | `chore: single-source the version from package metadata` | 47 | new: `neurostim.__version__`, `pyproject.toml`, `CITATION.cff` and the installed distribution must agree; today 0.15.0 vs 0.13.0 |
+| C7.3 | `docs: correct the FEM validation claim and its stated cause` | 46 | new: assert the reproduction figure appears and the "lead and electrode self-heating" cause does not |
+| C7.4 | `docs: refresh the README from the generated transcript` | 74, 76, 78/S-24 | new: the README quick-start block must equal C0.4's generated block byte for byte |
+| C7.5 | `docs: add paper.md, paper.bib, CONTRIBUTING and CODE_OF_CONDUCT` | packaging (JOSS) | paper builds |
+| C7.6 | `ci: gate on provenance, transcription, coverage, mutation, determinism and the ledger` | 68, T21, T22, T25, T26 | each gate must go red on a seeded violation before it is wired in |
+| C7.7 | `docs: CHANGELOG for 0.16.0 with a recall notice for earlier reports` | doc drift | presence of the recall notice naming the defect, the 7.07× figure and the affected version range |
+
+C7.3 is precise because ledger 46 settles what is true: the analytic solution reproduces
+Elwassif's 0.8200 K to **1.2 %** (0.8298 K) on that paper's own parameters. Therefore
+(a) CITATION.cff's "validated against a published finite element model" is an overclaim *as
+written* and becomes "reproduces the published steady-state temperature rise of Elwassif et
+al. (2006) to 1.2 % when given that paper's own parameters"; (b) README's "that gap is not
+reconciled" is **stale**, not false, and is replaced by the reconciliation — the gap is the
+protocol power difference (72.66 µW vs 5.639 mW, 78×) and nothing else; (c) the stated
+**cause is wrong** in both README and `examples/worked_example.py`, which blame Elwassif's
+"lead and electrode self-heating"; their shaft is thermally insulated and their source is
+`σ|∇V|²` in tissue only.
+
+C7.4 is now a byte comparison rather than a hand edit, because C0.4 generates the block.
+Verified stale today at README `:40`, `:135`, `:136`, `:140`: `Limiting current: 70.69 uA`
+(which is not a current at all — it is the Pt chronic FAIL ceiling for that geometry),
+`across published ranges: 70.69-212.1 uA`, a transcript showing 5 checks where `assess()`
+emits 9, a threshold of 1.70 where the default is 1.50, and a 50 µC/cm² Pt limit where the
+code uses 100.
+
+### 5.8 Phases at a glance
+
+| phase | commits | ids |
+|---|---|---|
+| 0 harness and oracles | 6 | C0.1–C0.6 |
+| 1 verdict core | 9 | C1.1–C1.9 |
+| 2 data model | 5 | C2.1–C2.5 |
+| 3 space, distribution, counter electrode | 6 | C3.1–C3.6 |
+| 4 provenance | 9 | C4.1–C4.9 |
+| 5 io, viz, gui | 11 | C5.1–C5.11 |
+| 6 physical models | 6 | C6.1–C6.6 |
+| 7 release, docs, CI | 7 | C7.1–C7.7 |
+
+### 5.9 Commit count
+
+**59.** 6 + 9 + 5 + 6 + 9 + 11 + 6 + 7 = 59, enumerated above. v1 said 41 and enumerated 50;
+v2 adds C0.3, C0.5, C0.6, C1.6, C2.3, C3.4, C4.2, C5.10, C6.2 (nine new) and merges none.
+
+---
+
+## 6. Blast radius — every number that moves
+
+Thirty-one rows. The ten surfaces v1 omitted are marked **[+]**; the two v1 booked wrongly
+are marked **[!]**.
+
+| fix | quantity | before → after | also update in the same commit |
+|---|---|---|---|
+| C1.2 | any back-solved limit at its own boundary | `100.00000000000001` → `100.0`; 12/54 combinations stop failing their own check | — |
+| C1.2 | rendered limits, text and PDF | `141.4 µA` → `141.3 µA`; `472.8` → `472.7` | README transcript, PDF/JSON goldens |
+| C1.2 **[+]** | GUI headline string (`gui/app.py:332`, `:.4g`) | `141.4 uA` → `141.3 uA`, then `20.00` after C1.4 | GUI snapshot test |
+| C1.2 **[+]** | figure annotation (`viz/plots.py:211`, `:.3g`) | verified `binding limit 141 µA` → `141.3`, then `20.00` after C5.1 | `figure_summary.{svg,pdf}` |
+| C1.2 **[+]** | `Interval.describe()` low bound | `141.4-212.1 uA` → `141.3-212.0 uA` | README `:136`, `:140` |
+| C1.2 **[+]** | `report()["max_current_cic_uA"]`, `["max_current_shannon_uA"]`, `["max_charge_shannon_uC"]` | raw floats move by ≤ 2 ulp | all three are columns in `example_output/current_sweep.csv` — **regenerate** (v1 said "no user-visible digit changes"; under C0.4's byte regime a one-ulp change *is* a byte change) |
+| C1.3 **[+]** | `assessment.json` `checks[].margin` | `null` → float for Water window and Chronic degradation (verified 5 of 9 are `null` today) | `example_output/assessment.json` schema, JSON consumer docs |
+| C1.3 | `Check` schema | gains `kind`, `provisional` | JSON, PDF check table, GUI table |
+| C1.4 | worked-example limiting current | **141.37 → 20.00 µA (7.0686×)**; mechanism `Pt charge-injection limit` → `Microelectrode charge/phase`. Independently confirmed by binary search: first FAIL at 20.000000000000004 | `assessment.json`, `current_sweep.csv` (`limiting_current_uA` and `limiting_mechanism` on every row), `figure_summary.*`, README transcript, CHANGELOG, `limiting_current_uA` docstring |
+| C1.4 | `limits_incomplete`, `limiting_current_by_kind` | new fields | `describe()`, JSON, PDF, GUI |
+| C1.5 **[+]** | `limiting_mechanism` **value** where the named check did not run | verified `DiscElectrode(40,"PEDOT")` at 200 µs: **99.6724 µA "(Shannon tissue-damage criterion)"** while Shannon is NOT_EVALUATED → the real binding mechanism | `current_sweep.csv` `limiting_mechanism` column |
+| C1.6 **[+]** | `limiting_current_interval_uA` and its `describe()` line | verified `[141.37166941154072, 212.05750411731108]` → an interval that contains 20.00; `contains()` False in 18/18 cases today | README `:136` and `:140`, `describe()` golden |
+| C1.1 | overall status of every macroelectrode | `NOT_EVALUATED` → `PASS`/`CAUTION`/`FAIL` as the checks warrant | `Status.rank` docstring, README status table, **JSON/PDF/GUI headline in the same commit** |
+| C2.1 **[+]** | `asdict(calc.p)` in `assessment.json` | gains `charge_recovery_ratio` and `train_duty_cycle` (verified the protocol block has 8 keys today) | `assessment.json`, batch CSV aliases, GUI form |
+| C2.2 | `required_V`, `J_avg` for `return_phase_ratio ≠ 1` | 0.524 V → ~2.6 V; 0.0167 → 0.0836 A/cm² peak at r = 0.2 | compliance + current-density docstrings |
+| C2.2 **[+]** | `limiting_current_uA` / `limiting_mechanism` for **asymmetric** protocols | the current-density margin is in the candidate set after C1.4, so the headline moves for every `return_phase_ratio ≠ 1` | plus an assertion that symmetric protocols are byte-identical across this commit |
+| C2.4 | monophasic charge-injection limit | a number → NOT_EVALUATED, `limits_incomplete = True` | README "What it computes" table, `charge.py` module docstring |
+| C2.4 | monophasic water-window verdict | PASS with 0.58 V headroom → **FAIL, drift time 0.256 s** (verified 0.2558 s) | water_window docstring, PDF |
+| C2.4 | monophasic `limiting_current_uA` | capped at the biphasic value; **0.0 for a continuous train** | JSON, PDF, GUI |
+| C2.5 | envelope excursion list | the pulse-duty entry is removed; a train-duty entry appears | `EnvelopeResult.describe()` golden. `report()["duty_cycle"]` is **unchanged** (0.052) — v1 would have moved it; v2 does not |
+| C3.1 | planar `potential_V` | **2.00× larger** (22.7364 → 45.4728 mV at the audit's reference point) | `field.py` docstrings, README "Field — exact for a sphere" |
+| C3.1 **[+]** | `io/fem.compare_with_point_source` | the same 2× — it calls `potential_V` with no `electrode=` and would silently stay full-space | `io/fem.py`, and C7.3's validation claim depends on it |
+| C3.1 **[+]** | `viz/plots.py:309-334` field panel | the same 2× | `figure_summary.*` |
+| C3.1 | DBS band access resistance | **517.5 → 329.5 Ω (−36.3 %)** (equal-area sphere, not v1's 470.7); aspect 0.39: 900.6 → 573.3 Ω | compliance numbers in `example_output`, `access_resistance_ohm` column in `current_sweep.csv` |
+| C3.1 | `access_resistance_is_exact` on five presets | `True` → `False` | `describe()` output, PDF electrode section |
+| C3.5 | bipolar required compliance | 1.571 V → **431.7/659.0 × 3.142 = 2.06 V** for two 3389 contacts at 2 mm (not v1's flat 2.0×, which is the far-separation upper bound); unchanged when no counter electrode is supplied | README compliance formula row |
+| C3.5 | monopolar compliance **status** | `PASS` → `CAUTION` with the stated assumption | JSON, PDF, GUI |
+| C4.3 | water-window headroom under an unverified CIC | clean PASS → CAUTION/PROVISIONAL; `C_eff = 103 µF/cm²` gains its provenance | PDF provenance section, JSON, README `:15` and `:205-206` |
+| C4.5 | Pt in-vivo derating range | 2–14× → 3.2–8.7× | `data/cogan2016.py` docstring, any derated limit |
+| C6.3 **[!]** | worked-example thermal rise | **5.3961 → 8.0612 mK (×1.494)**, booked **once**, here, at the post-C3.1 access resistance. v1's 24.060 mK is the *unperfused* analytic value at the *old* 517.5 Ω and is wrong twice. Cross-check: the FD-true 335.1 Ω gives 8.3639 mK, 3.6 % away | `examples/worked_example.py` narration, `data/elwassif2006.py` (7.5 mW → 5.639 mW, 325 → 431.6 Ω in four docstrings — these are Elwassif's own quantities and are independent of C3.1), README thermal claim |
+| C4.9 | `separating_k_range()` | zero-width `[1.69897, 1.69897]` → a band that contains the k values the package uses | `shannon.py` docstring |
+
+**Artifacts regenerated by C0.4's script, once per numeric commit:**
+`example_output/assessment.json`, `current_sweep.csv`, `figure_summary.{svg,pdf}`,
+`figure_strength_duration.{svg,pdf}`, `safety_report.pdf`, **and the README quick-start
+block**. The 47 MB TIFF leaves the repo at C0.4. Numeric commits are C1.2, C1.3, C1.4, C1.5,
+C1.6, C1.1, C2.1, C2.2, C2.4, C2.5, C3.1, C3.5, C4.3, C4.5, C4.9, C5.1, C6.3.
+
+**Loose exports outside the repo.** Five PDFs in `~/Downloads/` carry the pre-fix headline:
+`neurostim_report_1.pdf`, `_2.pdf`, `_4.pdf`, `_A.pdf`, `_B.pdf`. They cannot be
+repaired by a commit. Two actions: (a) C7.7's CHANGELOG carries an explicit recall notice
+naming the defect, the 7.07× figure and the affected version range; (b) C4.4 stamps the
+package version and the `audit.py` SHA-256 digest onto every future PDF, which is the
+structural fix. The five existing files should be deleted or regenerated by the user; this
+plan does not touch files outside the repo.
+
+---
+
+## 7. Risk register
+
+**R1 — C1.2 + C1.4, the limit floor and the widened minimum. Highest risk.**
+It changes the most prominent number in every output by 7.07×, and the floor operates at
+the last ulp where an off-by-one reintroduces the exact defect being fixed, in the opposite
+direction.
+*Proof:* C0.6's independently written binary search — **not** `min(c.margin × I)`, which is
+the implementation restated (execution M1). T2a over 9 × 3 × 2 with both boundary
+directions; `floor_to_pass(v)` passes and `nextafter(v, +inf)` does not; a property test
+over random `(area, pulse_width, k)`; and the cross-surface gate (§10 G9) so the figure,
+the GUI, the CSV and the PDF cannot drift apart.
+
+**R2 — C3.1, the half-space/full-space convention. Second highest.**
+The same 2× appears in `_geometry_factor`, in `access_resistance_ohm`, and implicitly in the
+thermal source term, and the legitimate disc-vs-sphere factor is π/2. The failure mode is
+double-correcting.
+*Proof:* Pin A (the exact disc oracle) verified to admit exactly one of four (factor × R)
+combinations; Pin B (sphere and hemisphere surface identity at the physical radius) verified
+to break in opposite directions under a uniform factor; Pin C (the FD band table). v1's
+named second pin, `TestKuncelGrill2004`, is withdrawn — it never calls `potential_V` and
+goes red under D4 either way.
+
+**R3 — C2.1, the return-phase data model. Third highest.**
+Widest blast radius of any single commit: `protocol.py`, `safety/current_density.py`,
+`safety/compliance.py`, `safety/assessment.py`, `io/tabular.py`, `io/report.py`,
+`gui/app.py` — **7 modules** and **79** `StimProtocol(` call sites in `tests/` (measured;
+v1 said ~150). The failure mode is a silent default change.
+*Proof:* a golden capture of `calc.report()` for a spread of existing protocols before the
+commit, asserted byte-identical after; T12 and T13; `rms_current_uA` and
+`average_current_uA` re-derived by hand for one asymmetric case.
+
+**R4 — C2.4 interacting with C1.1 and D3.** v1's version of this was a live regression
+(110 inversions). v2's is a monotonicity cap plus a drift model, so the failure mode is now
+*under*-reach: a drift model that is wired into the report but not into the candidate set.
+*Proof:* T4(a) asserts **strict** inequality on the 110 previously-inverting cases, which
+the cap alone cannot satisfy.
+
+**R5 — C4.3, provenance propagation.** Risk is under-reach: the flag must follow the derived
+quantity through `effective_capacitance_uF_cm2` → `polarisation_V` → water window →
+compliance → PDF → JSON, and stopping one hop short is precisely defect 60.
+*Proof:* T7 asserted on *every* check, plus an assertion that the JSON and the PDF carry the
+same provenance set.
+
+**R6 — C6.3, the thermal radius.** Three candidate radii differ by 2× and π, and C3.1 moves
+the access resistance underneath it.
+*Proof:* the electro-thermal analogy makes the radius a derived quantity rather than a
+choice (`a_eff = 1/(4πσR)`), the Elwassif 0.8200 K anchor is preserved by construction for a
+sphere, and the FD cross-check agrees to 3.6 %.
+
+**R7 — C0.4's byte-comparison regime, new in v2.** Every numeric commit must regenerate
+eight artifacts plus the README block, and a missed regeneration reddens CI on an unrelated
+commit. Mitigated by C0.3 landing determinism first (verified 5 of 8 artifacts are
+non-deterministic today) and by the regeneration being one script invocation.
+
+---
+
+## 8. What not to fix — document as a limitation instead
+
+All five of v1's refusals are retained; the physics review endorsed each and found nothing
+in this section above MINOR. One is amended and one is added.
+
+**Ledger 12 — Shannon on non-disc geometries. Do not add a perimeter correction.**
+Shannon p.425 gives a mechanism ("the limit of safe stimulation is linearly related to
+electrode **diameter**… probably due to the charge 'building up' at the edges"), not a
+functional form, and this bibliography contains none for a ring, band, rectangle or
+microwire. C3.6 attaches a geometry caveat and returns CAUTION. **v2 amendment (physics
+m6):** it also sets `Check.provisional`, so a caveated Shannon limit is visible when it
+binds the headline. The limit's value does not change.
+
+**Ledger 16 — no closed form for a band on an insulating shaft. New in v2.** The equal-area
+sphere is within 2 % of a converged FD solve over aspect 0.39–2.0 and degrades to ~18 % by
+aspect 10 (table in §2 D4). No compact exact solution exists; v1's `ln(2L/r)` form is worse
+in every respect measured. Document the accuracy, keep the entry open.
+
+**Ledger 22 — no array-level safety API. Do not build one.**
+No source here quantifies current sharing between simultaneously-driven sites. Fix: state
+the caution in `ArrayElectrode.describe()` and in the docstrings of `total_area_cm2` and
+`mean_area_cm2` ("this is a geometric sum; dividing total charge by it is not a safety
+calculation"), and correct the module docstring to say the caution is *stated*, not
+*modelled*.
+
+**Ledger 45 — Elwassif's own arithmetic is unreproducible.** Do not "correct" the source.
+Record the discrepancy in `data/elwassif2006.py` (C4.8).
+
+**Ledger 23 — the interval dependency problem.** Implement `square()`/`__pow__` correctly
+and stop. General dependency tracking is an affine-arithmetic rewrite; the hazard is latent
+(the Shannon `k = log10(Q²/A)` interval path cannot be run at all today). Document that
+`x*x` is not `x.square()`.
+
+**Ledger 36 — thermal domain truncation saturating at 0.075 %.** Do not raise `max_cells` by
+default. Make it a parameter, warn loudly when it clamps, and replace the docstring's
+"increase `domain_extent_factor` if you need better" — which is false — with the measured
+saturation figures (400a 0.249 %, 1000a 0.101 %, 2000a 0.075 %, 5000a 0.075 %, 20000a
+0.075 %, ideal 0.005 %).
+
+**Not fixed and now explicitly declared: the chronic check binds acute protocols.**
+The physics review is right that a platinum-dissolution threshold setting the binding
+amplitude for a one-second train is odd. But no source here gives a train-duration cut-off,
+so gating it would be an unsourced number. `Check.kind = "electrode-chronic"` plus
+`limiting_current_by_kind` makes it visible instead; the user decides.
+
+---
+
+## 9. Ledger coverage — all 78 entries, sub-findings broken out
+
+Reuses the execution review's appendix mapping, remapped to v2 commit ids. Verdict key:
+**OK** = commit named and its test can fail before / pass after · **DOC** = deliberate
+non-fix, disclosed in §8 · **N/A** = no action needed. Every v1 verdict of TEST-WEAK,
+BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the note.
+
+| # | sev | v1 verdict | v2 commit(s) | note |
+|---|---|---|---|---|
+| 1 | CRIT | TEST-WEAK | C1.3, C1.4, C1.5, C1.6 | tautology replaced by the C0.6 binary search; interval, `report()` floats and the figure now have commits |
+| 2 | HIGH | BLOCKED | C2.3, C2.4 | T4 rewritten as four assertions; drift model supplies a *lower* limit |
+| 3 | HIGH | OK | C2.1, C2.3 | field renamed; FAIL criterion sourced |
+| 4 | HIGH | OK | C2.2 | §6 now books the limiting-current move |
+| 5 | HIGH | OK | C3.5 | default CAUTION; mutual term modelled |
+| 6 | HIGH | TEST-WEAK | C2.5 | excursion deleted, so the percent/fraction trap is gone |
+| 7 | MED | LISTED-ONLY | C4.2 | split out, with a polarity test |
+| 8 | MED | LISTED-ONLY | C4.2 | split out, with the half-window test; ledger row repaired at C0.5 |
+| 9 | HIGH | OK | C1.2 | T2 split into T2a (here) and T2b (C1.4) |
+| 10 | MED | OK | C3.3 | elliptic-disc pin |
+| 11 | MED | OK | C1.1 | T17 verified reachable |
+| 12 | MED | DOC | C3.6 | value unchanged; `provisional` flag added |
+| 13 | LOW | OK | C1.7 | |
+| 14 | LOW | OK | C1.7 | now validated against the window, not only for NaN |
+| 15 | LOW | OK | C2.1 | |
+| 16 | LOW | BLOCKED | — (DOC, §8) | cylinder override rejected; documented limitation |
+| 17 | HIGH | BLOCKED | C3.1 | Pin A + Pin B replace the false invariant |
+| 18 | HIGH | OK | C3.2 | signature change named |
+| 19 | HIGH | OK | C4.3 | |
+| 20 | MED | BLOCKED | C3.1 | equal-area sphere |
+| 21 | MED | OK | C3.1 | |
+| 22 | MED | DOC | — | §8 |
+| 23 | MED | DOC | C6.6 | `square()`/`__pow__` only |
+| 24 | MED | OK | C4.1 | |
+| 25 | MED | OK | C4.1 | |
+| 26 | LOW | OK | C6.6 | |
+| 27 | LOW | OK | C6.6 | |
+| 28 | LOW | LISTED-ONLY | C3.4 | own commit |
+| 29 | LOW | LISTED-ONLY | C3.4 | own commit |
+| 30 | LOW | LISTED-ONLY | C4.1 | `verified` field + provenance rollup named |
+| 31 | LOW | OK | C6.6 | |
+| 32 | HIGH | TEST-WEAK | C6.3 | pinned to Elwassif 0.8200 K, not to itself; booked once |
+| 33 | HIGH | OK | C6.1 | |
+| 34 | MED | OK | C6.3 | |
+| 35 | MED | OK | C6.4 | |
+| 36 | MED | DOC | C6.4 | measured saturation figures |
+| 37 | MED | OK | C6.1 | |
+| 38 | MED | LISTED-ONLY | C6.2 | own commit |
+| 39 | MED | OK | C6.5 | |
+| 40 | MED | OK | C6.5 | |
+| 41 | MED | LISTED-ONLY | C6.5 | moved to the VTA commit |
+| 42 | LOW | OK | C6.4 | |
+| 43 | LOW | OK | C6.6 | |
+| 44 | LOW | OK | C6.6 | |
+| 45 | LOW | DOC | C4.8 | discrepancy recorded |
+| 46 | HIGH | OK | C7.3 | ledger row repaired at C0.5 |
+| 47 | HIGH | OK | C7.2 | |
+| 48 | CRIT | PARTIAL | C5.1 | candidate set rebuilt from the assessment |
+| 49 | CRIT | PARTIAL | C1.2 | GUI, figure and `Interval.describe` added to scope |
+| 50 | HIGH | OK | C5.6 | |
+| 51 | HIGH | OK | C5.5 | row-error contract landed at C1.7 |
+| 52 | HIGH | OK | C1.7 | |
+| 53 | HIGH | OK | C5.7 | |
+| 54 | HIGH | OK | C4.4 | also carries `counter_electrode` |
+| 55 | HIGH | OK | C5.2 | |
+| 56 | HIGH | OK | C5.3 | |
+| 57 | HIGH | OK | C5.8 | |
+| 58 | HIGH | OK | C5.4 | |
+| 59 | HIGH | OK | C4.4 | |
+| 60 | HIGH | OK | C4.3 | |
+| 61/M1 | MED | OK | C1.1 + C5.11 | headline caveat pulled forward ~30 commits |
+| 61/M2 | MED | OK | C5.11 | |
+| 61/M3 | MED | OK | C5.11 | |
+| 61/M4 | MED | OK | C5.5 | |
+| 61/M5 | MED | OK | C5.10 | unbundled; also C3.1's electrode threading |
+| 61/M6 | MED | OK | C5.10 | |
+| 61/M7 | MED | OK | C5.10 | |
+| 61/M8 | MED | OK | C5.10 | |
+| 61/M9 | MED | OK | C5.10 | unbundled |
+| 61/M10 | MED | OK | C5.11 | |
+| 61/M11 | MED | OK | C5.11 | |
+| 61/M12 | MED | OK | C0.4, C5.9 | TIFF 47 001 446 bytes |
+| 61/M13 | MED | OK | C5.9 | test must force a NaN |
+| 61/M14 | MED | OK | C5.5 | mapping label corrected from v1's `62/L-M14` |
+| 62/L1 | LOW | OK | C5.11 | |
+| 62/L2 | LOW | OK | C5.11 | |
+| 62/L3 | LOW | OK | C5.8 | |
+| 62/L4 | LOW | OK | C5.11 | |
+| 62/L5 | LOW | OK | C5.11 | |
+| 63 | HIGH | PARTIAL | C0.1, C0.2, C1.8 | coverage sub-claims reconciled in §3; mutation gate in §10 |
+| 64 | HIGH | OK | C1.8 | |
+| 65 | HIGH | OK | C0.2 | |
+| 66 | HIGH | TEST-WEAK | C1.4 | binary-search oracle |
+| 67(a) | HIGH | OK | C1.8, C2.5 | assigned once in §9, as in v1's §2 |
+| 67(b) | HIGH | OK | C1.8 | |
+| 67(c) | HIGH | OK | C1.1 | |
+| 68 | MED | PARTIAL | C0.1, C7.6 | branch floor now implementable (§3) |
+| 69 | MED | PARTIAL | C0.2, C0.5, C1.9, C3.5 | T18 scheduled at C3.5; ledger gate at C0.5 |
+| 70 | — | N/A | — | vindication |
+| 71 | HIGH | OK | C4.5 | |
+| 72 | HIGH | OK | C4.6 | |
+| 73 | HIGH | OK | C4.6 | |
+| 74 | HIGH | OK | C0.4, C7.4 | transcript regenerates from C0.4 on every numeric commit |
+| 75 | HIGH | OK | C4.8 | |
+| 76 | HIGH | OK | C7.4 | exit criterion 6 restated so it no longer conflicts |
+| 77/S-6 | MED | OK | C4.7 | Butterwick exponent −0.48 vs the re-fit −0.4429 |
+| 77/S-7 | MED | OK | C4.7 | AIROF derating evidence string |
+| 77/S-8 | MED | OK | C4.7 | SIROF 2–4 vs Kane's 2–3 |
+| 77/S-10 | MED | OK | C4.7 | `audit.py` digest omits nine condition fields |
+| 77/S-11 | MED | OK | C4.7 | two Ta2O5 designs measured by different methods |
+| 77/S-12 | MED | OK | C4.7 | McCreery 2010's four defining conditions; damage radius |
+| 77/S-13 | MED | OK | C4.7 | Butterwick d⁻² measured on single pulses |
+| 78/S-14 | LOW | OK | C4.9 | zero-width `separating_k_range()` — changes a computed value |
+| 78/S-15 | LOW | OK | C4.9 | |
+| 78/S-16 | LOW | OK | C4.9 | κ range excludes Elwassif's 0.45 |
+| 78/S-17 | LOW | OK | C4.9 | |
+| 78/S-18 | LOW | OK | C4.9 | |
+| 78/S-19 | LOW | OK | C4.8 | leung2014 is 2015 |
+| 78/S-20 | LOW | OK | C4.8 | itis2025 is v4.2, 2024 |
+| 78/S-21 | LOW | OK | C4.9 | |
+| 78/S-22 | LOW | OK | C4.9 | |
+| 78/S-23 | LOW | OK | C4.9 | |
+| 78/S-24 | LOW | OK | C7.4 | six stale README claims |
+| 78/S-25 | LOW | OK | C4.9 | |
+
+**Coverage:** 78 entries, 114 rows with 61 (14), 62 (5), 67 (3), 77 (7) and 78 (12) broken
+out. Two entries take no code action: 22 (documented, §8) and 70 (vindication). Entry 16 is
+a documented limitation with a stated accuracy, not an unfixed defect.
+
+---
+
+## 10. Exit criteria
+
+Twelve criteria. Each is individually achievable from the state this plan leaves, and each
+names the artifact that proves it. v1's criteria 2, 3, 5 and 6 were unsatisfiable,
+unimplementable, unachievable and fabrication-inviting respectively; all four are restated.
+
+| # | criterion | why it is achievable | measured today |
+|---|---|---|---|
+| G1 | `pytest -q` green, and all 26 tests of `audit_tests.md` §10 present and passing — with T1, T2, T4, T5, T14, T16 and T19 in their **v2** forms | v1's versions of T1, T2, T4, T5, T14, T16 and T19 were unsatisfiable or tautological; the v2 forms are specified in §5 with their oracles | 522 pass |
+| G2 | **Mutation: all 42 named mutants killed (100 %), plus ≥ 90 % of a generated set of ≥ 150 mutants** over `neurostim/safety/`, `units.py`, `protocol.py`, `uncertainty.py`, `models/field.py`, `models/vta.py`, `models/strength_duration.py`. Script and results committed. | v1 asked for "≥ 95 % over safety + units" while 4 of its 13 named survivors live outside that scope, and measured "from 69 %" over a *different* 42-mutant population. A named set should be 100 % — "95 % of 42" leaves one survivor with no rule for which. The generated set is what a fixed list cannot give: it cannot be satisfied by writing one test per named mutant. 90 %, not 95 %, because equivalent mutants in a generated set should not block a release. | 42 mutants, 13 survivors, **69.0 %**. `units.py` contributes 1 mutant, already killed — which is why the scope is widened rather than narrowed |
+| G3 | **Branch-POINT coverage ≥ 80 % overall, and ≥ 60 % for every module with ≥ 4 branch points**, measured by `scripts/branch_floor.py` from `coverage json`, ratcheted per phase in CI | §3. `--cov-fail-under` gates the blended line+branch total and cannot ratchet. An 80 % point floor implies ≥ 87 % arcs, so the execution review's 85 % arc floor is subsumed | **48.30 %** points (185/383); 71.54 % arcs (548/766) |
+| G4 | `python scripts/provenance_audit.py --strict` exits 0 **in CI** | already written; only the `--strict` flag and the CI wiring are missing | never run with `--strict` |
+| G5 | **Determinism: `regenerate_example_output.py` run twice is byte-identical, asserted before the committed-vs-regenerated comparison** | v1 asked only for the second comparison, which fails on unchanged code. C0.3 lands the four fixes (`SOURCE_DATE_EPOCH`, `savefig` metadata, `svg.hashsalt`, `rl_config.invariant`) first | 5 of 8 artifacts differ between two identical runs |
+| G6 | **Every provenance flag the README describes is exercised by a test using `with_measured_cic`, the README says so explicitly, and a test asserts all nine shipped materials remain `verified=True`** | v1's "fires on at least one shipped material" is false by construction — all nine are verified, which *is* ledger 76 — and its only satisfaction is flipping a flag, i.e. fabricating provenance in a provenance package. The third clause makes that flip a test failure | all nine `verified=True`, `cic.verified=True` |
+| G7 | `neurostim.__version__`, `pyproject.toml`, `CITATION.cff` and the installed distribution agree, asserted by a test | C7.2 single-sources it | 0.15.0 vs 0.13.0 |
+| G8 | LICENSE present; `paper.md` builds; `CITATION.cff` free of placeholders | C7.1, C7.5 | LICENSE absent |
+| G9 | **Cross-surface consistency**: the limiting current is identical in `describe()`, `report()`, `report_to_json`, the PDF text, the GUI headline and the figure annotation, for one microelectrode and one macroelectrode case | adopted from the execution review. This is the single gate that makes B1/B3/M4/M5 unrepeatable | figure 141 µA vs a headline that becomes 20.00 |
+| G10 | **Round-trip**: over the 9 × 3 × 2 grid, `limiting_current_uA` equals C0.6's independent binary search to `rel=1e-9`, `nextafter(limit, +inf)` FAILs, and `limit > 0` | adopted. The `> 0` clause is what a one-sided `<= 20.0` admits (−21.095 µA) | 18/18 interval containments fail; 52/54 whole-assessment round-trips fail |
+| G11 | **Ledger gate**: every row of `CODE_MISTAKES_LOG.md` parses to exactly 9 fields, and every entry number appears in §9 with a commit id present in `git log` | adopted. Rows 8 and 46 parse to 13 and 11 fields today | 2 corrupt rows |
+| G12 | **No regression on earlier phases**: each phase re-runs the previous phases' new tests unchanged; a later phase that must edit an earlier phase's assertion says so in the commit message | adopted | — |
+
+**What can still be false when all twelve are met.** Ledger 16 (no exact band form) and
+ledger 22 (no array safety API) remain open as documented limitations; the chronic check can
+still bind an acute protocol, visibly; the compliance two-interface model (ledger 5) is
+first-order superposition, not a solved two-body problem, and this bibliography contains no
+published compliance-voltage measurement to pin it against — which is the one gap the test
+list cannot close from inside the repo. Each is stated in §8 or in the module docstring.
+
+---
+
+## 11. Process note
+
+`<user CLAUDE.md>` rule 14 requires appending a summary to
+`_conversation_history.md` after every response. The task brief for this revision restricted
+writes to `docs/audit/FIX_PLAN_v2.md` only. That conflict is flagged rather than resolved
+silently: `_conversation_history.md` has **not** been updated by the author of this plan.
+The same restriction applies to `CODE_MISTAKES_LOG.md`, whose corrupt rows 8 and 46 are
+therefore scheduled for repair in commit C0.5 rather than fixed here.
