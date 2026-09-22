@@ -9,51 +9,94 @@ All mutation work ran on the throwaway copy at
 measured with the surviving `sys.monitoring` harness (`$SCRATCH/cov.py` → `$SCRATCH/cov.json`,
 `cov.pkl`), re-post-processed here into `$SCRATCH/cov_real.json`.
 
+**Read-only confirmation.** Verified after the fact: every file under `neurostim/`, `tests/`,
+`scripts/`, `examples/`, `.github/` and `pyproject.toml` is byte-untouched since before this audit
+began (`find ... -newermt` returns empty for all of them). The mutation copy was diffed back to the
+repo after the run — `MUT COPY PRISTINE`, all 42 mutations reverted. Three paths in the repo *did*
+change during my session window — `_conversation_history.md`, `CODE_MISTAKES_LOG.md` and
+`example_output/*` — none written by me; the first two are the session's own bookkeeping and the
+third is what `examples/worked_example.py` emits when someone runs it (relevant to §9b.4).
+
 **Baseline.** `522 passed in 22.44s` locally, exit code 0, no skips (this machine has
 `pdftotext` and PyQt6). Under instrumentation the suite still returns rc=0, so the coverage
 numbers describe the real green run.
 
 ---
 
-## 0. VERDICT — the green is SPLIT, and the half that matters is HOLLOW
+## 0. VERDICT — the green is SPLIT: the bibliography is EARNED, the safety maths is HOLLOW
 
-The suite is really two suites welded together, and they are of opposite quality.
+The suite is two suites welded together, and they are of opposite quality. One verdict for the
+whole thing would be wrong in both directions.
 
 **The literature layer is EARNED.** `test_literature.py` (1350 lines) and
-`test_published_cases.py` (721 lines) do the thing almost nobody does: they quote the source
-sentence in the docstring and assert the stored constant against it. Cogan 2008 Table 2 row by
-row; Shannon's own "k = 1.5 … used in all calculations"; McCreery 1990 Table I; IT'IS v4.2;
-ISO 14708-3 Table 101; Riedy & Walter; Rose 1985. Better still, several are genuine independent
-derivations rather than lookups — Kuncel & Grill's 0.0993 A/cm² reconstructed through three
-independent steps (lateral area → Newman access resistance → Ohm's law) to 2 %; McCreery eq. (1)
-at 60 µm giving 160 µC/cm²; Elwassif's perfusion sweep matched by the analytic `1/(1 + a/L)` to
-10 %; Pennes closed form against an independently written finite-difference solve to 1e-4. That
-work is real and the README's provenance claim is defensible **for the constants**.
+`test_published_cases.py` (721 lines) do the thing almost nobody does: quote the source sentence
+in the docstring and assert the stored constant against it. Cogan 2008 Table 2 row by row;
+Shannon's own "k = 1.5 … used in all calculations"; McCreery 1990 Table I; IT'IS v4.2;
+ISO 14708-3 Table 101; Riedy & Walter; Rose 1985. Several go further and are genuine independent
+derivations: Kuncel & Grill's 0.0993 A/cm² reconstructed through three independent steps
+(lateral area → Newman access resistance → Ohm's law) to 2 %; McCreery eq. (1) at 60 µm giving
+160 µC/cm²; Elwassif's perfusion sweep matched by analytic `1/(1 + a/L)` to 10 %; Pennes closed
+form against a separately written finite-difference solve to 1e-4. The mutation run confirms this
+independently — the 29 killed mutants are concentrated almost entirely in the literature and
+physics layers. **The README's provenance claim is defensible for the constants.**
 
-**The decision layer is HOLLOW.** The README claims the tests "pin the package to its sources".
-They pin the *inputs*. They barely touch the code that turns those inputs into a verdict:
+**The decision layer is HOLLOW.** The README says the tests "pin the package to its sources".
+They pin the *inputs*. They barely constrain the code that turns those inputs into a verdict:
 
-| evidence | number |
+| evidence | measured |
 |---|---|
-| true branch coverage of the package (PEP-649 artefacts excluded) | **46.7 %** (338/724) |
-| true branch coverage of `safety/current_density.py` | **9.1 %** (1/11) |
+| line coverage | 89.2 % |
+| **true branch coverage** (PEP-649 artefacts excluded) | **46.7 %** (338/724) |
+| branch coverage of `safety/current_density.py` | **9.1 %** (1/11) |
+| **mutation score** (42 mutants, full suite each) | **69 %** — **13 survivors** |
 | `Status.FAIL` assertions in the entire 522-test suite | **3** |
-| of the 9 safety checks, how many have a failing case pinned | **3 of 9** |
-| safety checks whose FAIL branch is never executed at all | **Shannon, Water window, Compliance** |
-| `assessment.py` lines 240-248 (Shannon FAIL) executed | **never** |
-| `assessment.py` lines 352-356 (envelope "inside" PASS) executed | **never — dead code** |
-| `assessment.py` lines 568-576 (unbalanced-biphasic FAIL) executed | **never — dead code** |
+| of 9 safety checks, how many have a failing case pinned | **3 of 9** |
+| uses of `.passes` / `.failed` / `.cautions` / `.status.value` in tests | **0** |
+| confirmed defects the suite does not catch | **13** |
+| provably dead branches blessed by a passing test | **3** |
 
-The package's single headline output — `limiting_current_uA`, documented as "the number to
-programme against" — is pinned by a test that *recomputes the same expression the code uses*.
-That test therefore blesses the defect it was written to guard. Measured below: for a 100 µm Pt
-disc at 200 µs the package reports a limiting current of **39.27 µA** while two of its own
-checks (microelectrode charge/phase, chronic dissolution) put the ceiling at **~20 µA**. The
-assessment even prints `FAIL` for both — and still reports 39.27 µA as the limit. Nothing in
-522 tests notices.
+Three findings carry the verdict:
 
-**Assume hollow until proven otherwise** was the right prior for the safety maths. It was the
-wrong prior for the bibliography, which is the best part of this package.
+1. **Every boundary comparison in a safety check is unprotected.** `<=` → `<` survives in
+   Shannon (S3), charge injection (C2) and compliance (P3), and `>` → `>=` survives in chronic
+   degradation (A5). This follows directly from having no failing case: if nothing ever crosses a
+   limit, the limit's inclusivity is unobservable. `CAUTION_MARGIN` can be **halved** (A2) and the
+   suite stays green.
+
+2. **Dropped unit conversions survive.** Four mutations of the form "delete a 10⁻⁶ / 10⁻³ / 4⁄3"
+   pass all 522 tests (C4, M5, M10, M4) — because the tests that cover those functions assert a
+   *ratio* or a *sign*, in which the constant cancels. `neurostim/units.py`, which owns every
+   conversion in a package whose answers are unit-critical, has **0 of 2 real branches covered and
+   no test file importing it**.
+
+3. **The headline output is pinned by a tautology, and is wrong.** `limiting_current_uA` —
+   documented as "the number to programme against" — is asserted by a test that recomputes the
+   same `min` over the same three candidates the code uses, so it is structurally incapable of
+   noticing the four omitted limits. Measured: `DiscElectrode(100 µm, "Pt")` at 200 µs reports
+   **39.27 µA** while the assessment simultaneously prints `FAIL` for *Microelectrode charge/phase*
+   (ceiling **20.0 µA**) and *Chronic degradation* (ceiling **19.63 µA**). On another electrode it
+   attributes the limit to "Shannon tissue-damage criterion" while the Shannon check reads
+   `NOT_EVALUATED`. And re-assessing at the package's own reported limit **fails its own forward
+   check in 17 of 54 material × policy × polarity combinations** (`100.00000000000001 > 100.0`).
+
+Beyond those, three branches are **provably dead while a passing test blesses them**: the
+envelope's `inside` PASS (unreachable over a 300,000-protocol sweep — the McCreery envelope
+rejects its own fit protocol because the duty-cycle reference is 100 % where the fit was 4 %); the
+unbalanced-biphasic FAIL (imbalance is structurally inexpressible, and the one test asserting
+`is_charge_balanced` certifies that rather than exposing it); and overall `PASS` for any
+macroelectrode (`NOT_EVALUATED` outranks `PASS`, and the microelectrode check is always
+`NOT_EVALUATED` for a macroelectrode).
+
+**Assume hollow until proven otherwise** was the right prior for the safety maths and the wrong
+prior for the bibliography. The gap between them is the actionable finding: this project already
+knows how to write a test that cannot pass by accident — §5's kill list shows it — and simply
+never applied that standard to the code that decides whether a protocol is safe. §10 lists 26
+tests, ranked, that would close all 13 defects and all 13 mutation survivors.
+
+**One caveat on my own numbers.** The raw harness reported 29.7 % branch coverage. The venv is
+Python 3.14, where PEP 649 gives every annotated `def` a hidden `__annotate__` code object with an
+uncoverable branch — 413 phantom branches of 1137. Reporting 29.7 % would have overstated the
+problem. **46.7 %** is the honest figure and is what §2 uses throughout.
 
 ---
 
@@ -983,4 +1026,280 @@ chronaxie with no signal that anything is wrong.
 > asserts `not az.plausible_cortical_chronaxie(3000.0)` and `(10.0)` — it tests the *plausibility
 > predicate* on hand-written numbers, never on a fit result, so the two halves of the guard are
 > never connected.
+
+---
+
+## 10. TESTS TO ADD — ranked, each as a concrete assertion with what pins it
+
+Ranked by (defect severity × how cheaply the test closes it). Every "pin against" is either a
+published number, a hand derivation, or a physical invariant — never the code's own output.
+
+### Tier 1 — closes a confirmed defect that ships a wrong number
+
+**T1. The limiting current must be the minimum over *every* check that produces one.**
+```python
+# pins: the definition of "binding constraint" in assessment.py:120-124 docstring
+a = SafetyCalculator(DiscElectrode(100.0, "Pt"), StimProtocol(40, 200, 50, 1)).assess()
+implied = {c.name: c.margin * a.protocol.current_uA for c in a.checks if math.isfinite(c.margin)}
+assert a.limiting_current_uA == pytest.approx(min(implied.values()))
+assert a.limiting_current_uA <= 20.0   # 4 nC/phase over 200 us = 20 uA (Cogan 2016 / McCreery 2010)
+```
+Closes §9.1. Measured today: reports 39.27 µA against a 20.0 µA microelectrode ceiling. Pin the
+20 µA against McCreery 2010's 4 nC/phase, which the package already stores as
+`cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE`. Replaces tautology **C5**.
+
+**T2. The reported limiting current must itself assess clean.**
+```python
+# invariant: setting I to the reported limit must sit exactly ON the boundary, not past it
+a = SafetyCalculator(e, p).assess()
+at_limit = SafetyCalculator(e, replace(p, current_uA=a.limiting_current_uA)).assess()
+assert not at_limit.failed                       # no check may FAIL at the reported limit
+assert min(c.margin for c in at_limit.checks) == pytest.approx(1.0, rel=1e-9)
+```
+Closes §4.2 **and** §9b.2 in one assertion. Parametrise over the 9 materials × 3 policies × 2
+polarities; today 17 of 54 combinations fail their own forward check
+(`100.00000000000001 > 100.0`). The fix is `math.nextafter` or a relative tolerance in
+`ChargeResult.passes`, not a looser test.
+
+**T3. `limiting_mechanism` must name a check that actually ran.**
+```python
+a = SafetyCalculator(DiscElectrode(80.0, "SIROF"), StimProtocol(50, 200, 50, 1)).assess()
+by_name = {c.name: c for c in a.checks}
+assert "Shannon" not in a.limiting_mechanism or \
+       by_name["Shannon criterion"].status is not Status.NOT_EVALUATED
+```
+Closes §9b.1. Today the mechanism reads "Shannon tissue-damage criterion" on an electrode where
+the Shannon check is `NOT_EVALUATED` — pinned against Cogan 2016's macro/micro boundary, which
+the package already encodes.
+
+**T4. A monophasic protocol must not receive biphasic-derived limits.**
+```python
+# pins: charge.py module docstring + _charge_balance_check detail, "No charge-density limit in
+# this package is validated for monophasic delivery" (Merrill 2005)
+bi  = SafetyCalculator(DiscElectrode(500., "Pt"), StimProtocol(10, 200, 50, 1)).assess()
+mono= SafetyCalculator(DiscElectrode(500., "Pt"),
+                       StimProtocol(10, 200, 50, 1, waveform="monophasic")).assess()
+assert mono.limiting_current_uA < bi.limiting_current_uA
+```
+Closes §9.2. Measured today: **identical** (981.748 µA both). Whether the right behaviour is a
+derating or `NOT_EVALUATED` is a design call — but "silently identical" is not defensible when
+every stored CIC was measured biphasic.
+
+**T5. Planar electrodes must inject into a half-space.**
+```python
+# pins: Newman (1966) half-space disc result, which electrodes.py already uses
+for el in (DiscElectrode(200.), RingElectrode(330., 270.), RectangularElectrode(200., 500.)):
+    assert field_mod.potential_V(100.0, el.equivalent_radius_um, 0.35, electrode=el) == \
+           pytest.approx(100e-6 * el.access_resistance_ohm(0.35), rel=0.05)
+```
+Closes §9b.3 — exactly the assertion `test_published_cases.py::TestNewman1966::test_sphere_potential_equals_current_times_access_resistance`
+already makes, extended past the one geometry where the bug hides. Today fails by exactly 2×.
+Also kills mutant **M1**.
+
+**T6. `fit_weiss` must reject an unphysical fit instead of returning NaN tau.**
+```python
+widths = np.array([100., 200., 400., 800., 1600.])
+thresholds = 20.0 * (1.0 + (-60.0) / widths)      # all > 0, generated from t_c = -60 us
+with pytest.raises(ValueError, match="chronaxie"):
+    sd.fit_weiss(widths, thresholds)
+```
+Closes §9b.7. Today returns `chronaxie_us = -60.0`, `membrane_tau_us = nan`, `rss = 5.4e-22`,
+silently. Pin against Asanuma 1976's measured cortical range, which the package already stores
+as `az.plausible_cortical_chronaxie`.
+
+**T7. An unverified CIC must mark every check it touches as provisional.**
+```python
+measured = with_measured_cic(get_material("Pt"), 600.0, pulse_width_us=200)
+a = SafetyCalculator(DiscElectrode(500., "Pt"), StimProtocol(50, 200, 50, 1),
+                     material=measured).assess()
+for name in ("Charge injection limit", "Water window", "Compliance voltage"):
+    check = next(c for c in a.checks if c.name == name)
+    assert check.status is not Status.PASS or "PROVISIONAL" in check.detail
+```
+Closes §9b.5. Today the water-window check returns a clean `PASS` with the excursion reduced
+fourfold (−0.020 V → −0.005 V) on an unverified number, with no provisional marker.
+
+### Tier 2 — closes a whole class of untested logic
+
+**T8. A failing case for each of the six unpinned checks.** Six tests, one per check, on the
+template of the one that is already done right
+(`test_literature.py::TestButterwick2007::test_exceeding_the_threshold_fails`). All six FAIL
+states are reachable — verified:
+```
+Shannon FAIL     CylindricalBandElectrode(1270,1500,"SIROF"), StimProtocol(20000,400,50,1)
+Charge-inj FAIL  DiscElectrode(500,"Pt"),  StimProtocol(3000,200,50,1)
+Water-win FAIL   DiscElectrode(500,"Pt"),  StimProtocol(300,200,50,1), resting_potential_V=-0.55
+Compliance FAIL  DiscElectrode(50,"Pt"),   StimProtocol(50,200,50,1), compliance_V=1.0
+Chronic FAIL     DiscElectrode(500,"Pt"),  StimProtocol(3000,200,50,1)
+Charge-bal FAIL  (biphasic arm) — blocked until T12 makes imbalance expressible
+```
+Pin each threshold against its stored source: Shannon `k=1.5` (Shannon 1992); Pt CIC 50-150 µC/cm²
+(Rose & Robblee 1990); Pt window −0.6/+0.8 V (Cogan 2008); Pt dissolution 20-50 µC/cm²
+(Rose & Robblee 1990). Closes §3 and kills mutants **S3, C2, P3, A5**.
+
+**T9. Boundary tests, one each side, for every limit.**
+```python
+# exactly at the Shannon line must PASS; one ulp above must FAIL
+q = shannon.shannon_max_charge_uC(area, k=1.5)
+assert shannon.evaluate(q,            area, 200.0, k=1.5).passes
+assert not shannon.evaluate(math.nextafter(q, math.inf) * 1.0001, area, 200.0, k=1.5).passes
+```
+The mutation survivors **S3, C2, P3, A5** are all `<=` → `<` on a boundary nothing approaches.
+Repeat for `ChargeResult.passes`, `ComplianceResult.passes`, `_chronic_check`.
+
+**T10. `neurostim/units.py` needs a test file at all.**
+```python
+# round-trip: pins charge_uC/current_uA_from_charge against each other AND against the SI chain
+assert units.current_uA_from_charge(units.charge_uC(80.0, 200.0), 200.0) == pytest.approx(80.0)
+assert units.charge_uC(1.0, 1.0) == pytest.approx(1e-6)     # 1 uA x 1 us = 1e-12 C = 1e-6 uC
+# table self-consistency, pinned against SI, not against each other's code path
+assert units.to_cm2(1.0, "mm2") == pytest.approx(1e-2)
+assert units.to_uC_cm2(1.0, "uC/mm2") == pytest.approx(100.0)   # 1 mm^2 = 0.01 cm^2
+assert units.to_uC(1.0, "mC") == pytest.approx(1e3)
+with pytest.raises(ValueError, match="Unknown charge unit"):
+    units.to_uC(1.0, "kC")
+```
+Closes §4.3. The module has **0 of 2 real branches** covered and no importing test. Kills **C4**,
+and the dimensional variants kill **M5** and **M10**.
+
+**T11. Dimensional-consistency invariants across the assessment.**
+```python
+a = SafetyCalculator(e, p).assess()
+assert a.charge.charge_density_uC_cm2 * e.area_cm2 == pytest.approx(a.charge.charge_per_phase_uC)
+assert a.charge.max_current_uA * p.pulse_width_us * 1e-6 == pytest.approx(a.charge.max_charge_uC)
+assert jd.average_current_density_A_per_cm2(I, A) * A * 1e6 == pytest.approx(I)
+assert vta.CurrentDistanceModel().activated_volume_mm3(I) == pytest.approx(
+    (4.0/3.0) * math.pi * (vta.CurrentDistanceModel().activation_radius_um(I) * 1e-3)**3)
+```
+Closes §4.5. The last line kills **M4** and **M5** — the two surviving VTA mutants that the
+existing ratio-only test cannot see. Pin the `4/3 π r³` against the sphere volume formula, not
+against `vta.py`.
+
+**T12. Make charge imbalance expressible, then pin its FAIL.**
+`return_phase_ratio` currently scales width and current inversely, so `net_charge ≡ 0` for every
+ratio (measured over r ∈ {0.25, 0.5, 1, 2, 4, 10}). Add an independent
+`return_phase_amplitude_ratio` (or accept an explicit return current), then:
+```python
+p = StimProtocol(80, 200, 130, 1, return_phase_ratio=1.0, return_phase_amplitude_ratio=0.9)
+assert p.net_charge_per_pulse_uC == pytest.approx(0.1 * p.charge_per_phase_uC)
+assert not p.is_charge_balanced
+assert next(c for c in SafetyCalculator(e, p).assess().checks
+            if c.name == "Charge balance").status is Status.FAIL
+```
+Closes §9.3 and revives the dead branch at `assessment.py:568-576`. Pin the 10 % residual against
+Merrill 2005's treatment of unrecovered charge as a DC offset.
+
+**T13. The return phase must be assessed, not just the leading phase.**
+```python
+sym  = StimProtocol(100, 200, 50, 1, return_phase_ratio=1.0)
+asym = StimProtocol(100, 200, 50, 1, return_phase_ratio=0.25)   # return carries 400 uA
+j_sym  = next(c for c in SafetyCalculator(e, sym ).assess().checks if c.name == "Current density")
+j_asym = next(c for c in SafetyCalculator(e, asym).assess().checks if c.name == "Current density")
+assert j_asym.margin < j_sym.margin
+```
+Closes §9.4. Today both report `0.3183 A/cm²` — identical. Pin the 4× against the protocol's own
+`return_phase_current_uA`, which the package already computes and never uses.
+
+**T14. Fix the envelope's duty-cycle reference, then pin `inside`.**
+```python
+# McCreery 1990 was 400 us biphasic at 50 Hz = 4 % duty, NOT 100 %
+assert envelope.DUTY_CYCLE_REFERENCE == pytest.approx(
+    2 * 400e-6 * 50)                                   # = 0.04, from the fit conditions
+fit = StimProtocol(50, 400, 50, 7 * 3600)
+assert envelope.evaluate(fit, area_cm2=0.1).inside
+```
+Closes §9.6. `EnvelopeResult.inside` is proven unreachable over a 300,000-protocol sweep
+(pulse width 20-2000 µs × frequency 1-3000 Hz), making `assessment.py:352-356` dead code. Pin the
+4 % against `shannon.FIT_PULSE_WIDTH_US` and `FIT_FREQUENCY_HZ`, which the package already stores.
+
+### Tier 3 — hardening
+
+**T15. Monotonicity: more current is never safer.**
+```python
+prev = None
+for I in (1, 10, 100, 1000, 10000):
+    a = SafetyCalculator(e, StimProtocol(I, 200, 50, 1), compliance_V=10.0).assess()
+    if prev is not None:
+        assert a.status.rank >= prev.status.rank
+        for c, pc in zip(a.checks, prev.checks, strict=True):
+            assert c.margin <= pc.margin + 1e-12
+    prev = a
+```
+Closes §4.1. The existing `test_gui.py::TestLiveRecompute::test_raising_current_lowers_the_headroom`
+asserts only that a *string* changed.
+
+**T16. Interval containment, across policies and k — the weak invariant, always true.**
+```python
+for policy in ("conservative", "nominal", "optimistic"):
+    for k in (1.5, 1.7, 2.0):
+        a = SafetyCalculator(e, p, k=k, policy=policy, compliance_V=10.0).assess()
+        assert a.limiting_current_interval_uA.contains(a.limiting_current_uA)
+```
+Closes §4.4. Replaces `test_point_estimate_sits_at_the_conservative_end`, which asserts the
+stronger `== interval.low` and is false away from the default `k`/policy.
+
+**T17. Pin `Status.rank` ordering directly, and decide what PASS means.**
+```python
+assert Status.PASS.rank < Status.NOT_EVALUATED.rank < Status.CAUTION.rank < Status.FAIL.rank
+a = SafetyCalculator(DiscElectrode(2000., "SIROF"), StimProtocol(20, 400, 50, 3600)).assess()
+assert a.status is Status.PASS          # fails today: returns NOT_EVALUATED
+```
+Closes §9b.6. A macroelectrode can never report overall PASS because `_regime_check` always
+returns `NOT_EVALUATED` for one. Either exclude structurally-inapplicable checks from the
+aggregate or rank `NOT_EVALUATED` below `PASS` — but the ordering must be asserted either way.
+Also kills **A2** if extended to probe `CAUTION_MARGIN` either side of 2.0.
+
+**T18. `lead_resistance_ohm` and `compliance_V` must actually do something.**
+```python
+base = SafetyCalculator(e, p, compliance_V=10.0).assess().compliance
+lead = SafetyCalculator(e, p, compliance_V=10.0, lead_resistance_ohm=2000.0).assess().compliance
+assert lead.required_V == pytest.approx(base.required_V + p.current_uA * 1e-6 * 2000.0)
+assert lead.max_current_uA < base.max_current_uA
+```
+Kills **P1**. `lead_resistance_ohm` is never non-zero anywhere in the suite today.
+
+**T19. Smoke-test `examples/worked_example.py`.**
+```python
+# add examples/ to testpaths, or:
+def test_worked_example_runs_and_is_geometry_consistent(capsys):
+    runpy.run_path("examples/worked_example.py", run_name="__main__")
+    ...  # assert the printed thermal rise matches thermal.peak_temperature_rise_K
+         # computed for the SAME geometry as the electrode it describes
+```
+Closes §9b.4. The example is linted and never executed; `pyproject.toml` `testpaths = ["tests"]`
+excludes it and `ci.yml` never runs it.
+
+**T20. Replace the `grep` subprocess in `test_every_key_is_reachable_from_the_package`.**
+```python
+root = pathlib.Path(__file__).resolve().parents[1] / "neurostim"
+used = {w for f in root.rglob("*.py") for w in re.findall(r"[a-z0-9_]+", f.read_text())}
+```
+Closes §8.1 — removes the CWD dependency, the silent-empty-on-missing-grep failure mode, and the
+GNU-vs-BSD flag sensitivity.
+
+### Tier 4 — CI changes that make the above enforceable
+
+| # | change | closes |
+|---|---|---|
+| **T21** | add `poppler-utils` to the `test` job (or make the 16 PDF tests fail rather than skip) | §7 Gap 3 — 16 tests silently skip on every CI Python version |
+| **T22** | pass `--strict` to `scripts/provenance_audit.py` in `ci.yml` | §7 Gap 1 — the provenance gate currently always exits 0 |
+| **T23** | add `pytest-cov` to the `dev` extra; run `--cov=neurostim --cov-branch --cov-fail-under=` and ratchet | §7 Gap 7 — 46.7 % branch coverage is invisible to the project |
+| **T24** | add `"3.14"` to the matrix and the classifier list, or cap `requires-python` | §7 Gap 5 — development runs on 3.14.7, CI stops at 3.13 |
+| **T25** | add a lockfile / constraints file and pin `ruff` and `mypy` exactly | §7 Gap 4 — every run resolves latest; a ruff minor reddens CI with no repo change |
+| **T26** | `mypy neurostim tests` | §7 Gap 6 |
+
+### Summary of what these close
+
+| target | closed by |
+|---|---|
+| 6 known defects (§9) | T1, T4, T12, T13, T5†, T14 |
+| 7 further defects (§9b) | T3, T2, T5, T19, T7, T17, T6 |
+| 13 mutation survivors (§5) | T8+T9 (S3, C2, P3, A5), T10 (C4), T18 (P1), T17 (A2), T8 (A3, A4), T5 (M1), T11 (M4, M5), T10 (M10) |
+| 15 tautologies (§1) | T1 replaces C5, T11 replaces C4/C7/C8/C9/C10, T2 replaces C11, T16 replaces C14 |
+| unpinned invariants (§4) | T15 (4.1), T2 (4.2), T10 (4.3), T16 (4.4), T11 (4.5), T9 (4.6), T17 (4.7) |
+
+† T5 closes the `_geometry_factor` defect; the compliance two-interface defect (§9.5) needs a
+published compliance-voltage measurement to pin against and is the one gap this list cannot close
+from inside the repo — it needs a source, on the model of
+`TestKuncelGrill2004::test_current_density_predicted_from_geometry_and_voltage`.
 
