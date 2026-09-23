@@ -587,8 +587,9 @@ class SafetyAssessment:
         excludes its own point estimate is a second, contradictory answer rather than a
         wider statement of the same one.
 
-        Two checks carry a genuine published band and contribute one: Shannon over
-        ``k`` 1.5-2.0, and chronic degradation over its stored threshold band. The rest
+        Three checks carry a genuine published band and contribute one: Shannon over
+        ``k`` 1.5-2.0, charge injection over the material's published CIC range, and
+        chronic degradation over its stored threshold band. The rest
         contribute their ceiling exactly -- not because they are certain, but because no
         source in this bibliography gives a range for them, and inventing one here would
         be the kind of unsourced number this package exists to avoid. Each check's
