@@ -799,25 +799,53 @@ def _chronic_ceiling_interval_uA(
 
 
 def _current_density_ceiling_uA(
-    result: jd_mod.CurrentDensityResult, area_cm2: float
+    result: jd_mod.CurrentDensityResult, protocol: StimProtocol, area_cm2: float
 ) -> float:
-    """Largest amplitude strictly below the electroporation threshold.
+    """Largest amplitude strictly below the electroporation threshold, for both phases.
 
     Strictly: the check FAILs at ``applied >= threshold``, so the amplitude that lands
     exactly on the threshold is already a FAIL and the ceiling is the float below it.
+
+    One clause per phase, and the seed is the minimum of their two closed-form inverses --
+    the same shape as the water window's, and for the same reason: the predicate is a
+    conjunction, so the seed must invert every branch of it or ``floor_to_pass`` is handed
+    a value its own forward comparison rejects by more than a rounding. The return phase's
+    inverse carries the waveform's amplitude ratio, because the amplitude being solved for
+    is the *leading* one: a return phase at ``k`` times the leading amplitude reaches its
+    own threshold at ``1/k`` of the leading amplitude that would reach it.
+
+    Both clauses are individually monotone-decreasing in the leading amplitude -- each is
+    a positive multiple of it compared against a constant -- so their conjunction is too
+    and ``floor_to_pass``'s precondition holds.
     """
     comparison = result.threshold
     if comparison is None:  # pragma: no cover - evaluate() always supplies one
         return math.inf
     threshold = comparison.threshold_A_per_cm2
-    return floor_to_pass(
-        threshold * area_cm2 * 1e6,
-        lambda current_uA: jd_mod.average_current_density_A_per_cm2(
-            current_uA, area_cm2
+    seeds = [threshold * area_cm2 * 1e6]
+
+    return_comparison = result.return_threshold
+    if return_comparison is not None:
+        return_threshold = return_comparison.threshold_A_per_cm2
+        # The leading amplitude at which the return phase reaches its own threshold.
+        factor = protocol.return_phase_current_at_uA(1.0)
+        seeds.append(return_threshold * area_cm2 * 1e6 / factor)
+
+    def below_threshold(current_uA: float) -> bool:
+        if (
+            jd_mod.average_current_density_A_per_cm2(current_uA, area_cm2) >= threshold
+        ):
+            return False
+        if return_comparison is None:
+            return True
+        return (
+            jd_mod.average_current_density_A_per_cm2(
+                protocol.return_phase_current_at_uA(current_uA), area_cm2
+            )
+            < return_comparison.threshold_A_per_cm2
         )
-        < threshold,
-        name="Current density",
-    )
+
+    return floor_to_pass(min(seeds), below_threshold, name="Current density")
 
 
 def _microelectrode_ceiling_uA(electrode: Electrode, protocol: StimProtocol) -> float:
@@ -1033,8 +1061,14 @@ def _current_density_check(result: jd_mod.CurrentDensityResult) -> Check:
     The threshold comes from chick membrane and retina, so this never returns a bare
     PASS: crossing it is a FAIL, but staying under it is a CAUTION at best, because the
     margin is against a preparation that is not the one being stimulated.
+
+    Over the *binding* phase, since ledger 4. A return phase of width ``W*r`` carries
+    ``I*r_a/r`` through the same area, and the package compared only the leading one: with
+    ``r = 0.2`` a 1000 uA protocol drives 5000 uA back and reported a bit-identical
+    verdict to the symmetric case. Each phase is compared against the threshold at its own
+    width, and whichever sits closer to its own threshold is the one the verdict is about.
     """
-    comparison = result.threshold
+    comparison = result.binding_threshold
     if comparison is None:  # pragma: no cover - evaluate() always supplies one
         return Check(
             name="Current density",
@@ -1042,12 +1076,15 @@ def _current_density_check(result: jd_mod.CurrentDensityResult) -> Check:
             summary=f"{result.average_A_per_cm2:.4g} A/cm^2, no threshold available",
             detail=result.describe(),
         )
+    phase = (
+        "" if result.binding_phase == "leading" else f" ({result.binding_phase} phase)"
+    )
     if comparison.exceeds:
         return Check(
             name="Current density",
             status=Status.FAIL,
             summary=(
-                f"{comparison.applied_A_per_cm2:.4g} A/cm^2 is at or above the "
+                f"{comparison.applied_A_per_cm2:.4g} A/cm^2{phase} is at or above the "
                 f"{format_limit(comparison.threshold_A_per_cm2)} A/cm^2 electroporation threshold"
             ),
             detail=result.describe(),
@@ -1057,7 +1094,7 @@ def _current_density_check(result: jd_mod.CurrentDensityResult) -> Check:
         name="Current density",
         status=Status.CAUTION if comparison.margin < CAUTION_MARGIN else Status.PASS,
         summary=(
-            f"{comparison.applied_A_per_cm2:.4g} A/cm^2 of the "
+            f"{comparison.applied_A_per_cm2:.4g} A/cm^2{phase} of the "
             f"{format_limit(comparison.threshold_A_per_cm2)} A/cm^2 electroporation threshold "
             f"({comparison.utilisation * 100:.1f} % used, chick-tissue derived)"
         ),
@@ -1458,6 +1495,8 @@ class SafetyCalculator:
             self.p.pulse_width_us,
             diameter_um=2.0 * self.e.equivalent_radius_um,
             n_pulses=n_pulses,
+            return_phase_current_uA=self.p.return_phase_current_uA,
+            return_phase_width_us=self.p.return_phase_width_us,
         )
         ww_result = ww_mod.evaluate(
             self.material,
@@ -1504,7 +1543,9 @@ class SafetyCalculator:
             "Water window": _water_window_ceiling_uA(
                 ww_result, self.p, self.e.area_cm2
             ),
-            "Current density": _current_density_ceiling_uA(jd_result, self.e.area_cm2),
+            "Current density": _current_density_ceiling_uA(
+                jd_result, self.p, self.e.area_cm2
+            ),
             "Microelectrode charge/phase": _microelectrode_ceiling_uA(self.e, self.p),
             "Chronic degradation": _chronic_ceiling_uA(
                 self.material, self.p, self.e.area_cm2
@@ -1534,7 +1575,7 @@ class SafetyCalculator:
             # Always. Butterwick's threshold is chick membrane and retina, so the margin
             # is against a preparation that is not the one being stimulated -- which is
             # also why this check never returns a bare PASS.
-            "Current density": jd_result.threshold is not None,
+            "Current density": jd_result.binding_threshold is not None,
             # The macro/micro boundary is itself a band; inside it neither criterion is
             # clearly the right one.
             "Microelectrode charge/phase": cogan2016.in_regime_transition(

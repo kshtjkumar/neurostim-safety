@@ -363,3 +363,239 @@ class TestSymmetricProtocolsDoNotMove:
         assert p.net_charge_per_pulse_uC == 0.0
         assert p.is_charge_balanced
         assert math.isclose(p.return_charge_uC, p.charge_per_phase_uC, rel_tol=0.0)
+
+
+class TestTheReturnPhaseIsEvaluated:
+    """T13. Only the leading phase reached the verdicts (ledger 4).
+
+    ``return_phase_ratio`` has always changed the return phase's amplitude and width, and
+    neither current density nor compliance ever looked at it. With ``r = 0.2`` on a
+    1000 uA protocol the return phase is 5000 uA -- five times the current through the
+    same access resistance and the same electrode area -- and both checks returned
+    bit-identical answers to the symmetric case: ``required_V`` 0.5235 V and a current
+    density of 0.01671 A/cm^2, when the return phase alone needs 2.59 V and reaches
+    0.0835 A/cm^2.
+
+    The return phase is a pulse of its own width, so it is compared against the Butterwick
+    threshold *at that width* rather than at the leading phase's. A shorter return phase
+    is not simply worse: the threshold rises as roughly ``t^-0.5``, so the amplitude gain
+    and the threshold gain partly cancel and only the arithmetic says which binds.
+
+    Fixture rule: every ratio here differs from the 1.0 default, and the golden class
+    above pins that the default population does not move.
+    """
+
+    BAND_SYMMETRIC_REQUIRED_V = 0.5235321306516268
+    """``required_V`` for the band at 1000 uA / 90 us, measured at ``9e87b85``.
+
+    A pre-change literal. The commit under test must leave it exactly where it is for the
+    symmetric protocol and must move the asymmetric one away from it.
+    """
+
+    def test_the_peak_current_density_is_the_return_phase_when_it_is_narrower(
+        self,
+    ) -> None:
+        """Four times the leading density at a quarter of the width.
+
+        Not tautological: the expected peak is ``4 * I * 1e-6 / area``, written from the
+        protocol's own inputs and the geometric area. The defect is that the package never
+        formed this quantity at all -- ``0.3183 A/cm^2`` was reported for both the
+        symmetric and the asymmetric protocol.
+        """
+        from neurostim.safety import current_density as jd
+
+        electrode = DiscElectrode(100.0, "Pt")
+        area = electrode.area_cm2
+        symmetric = StimProtocol(25.0, 200.0, 130.0, 1.0)
+        asymmetric = StimProtocol(25.0, 200.0, 130.0, 1.0, return_phase_ratio=0.25)
+
+        assert asymmetric.return_phase_current_uA == pytest.approx(100.0, rel=1e-15)
+        assert asymmetric.return_phase_width_us == pytest.approx(50.0, rel=1e-15)
+
+        def peak(p: StimProtocol) -> float:
+            return jd.evaluate(
+                p.current_uA,
+                area,
+                p.pulse_width_us,
+                diameter_um=2.0 * electrode.equivalent_radius_um,
+                return_phase_current_uA=p.return_phase_current_uA,
+                return_phase_width_us=p.return_phase_width_us,
+            ).peak_A_per_cm2
+
+        assert peak(symmetric) == pytest.approx(25e-6 / area, rel=1e-15)
+        assert peak(asymmetric) == pytest.approx(4.0 * 25e-6 / area, rel=1e-15)
+
+    def test_the_binding_phase_is_whichever_sits_closer_to_its_own_threshold(
+        self,
+    ) -> None:
+        """Compared at its own width, because that is the pulse it is.
+
+        Butterwick's threshold falls as ``(t / 6000 us) ** n``. On a 500 um disc the size
+        regime is flat, so the two phases differ only through that power law: a quarter
+        the width raises the threshold by ``4 ** -n`` while the amplitude rises 4x, and
+        the return phase binds by the ratio of the two.
+
+        Not tautological: both thresholds are written out here from the published anchor
+        (0.061 A/cm^2 at 6 ms, repeated exposure) and the fitted exponent, not read from
+        the comparison the check builds.
+        """
+        from neurostim.data import butterwick2007 as bw
+        from neurostim.safety import current_density as jd
+
+        electrode = DiscElectrode(500.0, "SIROF")
+        area = electrode.area_cm2
+        protocol = StimProtocol(500.0, 50.0, 130.0, 1.0, return_phase_ratio=0.25)
+        n = bw.FITTED_DURATION_EXPONENT
+
+        expected_lead_threshold = 0.061 * (50.0 / 6000.0) ** n
+        expected_return_threshold = 0.061 * (12.5 / 6000.0) ** n
+        lead_margin = expected_lead_threshold / (500e-6 / area)
+        return_margin = expected_return_threshold / (2000e-6 / area)
+        assert return_margin < lead_margin
+
+        result = jd.evaluate(
+            protocol.current_uA,
+            area,
+            protocol.pulse_width_us,
+            diameter_um=2.0 * electrode.equivalent_radius_um,
+            return_phase_current_uA=protocol.return_phase_current_uA,
+            return_phase_width_us=protocol.return_phase_width_us,
+        )
+        assert result.binding_phase == "return"
+        assert result.binding_threshold is not None
+        assert result.binding_threshold.threshold_A_per_cm2 == pytest.approx(
+            expected_return_threshold, rel=1e-12
+        )
+        assert result.binding_threshold.margin == pytest.approx(return_margin, rel=1e-12)
+
+    def test_an_asymmetric_protocol_gets_a_worse_current_density_margin(self) -> None:
+        """The check itself, not just the result object -- identical today.
+
+        Not tautological: the two margins are compared with each other, and the symmetric
+        one is pinned to the value the package reported before this commit
+        (3.4571173440156455 on a 100 um Pt disc at 25 uA / 200 us), so the assertion fails
+        if the asymmetric case is merely *changed* rather than made worse.
+        """
+        electrode = DiscElectrode(100.0, "Pt")
+        symmetric = _check(
+            SafetyCalculator(electrode, StimProtocol(25.0, 200.0, 130.0, 1.0)),
+            "Current density",
+        )
+        asymmetric = _check(
+            SafetyCalculator(
+                electrode,
+                StimProtocol(25.0, 200.0, 130.0, 1.0, return_phase_ratio=0.25),
+            ),
+            "Current density",
+        )
+
+        assert symmetric.margin == pytest.approx(3.4571173440156455, rel=1e-12)
+        assert asymmetric.margin < symmetric.margin
+        assert asymmetric.ceiling_uA < symmetric.ceiling_uA
+
+    def test_the_return_phase_enters_the_voltage_budget(self) -> None:
+        """Ledger 4's own case: 5000 uA through the same access resistance.
+
+        Not tautological: the expected requirement is Ohm's law plus the capacitive
+        excursion, written here for the *return* phase's own amplitude and width --
+        ``I_ret * R + (I_ret * W_ret / A) / C`` -- a quantity the package computed nowhere.
+        ``R`` is read from the result rather than written as a literal because it is the
+        geometry's answer, not the compliance model's, and C3.1 moves it.
+        """
+        from neurostim import CylindricalBandElectrode
+
+        electrode = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        area = electrode.area_cm2
+        symmetric = SafetyCalculator(
+            electrode,
+            StimProtocol(1000.0, 90.0, 130.0, 1.0),
+            capacitance_uF_cm2=250.0,
+        ).assess().compliance
+        asymmetric = SafetyCalculator(
+            electrode,
+            StimProtocol(1000.0, 90.0, 130.0, 1.0, return_phase_ratio=0.2),
+            capacitance_uF_cm2=250.0,
+        ).assess().compliance
+
+        assert symmetric.required_V == self.BAND_SYMMETRIC_REQUIRED_V
+
+        resistance = asymmetric.total_resistance_ohm
+        expected = 5000e-6 * resistance + (5000.0 * 18.0 * 1e-6 / area) / 250.0
+        assert asymmetric.required_V == pytest.approx(expected, rel=1e-12)
+        assert asymmetric.required_V == pytest.approx(2.59, rel=1e-2)
+        assert asymmetric.required_V / symmetric.required_V == pytest.approx(
+            4.954, rel=1e-3
+        )
+
+    def test_the_compliance_limit_falls_and_still_passes_its_own_check(self) -> None:
+        """A limit that FAILs its own check is the defect the whole floor contract is for.
+
+        Not tautological: the limit is re-fed to the forward comparison the check uses,
+        and to its IEEE successor. Neither reads the back-solve.
+        """
+        import math
+
+        from neurostim import CylindricalBandElectrode
+
+        electrode = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        symmetric = SafetyCalculator(
+            electrode,
+            StimProtocol(1000.0, 90.0, 130.0, 1.0),
+            capacitance_uF_cm2=250.0,
+            compliance_V=3.0,
+        ).assess().compliance
+        asymmetric_calc = SafetyCalculator(
+            electrode,
+            StimProtocol(1000.0, 90.0, 130.0, 1.0, return_phase_ratio=0.2),
+            capacitance_uF_cm2=250.0,
+            compliance_V=3.0,
+        )
+        asymmetric = asymmetric_calc.assess().compliance
+
+        assert asymmetric.max_current_uA < symmetric.max_current_uA
+
+        limit = asymmetric.max_current_uA
+        assert asymmetric.required_V_at(limit) <= 3.0
+        assert asymmetric.required_V_at(math.nextafter(limit, math.inf)) > 3.0
+
+    def test_the_headline_moves_where_current_density_binds(self) -> None:
+        """Section 6: the limiting current moves for every ``return_phase_ratio != 1``
+        whose binding check is one of the two this commit repairs.
+
+        Not tautological: the expected ceiling is the independent fail-ceiling bisection
+        over ``assess().failed``, which reads one bit per probe and never reads a margin,
+        a ceiling or the limiting current.
+        """
+        from tests import oracles
+
+        electrode = DiscElectrode(500.0, "SIROF")
+        symmetric = SafetyCalculator(electrode, StimProtocol(500.0, 50.0, 130.0, 1.0))
+        asymmetric = SafetyCalculator(
+            electrode,
+            StimProtocol(500.0, 50.0, 130.0, 1.0, return_phase_ratio=0.25),
+        )
+
+        assert symmetric.assess().limiting_current_uA == 998.0887516949169
+        moved = asymmetric.assess().limiting_current_uA
+        assert moved is not None
+        assert moved < 998.0887516949169
+        assert moved == pytest.approx(
+            oracles.fail_ceiling_uA(asymmetric, names=oracles.LIMIT_BEARING), rel=1e-9
+        )
+
+    def test_a_monophasic_protocol_has_no_return_phase_to_evaluate(self) -> None:
+        """A zero-width return phase must not be handed to a ``t ** -n`` threshold.
+
+        Not tautological: the assertion is that the binding phase is the leading one and
+        that no return comparison exists, which is a statement about absence; the
+        arithmetic that would otherwise raise is the package's, not the test's.
+        """
+        electrode = DiscElectrode(500.0, "SIROF")
+        result = SafetyCalculator(
+            electrode,
+            StimProtocol(500.0, 50.0, 130.0, 1.0, waveform="monophasic"),
+        ).assess()
+        jd_result = next(
+            c for c in result.checks if c.name == "Current density"
+        )
+        assert jd_result.ceiling_uA == pytest.approx(998.0887516949169, rel=1e-12)

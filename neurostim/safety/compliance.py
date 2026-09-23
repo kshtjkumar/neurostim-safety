@@ -84,6 +84,56 @@ class ComplianceResult:
     area_cm2: float
     capacitance_uF_cm2: float
     conductivity_note: str = ""
+    return_phase_current_uA: float = 0.0
+    return_phase_width_us: float = 0.0
+    return_current_factor: float = 0.0
+    """Return-phase amplitude as a multiple of the leading one; 0.0 when there is none.
+
+    Stored rather than derived from the two amplitudes, because the back-solve needs the
+    return phase at amplitudes the protocol was never configured at, and a division of one
+    stored amplitude by another is not the expression the protocol used to make them.
+    """
+    return_required_V: float = 0.0
+    """Voltage the return phase alone demands, at the configured amplitude."""
+
+    @property
+    def has_return_phase(self) -> bool:
+        """Whether a second phase draws current through the same load.
+
+        False for a monophasic pulse and for a biphasic one recovering no charge.
+        """
+        return self.return_current_factor > 0.0 and self.return_phase_width_us > 0.0
+
+    def required_V_at(self, current_uA: float) -> float:
+        """Voltage the stimulator must supply for the worse of the two phases.
+
+        The quantity :attr:`max_current_uA` inverts, and the one :attr:`required_V` is at
+        the configured amplitude. Both phases are linear in the leading amplitude, so the
+        maximum of the two is too -- which is what keeps the closed-form seed exact.
+
+        The return phase used to be invisible here (ledger 4): with
+        ``return_phase_ratio = 0.2`` a 1000 uA protocol drives 5000 uA through the same
+        access resistance and the check reported the leading phase's 0.524 V, when the
+        return phase alone needs 2.59 V. A stimulator sized on that number drops out of
+        regulation during the return phase, silently.
+        """
+        leading = required_voltage_V(
+            current_uA,
+            total_resistance_ohm=self.total_resistance_ohm,
+            pulse_width_us=self.pulse_width_us,
+            area_cm2=self.area_cm2,
+            capacitance_uF_cm2=self.capacitance_uF_cm2,
+        )
+        if not self.has_return_phase:
+            return leading
+        returning = required_voltage_V(
+            current_uA * self.return_current_factor,
+            total_resistance_ohm=self.total_resistance_ohm,
+            pulse_width_us=self.return_phase_width_us,
+            area_cm2=self.area_cm2,
+            capacitance_uF_cm2=self.capacitance_uF_cm2,
+        )
+        return max(leading, returning)
 
     @property
     def evaluated(self) -> bool:
@@ -129,14 +179,7 @@ class ComplianceResult:
         available_V = self.available_V
         return floor_to_pass(
             self.current_uA * (available_V / self.required_V),
-            lambda current_uA: required_voltage_V(
-                current_uA,
-                total_resistance_ohm=self.total_resistance_ohm,
-                pulse_width_us=self.pulse_width_us,
-                area_cm2=self.area_cm2,
-                capacitance_uF_cm2=self.capacitance_uF_cm2,
-            )
-            <= available_V,
+            lambda current_uA: self.required_V_at(current_uA) <= available_V,
             name="Compliance voltage",
         )
 
@@ -154,8 +197,14 @@ class ComplianceResult:
         lines += [
             f"  ohmic drop    {self.ohmic_drop_V:.3f} V",
             f"  polarisation  {self.polarisation_V:.3f} V",
-            f"  required      {self.required_V:.3f} V",
         ]
+        if self.has_return_phase:
+            lines.append(
+                f"  return phase  {self.return_required_V:.3f} V "
+                f"({self.return_phase_current_uA:g} uA x "
+                f"{self.return_phase_width_us:g} us)"
+            )
+        lines.append(f"  required      {self.required_V:.3f} V")
         if self.available_V is None:
             lines.append("  available     not specified -> check NOT EVALUATED")
         else:
@@ -239,6 +288,28 @@ def evaluate(
         )
     polar = polarisation_V(density, capacitance_uF_cm2)
 
+    # The return phase's own budget. Its amplitude is a fixed multiple of the leading
+    # one, taken from the protocol rather than divided out of two amplitudes, so the
+    # back-solve can ask what the return phase does at an amplitude the protocol was
+    # never configured at.
+    return_factor = protocol.return_phase_current_at_uA(1.0)
+    leading_required = required_voltage_V(
+        protocol.current_uA,
+        total_resistance_ohm=total_r,
+        pulse_width_us=protocol.pulse_width_us,
+        area_cm2=electrode.area_cm2,
+        capacitance_uF_cm2=capacitance_uF_cm2,
+    )
+    return_required = 0.0
+    if return_factor > 0.0 and protocol.return_phase_width_us > 0.0:
+        return_required = required_voltage_V(
+            protocol.return_phase_current_uA,
+            total_resistance_ohm=total_r,
+            pulse_width_us=protocol.return_phase_width_us,
+            area_cm2=electrode.area_cm2,
+            capacitance_uF_cm2=capacitance_uF_cm2,
+        )
+
     return ComplianceResult(
         current_uA=protocol.current_uA,
         access_resistance_ohm=access_r,
@@ -246,13 +317,7 @@ def evaluate(
         total_resistance_ohm=total_r,
         ohmic_drop_V=ohmic,
         polarisation_V=polar,
-        required_V=required_voltage_V(
-            protocol.current_uA,
-            total_resistance_ohm=total_r,
-            pulse_width_us=protocol.pulse_width_us,
-            area_cm2=electrode.area_cm2,
-            capacitance_uF_cm2=capacitance_uF_cm2,
-        ),
+        required_V=max(leading_required, return_required),
         available_V=compliance_V,
         resistance_source=source,
         access_resistance_is_exact=is_exact,
@@ -260,4 +325,8 @@ def evaluate(
         area_cm2=electrode.area_cm2,
         capacitance_uF_cm2=capacitance_uF_cm2,
         conductivity_note=conductivity_note,
+        return_phase_current_uA=protocol.return_phase_current_uA,
+        return_phase_width_us=protocol.return_phase_width_us,
+        return_current_factor=return_factor,
+        return_required_V=return_required,
     )

@@ -176,9 +176,24 @@ class StimProtocol:
         two together require. With ``r_a = 1`` this is the prototype's ``I / r`` exactly,
         bit for bit.
         """
+        return self.return_phase_current_at_uA(self.current_uA)
+
+    def return_phase_current_at_uA(self, current_uA: float) -> float:
+        """The return-phase amplitude this waveform carries at a given leading amplitude.
+
+        The waveform's shape is fixed by the two ratios; only its scale is the amplitude.
+        Written as a method because two back-solves need it at amplitudes other than the
+        one configured -- the current-density and compliance ceilings both have to ask
+        "what does the return phase do if the leading phase is turned down to here?" --
+        and a second copy of the expression is a second place for the two to disagree.
+
+        Left-to-right, exactly as the prototype's ``current_uA / return_phase_ratio`` was:
+        at the ``1.0`` recovery default ``(I * 1.0) / r`` is bit-identical to ``I / r``,
+        while ``I * (1.0 / r)`` is not for a ratio like 3.
+        """
         if self.waveform == "monophasic":
             return 0.0
-        return self.current_uA * self.charge_recovery_ratio / self.return_phase_ratio
+        return current_uA * self.charge_recovery_ratio / self.return_phase_ratio
 
     @property
     def active_duration_us(self) -> float:

@@ -123,7 +123,19 @@ def disc_ratio_at_area_fraction(area_fraction: float) -> float:
 
 @dataclass(frozen=True)
 class CurrentDensityResult:
-    """Current density during the leading phase, with the geometric peak factor."""
+    """Current density of each phase, with the geometric peak factor.
+
+    Both phases, since ledger 4. A return phase of width ``W*r`` carries ``I*r_a/r``, so
+    a quarter-width return phase runs at four times the leading amplitude through the same
+    area -- and the package evaluated only the leading one, returning bit-identical
+    answers for a symmetric protocol and one with ``return_phase_ratio = 0.2`` whose
+    return phase draws 5000 uA.
+
+    The return phase is compared against the Butterwick threshold **at its own width**,
+    because that is the pulse it is. It is not simply worse than the leading phase: the
+    threshold rises as roughly ``t^-0.5`` while the amplitude rises as ``1/r``, so the two
+    partly cancel and which phase binds is arithmetic rather than assumption.
+    """
 
     current_uA: float
     area_cm2: float
@@ -133,6 +145,47 @@ class CurrentDensityResult:
     fraction_above_average: float
     centre_ratio: float
     threshold: butterwick2007.ThresholdComparison | None = None
+    return_phase_current_uA: float = 0.0
+    return_phase_width_us: float = 0.0
+    return_A_per_cm2: float = 0.0
+    return_threshold: butterwick2007.ThresholdComparison | None = None
+
+    @property
+    def has_return_phase(self) -> bool:
+        """Whether a second phase delivers current at all.
+
+        False for a monophasic pulse and for a biphasic one that recovers no charge --
+        both have a return phase carrying zero current, which has no density and no
+        threshold, and whose zero width a ``t ** -n`` power law cannot take.
+        """
+        return self.return_phase_current_uA > 0.0 and self.return_phase_width_us > 0.0
+
+    @property
+    def peak_A_per_cm2(self) -> float:
+        """Highest average current density reached by either phase."""
+        return max(self.average_A_per_cm2, self.return_A_per_cm2)
+
+    @property
+    def binding_phase(self) -> str:
+        """``'leading'`` or ``'return'``: the phase closest to its own threshold.
+
+        Not the phase with the higher density. The two phases are compared against
+        different thresholds, so the larger density can be the safer one.
+        """
+        if self.return_threshold is None or self.threshold is None:
+            return "leading"
+        return (
+            "return"
+            if self.return_threshold.margin < self.threshold.margin
+            else "leading"
+        )
+
+    @property
+    def binding_threshold(self) -> butterwick2007.ThresholdComparison | None:
+        """The comparison for :attr:`binding_phase`; the verdict is taken from this."""
+        if self.binding_phase == "return":
+            return self.return_threshold
+        return self.threshold
 
     @property
     def relative_to_dbs_clinical(self) -> float:
@@ -149,6 +202,14 @@ class CurrentDensityResult:
             "Current density (leading phase)",
             f"  average       {self.average_A_per_cm2:.4g} A/cm^2 "
             f"({self.current_uA:g} uA over {self.area_cm2:.4g} cm^2)",
+        ]
+        if self.has_return_phase:
+            lines.append(
+                f"  return phase  {self.return_A_per_cm2:.4g} A/cm^2 "
+                f"({self.return_phase_current_uA:g} uA x "
+                f"{self.return_phase_width_us:g} us)"
+            )
+        lines += [
             f"  for scale     {self.relative_to_dbs_clinical:.2f}x the "
             f"{DBS_CLINICAL_REFERENCE_A_PER_CM2:g} A/cm^2 modelled for a clinical DBS "
             f"contact at 3 V",
@@ -165,6 +226,13 @@ class CurrentDensityResult:
         if self.threshold is not None:
             lines.append("  vs electroporation damage threshold:")
             lines.append(self.threshold.describe())
+        if self.return_threshold is not None:
+            lines.append(
+                f"  return phase vs the threshold at its own "
+                f"{self.return_phase_width_us:g} us width:"
+            )
+            lines.append(self.return_threshold.describe())
+            lines.append(f"  binding phase: {self.binding_phase}")
         return "\n".join(lines)
 
 
@@ -176,19 +244,40 @@ def evaluate(
     recessed: bool = False,
     diameter_um: float | None = None,
     n_pulses: int = butterwick2007.PULSE_COUNT_SATURATION,
+    return_phase_current_uA: float = 0.0,
+    return_phase_width_us: float = 0.0,
 ) -> CurrentDensityResult:
-    """Compute average current density, the geometric peak factor, and the threshold."""
+    """Compute each phase's current density, the geometric peak factor, and the threshold.
+
+    ``return_phase_current_uA`` and ``return_phase_width_us`` default to zero, which is
+    "there is no second phase" and reproduces the pre-ledger-4 answer exactly. They are
+    supplied by :mod:`neurostim.safety.assessment` from the protocol; passing one without
+    the other is a return phase with no duration or no current, which is the same thing.
+    """
     applied = average_current_density_A_per_cm2(current_uA, area_cm2)
     comparison = butterwick2007.compare(
         applied, pulse_width_us, diameter_um, n_pulses=n_pulses
     )
+    return_applied = 0.0
+    return_comparison = None
+    if return_phase_current_uA > 0.0 and return_phase_width_us > 0.0:
+        return_applied = average_current_density_A_per_cm2(
+            return_phase_current_uA, area_cm2
+        )
+        return_comparison = butterwick2007.compare(
+            return_applied, return_phase_width_us, diameter_um, n_pulses=n_pulses
+        )
     return CurrentDensityResult(
         threshold=comparison,
         current_uA=current_uA,
         area_cm2=area_cm2,
-        average_A_per_cm2=average_current_density_A_per_cm2(current_uA, area_cm2),
+        average_A_per_cm2=applied,
         pulse_width_us=pulse_width_us,
         edge_concentrates=not recessed,
         fraction_above_average=0.0 if recessed else DISC_FRACTION_ABOVE_AVERAGE,
         centre_ratio=1.0 if recessed else DISC_CENTRE_RATIO,
+        return_phase_current_uA=return_phase_current_uA,
+        return_phase_width_us=return_phase_width_us,
+        return_A_per_cm2=return_applied,
+        return_threshold=return_comparison,
     )
