@@ -271,7 +271,7 @@ class TestChargeRecoveryIsAnIndependentInput:
         Not tautological: the assertion is on text extracted from the rendered PDF by an
         external tool, against a percentage computed here from the constructor argument.
         """
-        from tests.test_verdict_core import pdf_text
+        from test_verdict_core import pdf_text
 
         calc = SafetyCalculator(
             DiscElectrode(500.0, "Pt"),
@@ -567,7 +567,7 @@ class TestTheReturnPhaseIsEvaluated:
         over ``assess().failed``, which reads one bit per probe and never reads a margin,
         a ceiling or the limiting current.
         """
-        from tests import oracles
+        import oracles
 
         electrode = DiscElectrode(500.0, "SIROF")
         symmetric = SafetyCalculator(electrode, StimProtocol(500.0, 50.0, 130.0, 1.0))
@@ -648,7 +648,7 @@ class TestDcDriftOutOfTheWaterWindow:
         a pulse train cannot resolve time more finely than its own period, so agreement to
         within ``1/f`` is the whole of what can be asserted.
         """
-        from tests import oracles
+        import oracles
 
         electrode = self._band()
         drift = self._calc(waveform="monophasic").assess().water_window.drift
@@ -811,8 +811,9 @@ class TestDcDriftOutOfTheWaterWindow:
         """
         from dataclasses import replace
 
+        import oracles
+
         from neurostim.safety.assessment import LIMIT_BEARING
-        from tests import oracles
 
         calc = SafetyCalculator(
             self._band(),
@@ -965,9 +966,10 @@ class TestTheHeadlineRefusesWheneverNoAmplitudeIsSafe:
         """
         import json
 
+        from test_verdict_core import pdf_text
+
         from neurostim.gui.app import headline_text
         from neurostim.io.tabular import report_to_json
-        from tests.test_verdict_core import pdf_text
 
         calc = getattr(self, case)()
         assessment = calc.assess()
@@ -1251,8 +1253,9 @@ class TestMonophasicProtocolsStopInheritingBiphasicLimits:
         accumulation loop that imports no part of ``neurostim`` and evaluates no closed
         form.
         """
+        import oracles
+
         from neurostim import CylindricalBandElectrode
-        from tests import oracles
 
         electrode = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
         assessment = SafetyCalculator(
@@ -1756,7 +1759,7 @@ class TestTheRefusalContractHoldsInBothDirections:
         independent statements; and 0.0 from that search means "no probe anywhere in an
         eighteen-decade bracket passes", which no expression in the package produces.
         """
-        from tests import oracles
+        import oracles
 
         for label, settings in (
             ("edge resting potential", {"resting_potential_V": -0.6}),
