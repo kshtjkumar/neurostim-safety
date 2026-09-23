@@ -86,3 +86,47 @@ def drift_time_s_closed_form(
     if volts_per_second <= 0.0:
         return math.inf
     return window_V / volts_per_second
+
+
+def partial_recovery_exit_time_s(
+    *,
+    current_uA: float,
+    pulse_width_us: float,
+    recovered_fraction: float,
+    frequency_hz: float,
+    area_cm2: float,
+    capacitance_uF_cm2: float,
+    leading_window_V: float,
+    opposite_window_V: float,
+    max_pulses: int = 10_000_000,
+) -> float:
+    """First time the interface leaves the window, following every phase of every pulse.
+
+    The monophasic loop above cannot see what a return phase does, and that is where the
+    closed form's error hid (ledger 105). Here each pulse is two steps on the same
+    capacitor: the leading phase moves the potential ``e = Q / C`` toward the leading edge,
+    and the peak is checked there. The return phase then moves it ``recovered_fraction *
+    e`` back, and the potential is checked against the opposite edge. Whatever is left
+    over is carried into the next pulse. No closed form is evaluated. Pulse ``n``
+    (1-indexed) is reported at ``n / f``, the convention :func:`drift_time_s` uses.
+
+    ``leading_window_V`` and ``opposite_window_V`` are the positive distances from rest to
+    the edge in the leading phase's direction and to the other edge.
+
+    Returns ``inf`` if the window is not left within ``max_pulses``.
+    """
+    if frequency_hz <= 0.0:
+        raise ValueError(f"frequency_hz must be > 0, got {frequency_hz!r}")
+    charge_C = (current_uA * 1e-6) * (pulse_width_us * 1e-6)
+    capacitance_F = (capacitance_uF_cm2 * 1e-6) * area_cm2
+    excursion_V = charge_C / capacitance_F
+
+    potential_V = 0.0  # signed: positive is toward the leading phase's edge
+    for pulse in range(1, max_pulses + 1):
+        potential_V += excursion_V
+        if potential_V > leading_window_V:
+            return pulse / frequency_hz
+        potential_V -= recovered_fraction * excursion_V
+        if -potential_V > opposite_window_V:
+            return pulse / frequency_hz
+    return math.inf

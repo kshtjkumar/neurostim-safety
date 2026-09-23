@@ -864,7 +864,10 @@ class TestDcDriftOutOfTheWaterWindow:
             later < earlier for earlier, later in itertools.pairwise(ceilings)
         ), ceilings
         assert ceilings[-1] == pytest.approx(monophasic, rel=1e-12)
-        assert ceilings[0] == pytest.approx(2.0 * monophasic, rel=1e-9)
+        # Half the charge left behind would double the ceiling if the offset had the whole
+        # budget. The recovered half of each pulse rides on the offset (ledger 105), so it
+        # is 2 * f*T / (f*T + 1) with f*T = 130 pulses over the 1 s train: 260/131, not 2.
+        assert ceilings[0] == pytest.approx(260.0 / 131.0 * monophasic, rel=1e-9)
 
 
 class TestTheHeadlineRefusesWheneverNoAmplitudeIsSafe:
@@ -1978,3 +1981,157 @@ class TestTheUnrecoveredChargeIsExactlyLinear:
         balanced = replace(calc.p, charge_recovery_ratio=1.0)
         with pytest.raises(ArithmeticError, match="Water window"):
             assessment_mod._water_window_seed_uA(result, balanced, calc.e.area_cm2)
+
+
+class TestTheDriftBudgetCarriesThePulseRidingOnIt:
+    """Ledger 105 (Phase 2 review F3) and the drift half of 110 (F8).
+
+    Under the package's own capacitive model the leading phase of pulse ``n`` peaks at
+    ``rest + offset + excursion``, so the interface leaves the window when the offset has
+    used up the headroom *minus* what the pulse itself adds. The drift clause spent the
+    whole headroom on the offset. For monophasic delivery the two agree, because each pulse
+    is all offset, and the only drift oracle was monophasic. For a partial recovery the
+    clause was anti-conservative: CAUTION "after the 1 s train" for an interface the
+    model's own physics takes out of the window at 0.42 s.
+    """
+
+    PT_CATHODIC_V = 0.6
+    PT_ANODIC_V = 0.8
+
+    @staticmethod
+    def _oracle_time(calc):
+        import oracles
+
+        p = calc.p
+        lead, opposite = (
+            (0.8, 0.6) if p.anodic_first else (0.6, 0.8)
+        )
+        return oracles.partial_recovery_exit_time_s(
+            current_uA=p.current_uA,
+            pulse_width_us=p.pulse_width_us,
+            recovered_fraction=0.0 if p.waveform == "monophasic" else p.charge_recovery_ratio,
+            frequency_hz=p.frequency_hz,
+            area_cm2=calc.e.area_cm2,
+            capacitance_uF_cm2=250.0,
+            leading_window_V=lead,
+            opposite_window_V=opposite,
+        )
+
+    def test_the_reviewers_case_fails_inside_the_train(self) -> None:
+        """Not tautological: the expected exit, pulse 22 at 50 Hz (0.44 s, inside the 1 s
+        train), comes from the pulse-by-pulse oracle, which follows both phases of every
+        pulse on the same capacitor and evaluates no closed form."""
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(1227.184630308513, 200.0, 50.0, 1.0, charge_recovery_ratio=0.99),
+            capacitance_uF_cm2=250.0,
+        )
+        exit_s = self._oracle_time(calc)
+        assert exit_s == pytest.approx(0.44)
+        assessment = calc.assess()
+        window = next(c for c in assessment.checks if c.name == "Water window")
+        assert window.status is Status.FAIL, window.summary
+        # One pulse, with a float of slack: 0.42 s against the oracle's pulse-22 0.44 s.
+        assert abs(assessment.water_window.drift.time_to_exit_s - exit_s) <= (1.0 / 50.0) * (
+            1.0 + 1e-9
+        )
+        assert window.ceiling_uA < 1227.184630308513
+
+    def _population(self, train_duration_s: float = 1e4):
+        for recovery, current, anodic_first, width in itertools.product(
+            (0.0, 0.5, 0.9, 0.99, 1.2, 1.5),
+            (50.0, 300.0, 1000.0, 1300.0),
+            (False, True),
+            (100.0, 200.0),
+        ):
+            yield SafetyCalculator(
+                DiscElectrode(500.0, "Pt"),
+                StimProtocol(
+                    current, width, 50.0, train_duration_s,
+                    anodic_first=anodic_first, charge_recovery_ratio=recovery,
+                ),
+                capacitance_uF_cm2=250.0,
+            )
+
+    def test_the_drift_time_agrees_with_the_oracle_to_one_pulse_for_every_recovery(self) -> None:
+        """Under-recovery, zero recovery and over-recovery, in both polarities.
+
+        Not tautological: see the reviewer's-case test. Over-recovery drifts toward the
+        opposite edge, where the leading phase moves *away*; the oracle checks that edge
+        after each return phase, so a closed form that rode the wrong excursion on the
+        offset, or headed for the wrong edge, disagrees by more than one pulse.
+        """
+        compared = 0
+        for calc in self._population():
+            assessment = calc.assess()
+            drift = assessment.water_window.drift
+            if not assessment.water_window.passes or not drift.drifts:
+                continue
+            exit_s = self._oracle_time(calc)
+            one_pulse = (1.0 / calc.p.frequency_hz) * (1.0 + 1e-9)
+            assert abs(drift.time_to_exit_s - exit_s) <= one_pulse, (
+                calc.p, drift.time_to_exit_s, exit_s,
+            )
+            compared += 1
+        assert compared >= 60, compared
+
+    def test_the_ceiling_does_not_exit_before_the_train_ends(self) -> None:
+        """At the reported water-window ceiling the oracle keeps the interface inside the
+        window for the whole train, to within one pulse.
+
+        Not tautological: the ceiling is the package's; the exit time at it is the oracle's.
+        """
+        from oracles.fail_ceiling import rebuild_at
+
+        checked = 0
+        for calc in self._population(train_duration_s=1.0):
+            window = next(c for c in calc.assess().checks if c.name == "Water window")
+            if calc.p.is_charge_balanced or not 0.0 < window.ceiling_uA < math.inf:
+                continue
+            at = rebuild_at(calc, window.ceiling_uA)
+            assert self._oracle_time(at) >= 1.0 - 1.0 / 50.0, (calc.p, window.ceiling_uA)
+            checked += 1
+        assert checked >= 60, checked
+
+    def test_exits_during_train_is_strict_at_its_boundary(self) -> None:
+        """F8's surviving mutant, ``<`` -> ``<=``: a train that ends exactly as the edge is
+        reached is not a failure; one a float longer is.
+
+        Not tautological: the drift is built from literals, so the time to the edge is
+        exactly 1.0 s by IEEE arithmetic.
+        """
+        from neurostim.safety.water_window import DcDrift
+
+        at_edge = DcDrift(
+            net_dc_current_uA=2.0, window_headroom_V=0.5, window_charge_uC=2.0,
+            train_duration_s=1.0,
+        )
+        assert at_edge.time_to_exit_s == 1.0
+        assert not at_edge.exits_during_train
+        longer = DcDrift(
+            net_dc_current_uA=2.0, window_headroom_V=0.5, window_charge_uC=2.0,
+            train_duration_s=math.nextafter(1.0, math.inf),
+        )
+        assert longer.exits_during_train
+
+    def test_over_recovery_heads_for_the_opposite_edge(self) -> None:
+        """F8's other survivor: ignoring the net's sign. A cathodic-first pulse whose return
+        phase recovers 120 % leaves an anodic offset, so the budget is the 0.8 V to Pt's
+        anodic edge, and no leading excursion rides on it.
+
+        Not tautological: 0.8 V is Pt's published anodic limit at a resting potential of 0,
+        and the direction is the sign of ``1 - 1.2``.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(300.0, 200.0, 50.0, 1.0, charge_recovery_ratio=1.2),
+            capacitance_uF_cm2=250.0,
+        )
+        drift = calc.assess().water_window.drift
+        assert drift.net_dc_current_uA < 0.0
+        assert drift.window_headroom_V == pytest.approx(self.PT_ANODIC_V, rel=1e-15)
+        assert drift.window_charge_uC == pytest.approx(0.8 * 250.0 * calc.e.area_cm2)
+        assert drift.time_to_exit_s == pytest.approx(
+            drift.window_charge_uC / abs(drift.net_dc_current_uA), rel=1e-15
+        )
+

@@ -196,9 +196,21 @@ class DcDrift:
     actually leaves the window in about a quarter of a second (ledger 2).
 
     The model is the interface as a capacitor charged by the mean unrecovered current:
-    ``t = Q_window / I_dc`` with ``Q_window = dV * C * A``. Verified against a
-    pulse-by-pulse accumulation loop, which reproduces it to within one pulse -- the
-    finest time a pulse train can resolve.
+    ``t = (Q_window - Q_riding) / I_dc`` with ``Q_window = dV * C * A``. Verified against
+    pulse-by-pulse loops that follow both phases of every pulse, which reproduce it to
+    within one pulse -- the finest time a pulse train can resolve.
+
+    **The pulse rides on the offset** (ledger 105). After ``n`` pulses the offset is ``n``
+    times the unrecovered charge, and pulse ``n``'s leading phase peaks at that offset
+    plus the part of its own charge the return phase is about to recover:
+    ``offset(n-1) + e = offset(n) + r_a * e``. So the offset has ``Q_window - r_a * Q``
+    to spend, not ``Q_window``. For monophasic delivery ``r_a = 0``: each pulse is all
+    offset and nothing rides, which is why the monophasic oracle could not see this. For a
+    partial recovery the clause spent the whole budget on the offset and was
+    anti-conservative: CAUTION "reaches the edge in 2.4 s, after the 1 s train" for an
+    interface the same model takes out of the window at 0.42 s. An over-recovering pulse
+    drifts toward the *other* edge, and its leading phase moves away from that edge, so
+    nothing rides and the budget is the whole headroom.
     """
 
     net_dc_current_uA: float
@@ -213,6 +225,14 @@ class DcDrift:
     train_duration_s: float
     """How long the offset is applied for. ``inf`` for continuous stimulation."""
 
+    riding_charge_uC: float = 0.0
+    """Charge per pulse that peaks on top of the offset before the return phase recovers it.
+
+    ``r_a * Q`` when the offset heads for the leading phase's edge, ``0.0`` when it heads
+    for the other one or the pulse is monophasic. Spent from :attr:`window_charge_uC`
+    before the offset gets any of it.
+    """
+
     @property
     def drifts(self) -> bool:
         """Whether there is an offset to accumulate at all."""
@@ -220,10 +240,18 @@ class DcDrift:
 
     @property
     def time_to_exit_s(self) -> float:
-        """Seconds until the interface reaches the window edge; ``inf`` if never."""
+        """Seconds until the interface reaches the window edge; ``inf`` if never.
+
+        ``(window - riding) / |I_dc|``: the offset's share of the budget over the rate it
+        is spent. ``window`` is a constant and ``riding`` grows with amplitude, so the
+        numerator falls and the denominator rises with current, and the time is monotone
+        in floats as well as in exact arithmetic. Floored at zero: a pulse whose riding
+        charge alone fills the window has already failed the peak clause.
+        """
         if not self.drifts:
             return math.inf
-        return self.window_charge_uC / abs(self.net_dc_current_uA)
+        budget = max(self.window_charge_uC - self.riding_charge_uC, 0.0)
+        return budget / abs(self.net_dc_current_uA)
 
     @property
     def exits_during_train(self) -> bool:
@@ -334,6 +362,7 @@ def evaluate(
     net_dc_current_uA: float | None = None,
     area_cm2: float | None = None,
     train_duration_s: float | None = None,
+    recovered_charge_uC: float = 0.0,
 ) -> WaterWindowResult:
     """Check whether the leading phase drives the electrode out of the water window.
 
@@ -348,6 +377,11 @@ def evaluate(
 
         Must lie inside the material's own window; a value outside it raises
         ``ValueError``. See :func:`validate_resting_potential_V`.
+    recovered_charge_uC:
+        Charge per pulse the return phase recovers, ``r_a * Q``; ``0.0`` for a monophasic
+        pulse. When the offset heads for the leading phase's edge this part of each pulse
+        peaks on top of it, so the drift budget spends it first (ledger 105). Ignored when
+        the offset heads for the other edge.
     """
     mat = material if isinstance(material, Material) else get_material(material)
     validate_resting_potential_V(mat, resting_potential_V)
@@ -378,6 +412,9 @@ def evaluate(
             window_headroom_V=headroom,
             window_charge_uC=window_charge_uC(headroom, capacitance_uF_cm2, area_cm2),
             train_duration_s=train_duration_s,
+            riding_charge_uC=(
+                recovered_charge_uC if drift_anodic == anodic_first else 0.0
+            ),
         )
 
     return WaterWindowResult(

@@ -980,6 +980,58 @@ class TestDriftTime:
         assert abs(reported.time_to_exit_s - stepped) < 1.0 / self.FREQUENCY_HZ
 
 
+class TestPartialRecoveryExitTime:
+    """Oracle (c'): the pulse-by-pulse loop that follows the return phase too (ledger 105)."""
+
+    def test_it_reduces_to_the_monophasic_loop_when_nothing_is_recovered(self) -> None:
+        """With no return phase the two loops step the same charges, so they agree exactly
+        on the audit's band case: the 34th pulse, 34/130 s."""
+        kwargs = TestDriftTime()._kwargs()
+        window = kwargs.pop("window_V")
+        assert drift.partial_recovery_exit_time_s(
+            **kwargs, recovered_fraction=0.0, leading_window_V=window,
+            opposite_window_V=0.8,
+        ) == pytest.approx(34.0 / 130.0)
+
+    def test_the_reviewers_partial_recovery_case_by_hand(self) -> None:
+        """A 500 um disc (0.0019635 cm^2) at 250 uF/cm^2 is 4.9087e-7 F. 1227.1846 uA for
+        200 us is 2.4544e-7 C, so e = 0.5 V, and 99 % recovery leaves 0.005 V per pulse.
+        Pulse n peaks at (n - 1) * 0.005 + 0.5, which first exceeds 0.6 V at n = 22:
+        22/50 = 0.44 s."""
+        area = math.pi * 0.025**2
+        assert drift.partial_recovery_exit_time_s(
+            current_uA=1227.184630308513,
+            pulse_width_us=200.0,
+            recovered_fraction=0.99,
+            frequency_hz=50.0,
+            area_cm2=area,
+            capacitance_uF_cm2=250.0,
+            leading_window_V=0.6,
+            opposite_window_V=0.8,
+        ) == pytest.approx(0.44)
+
+    def test_over_recovery_leaves_by_the_opposite_edge(self) -> None:
+        """e = 0.5 V recovered at 120 % moves the potential 0.1 V the other way per pulse;
+        the opposite edge at 0.8 V is passed after the return phase of pulse 9
+        (-0.9 V): 9/50 s. The leading edge is never reached, because the leading phase
+        starts ever further from it."""
+        area = math.pi * 0.025**2
+        assert drift.partial_recovery_exit_time_s(
+            current_uA=1227.184630308513,
+            pulse_width_us=200.0,
+            recovered_fraction=1.2,
+            frequency_hz=50.0,
+            area_cm2=area,
+            capacitance_uF_cm2=250.0,
+            leading_window_V=0.6,
+            opposite_window_V=0.8,
+        ) == pytest.approx(9.0 / 50.0)
+
+    def test_the_loop_never_evaluates_a_closed_form(self) -> None:
+        text = Path(drift.__file__ or "").read_text(encoding="utf-8")
+        body = text.split("def partial_recovery_exit_time_s(", 1)[1]
+        assert "closed_form" not in body
+
 class TestFdBandReference:
     """Oracle (d): the converged Laplace solve for a band on an insulating shaft."""
 

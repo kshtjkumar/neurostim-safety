@@ -830,9 +830,14 @@ def _water_window_seed_uA(
     from rest.
 
     **DC drift over the train.** The amplitude at which ``t_exit`` equals
-    ``train_duration_s``::
+    ``train_duration_s``. ``t_exit = (window - riding) / I_dc`` with both ``riding`` and
+    ``I_dc`` proportional to the amplitude, so::
 
-        window_charge_uC / (net_dc_current_per_uA * train_duration_s)
+        window_charge_uC / (riding_per_uA + net_dc_current_per_uA * train_duration_s)
+
+    ``riding_per_uA`` is the recovered part of each pulse's charge, which peaks on top of
+    the offset (ledger 105). It is exactly ``0.0`` for monophasic delivery and for
+    over-recovery, which leaves the monophasic seed below unchanged bit for bit.
 
     with ``window_charge_uC = headroom_V * capacitance_uF_cm2 * area_cm2`` and
     ``net_dc_current_per_uA`` the net DC the waveform carries per microamp of leading
@@ -877,10 +882,25 @@ def _water_window_seed_uA(
                 f"DC, but the protocol carries {dc_per_uA!r} uA of DC per microamp of "
                 f"leading amplitude, so the drift clause has no inverse to seed from."
             )
+        riding_per_uA = _riding_charge_uC(drift, protocol, 1.0)
         terms.append(
-            drift.window_charge_uC / (dc_per_uA * protocol.train_duration_s)
+            drift.window_charge_uC
+            / (riding_per_uA + dc_per_uA * protocol.train_duration_s)
         )
     return min(terms)
+
+
+def _riding_charge_uC(
+    drift: ww_mod.DcDrift, protocol: StimProtocol, current_uA: float
+) -> float:
+    """The charge that rides on the offset at a given amplitude; see ``DcDrift``.
+
+    Zero exactly when it is zero at the configured amplitude, so the seed, the predicate
+    and the reported drift agree on whether anything rides.
+    """
+    if drift.riding_charge_uC == 0.0:
+        return 0.0
+    return charge_uC(current_uA, protocol.pulse_width_us) * protocol.recovered_fraction
 
 
 def _water_window_search(
@@ -915,7 +935,9 @@ def _water_window_search(
         if drift is None or not drift.drifts:
             return True
         return not replace(
-            drift, net_dc_current_uA=protocol.net_dc_current_at_uA(current_uA)
+            drift,
+            net_dc_current_uA=protocol.net_dc_current_at_uA(current_uA),
+            riding_charge_uC=_riding_charge_uC(drift, protocol, current_uA),
         ).exits_during_train
 
     # The smallest change in current this predicate can resolve. It adds the excursion to
@@ -1804,6 +1826,7 @@ class SafetyCalculator:
             ),
             area_cm2=self.e.area_cm2,
             train_duration_s=self.p.train_duration_s,
+            recovered_charge_uC=self.p.charge_per_phase_uC * self.p.recovered_fraction,
         )
         compliance_result = compliance_mod.evaluate(
             self.e,
