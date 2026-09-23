@@ -599,3 +599,267 @@ class TestTheReturnPhaseIsEvaluated:
             c for c in result.checks if c.name == "Current density"
         )
         assert jd_result.ceiling_uA == pytest.approx(998.0887516949169, rel=1e-12)
+
+
+class TestDcDriftOutOfTheWaterWindow:
+    """C2.3. A waveform that leaves charge behind walks the interface to the edge.
+
+    The package applied per-pulse limits, every one of them measured on a charge-balanced
+    waveform, and reported the monophasic case as a PASS with 0.58 V of headroom (ledger
+    2). The interface is a capacitor charged by the mean unrecovered current, so the
+    potential ramps: on the audit's own case -- a clinical band at 3000 uA, 90 us, 130 Hz
+    -- it leaves a 0.6 V window in about a quarter of a second.
+
+    **Reported on Water window, never on Charge balance** (fix plan D6, ledger 84). Charge
+    balance bears no ceiling and its verdict must stay amplitude-independent, which is the
+    invariant that makes ``unsafe_at_any_amplitude`` correct. The drift consequence *is*
+    amplitude-dependent -- halve the amplitude and the time to the edge doubles -- so it
+    belongs on the check that can express a ceiling.
+
+    Fixture rule: the capacitance is supplied as 250 uF/cm^2 rather than left to the
+    material derivation, and the train duration is 1 s rather than the ``inf`` that would
+    make every drift verdict a FAIL for free.
+    """
+
+    BAND = ("PtIr", 1270.0, 1500.0)
+    PLAN_CASE_DRIFT_TIME_S = 0.2557578634653229
+    PLAN_CASE_DRIFT_CEILING_uA = 767.2735903959687
+    PLAN_CASE_PEAK_CEILING_uA = 99745.56675147594
+
+    def _band(self):
+        from neurostim import CylindricalBandElectrode
+
+        return CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+
+    def _calc(self, **protocol_kw):
+        return SafetyCalculator(
+            self._band(),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, **protocol_kw),
+            capacitance_uF_cm2=250.0,
+        )
+
+    def test_the_drift_time_agrees_with_the_pulse_by_pulse_integrator(self) -> None:
+        """Within one pulse, which is the strongest statement that can be made.
+
+        Not tautological: the oracle is ``tests/oracles/drift.drift_time_s``, a loop that
+        adds one pulse's charge at a time and asks after each whether the potential has
+        left the window. It evaluates no closed form and imports no part of ``neurostim``;
+        a pulse train cannot resolve time more finely than its own period, so agreement to
+        within ``1/f`` is the whole of what can be asserted.
+        """
+        from tests import oracles
+
+        electrode = self._band()
+        drift = self._calc(waveform="monophasic").assess().water_window.drift
+        assert drift is not None
+
+        integrated = oracles.drift_time_s(
+            current_uA=3000.0,
+            pulse_width_us=90.0,
+            frequency_hz=130.0,
+            area_cm2=electrode.area_cm2,
+            capacitance_uF_cm2=250.0,
+            window_V=0.6,
+        )
+        assert drift.time_to_exit_s == pytest.approx(
+            self.PLAN_CASE_DRIFT_TIME_S, rel=1e-12
+        )
+        assert abs(drift.time_to_exit_s - integrated) < 1.0 / 130.0
+        assert drift.time_to_exit_s == pytest.approx(0.2558, rel=1e-3)
+
+    def test_the_window_charge_is_the_headroom_times_the_interface(self) -> None:
+        """``Q = dV * C * A``, and the net DC that empties it.
+
+        Not tautological: both quantities are written out here from the published window
+        edge (PtIr, -0.6 V cathodic), the supplied capacitance and the geometric area --
+        ``0.6 V * 250 uF/cm^2 * 0.05984734 cm^2 = 8.9771 uC`` -- and the DC from the duty
+        cycle, ``3000 uA * 90 us * 130 Hz = 35.1 uA``.
+        """
+        electrode = self._band()
+        drift = self._calc(waveform="monophasic").assess().water_window.drift
+        assert drift is not None
+
+        assert electrode.area_cm2 == pytest.approx(0.05984734005088556, rel=1e-12)
+        assert drift.window_headroom_V == pytest.approx(0.6, rel=1e-15)
+        assert drift.window_charge_uC == pytest.approx(
+            0.6 * 250.0 * electrode.area_cm2, rel=1e-12
+        )
+        assert drift.window_charge_uC == pytest.approx(8.9771, rel=1e-4)
+        assert drift.net_dc_current_uA == pytest.approx(35.1, rel=1e-12)
+
+    def test_the_seed_gains_the_drift_term_in_the_same_commit_as_the_clause(
+        self,
+    ) -> None:
+        """The hard condition. ``_water_window_seed_uA`` inverts every clause it seeds.
+
+        The peak-only seed is ``f * T = 130`` times the drift boundary -- 8.7e17 ulps
+        against a four-float budget -- so a drift clause added without its inverse makes
+        ``floor_to_pass`` raise ``LimitDidNotSettle`` on every monophasic protocol. Landing
+        the seed first was measured to be no better: 160 of 160 monophasic configurations
+        then raise on the way *up*.
+
+        Not tautological: both terms are written out here from the published window and the
+        geometry -- ``max_charge_density_in_window_uC_cm2 * A / W`` and
+        ``dV * C * A / (frac * W * f * T)`` -- and the ratio 130 between them is asserted
+        as ``f * T``, so a seed missing either term fails on a number this test computes
+        rather than on a crash inside the check.
+        """
+        from neurostim.safety import water_window as ww
+        from neurostim.safety.assessment import _water_window_search
+
+        electrode = self._band()
+        calc = self._calc(waveform="monophasic")
+        result = calc.assess().water_window
+
+        seed_density = ww.max_charge_density_in_window_uC_cm2(
+            "PtIr", anodic_first=False, resting_potential_V=0.0, capacitance_uF_cm2=250.0
+        )
+        peak_inverse = seed_density * electrode.area_cm2 / 90e-6
+        drift_inverse = (0.6 * 250.0 * electrode.area_cm2) / (1.0 * 90e-6 * 130.0 * 1.0)
+
+        assert peak_inverse == pytest.approx(self.PLAN_CASE_PEAK_CEILING_uA, rel=1e-12)
+        assert drift_inverse == pytest.approx(self.PLAN_CASE_DRIFT_CEILING_uA, rel=1e-12)
+        assert peak_inverse / drift_inverse == pytest.approx(130.0, rel=1e-12)
+
+        search = _water_window_search(result, calc.p, electrode.area_cm2)
+        assert search.seed_uA == pytest.approx(drift_inverse, rel=1e-12)
+        assert search.seed_uA == pytest.approx(min(peak_inverse, drift_inverse), rel=1e-12)
+
+    def test_the_monophasic_water_window_ceiling_is_the_drift_boundary(self) -> None:
+        """Section 6's C2.3 row: 99745.56675147594 -> 767.2735903959687 uA.
+
+        Not tautological: the expected ceiling is the closed form written above, and it is
+        then re-fed to the check's own forward comparison and to that value's IEEE
+        successor -- the floor contract -- neither of which reads the back-solve.
+        """
+        import math
+
+        from neurostim.safety.assessment import _water_window_search
+
+        calc = self._calc(waveform="monophasic")
+        electrode = self._band()
+        ceiling = _check(calc, "Water window").ceiling_uA
+
+        assert ceiling == pytest.approx(self.PLAN_CASE_DRIFT_CEILING_uA, rel=1e-9)
+        search = _water_window_search(
+            calc.assess().water_window, calc.p, electrode.area_cm2
+        )
+        assert search.passes(ceiling)
+        assert not search.passes(math.nextafter(ceiling, math.inf))
+
+    def test_the_monophasic_verdict_is_fail_with_the_drift_time(self) -> None:
+        """Ledger 2: PASS with 0.58 V of headroom becomes FAIL at 0.256 s.
+
+        Not tautological: the headroom the old verdict rested on is asserted to still be
+        positive -- the peak excursion really does stay inside the window -- so the FAIL
+        can only come from the drift clause, which is the finding.
+        """
+        assessment = self._calc(waveform="monophasic").assess()
+        result = assessment.water_window
+        check = next(c for c in assessment.checks if c.name == "Water window")
+
+        assert result.headroom_V > 0.5
+        assert result.passes
+        assert check.status is Status.FAIL
+        assert "0.256" in check.summary or "0.2558" in check.summary
+
+    def test_a_balanced_protocol_has_no_drift_and_does_not_move(self) -> None:
+        """The population that must stay byte-identical: no DC, no clause.
+
+        Not tautological: the net charge is asserted to be exactly zero before the verdict,
+        so this pins the *absence* of a drift term rather than a coincidence of values.
+        """
+        calc = self._calc()
+        result = calc.assess().water_window
+        assert calc.p.net_charge_per_pulse_uC == 0.0
+        assert result.drift is not None
+        assert not result.drift.drifts
+        assert result.drift.time_to_exit_s == math.inf
+        assert _check(calc, "Water window").status is Status.PASS
+
+    def test_the_drift_verdict_is_not_on_charge_balance(self) -> None:
+        """D6 and ledger 84: the ceiling goes where a ceiling can be expressed.
+
+        Not tautological: the two checks are read from one assessment and their statuses
+        compared with each other, and the Charge-balance status is additionally pinned to
+        the bracket invariant in the next test rather than to a literal alone.
+        """
+        calc = SafetyCalculator(
+            self._band(),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, charge_recovery_ratio=0.5),
+            capacitance_uF_cm2=250.0,
+        )
+        assert _check(calc, "Charge balance").status is Status.CAUTION
+        assert _check(calc, "Water window").status is Status.FAIL
+        assert _check(calc, "Charge balance").ceiling_uA == math.inf
+        assert _check(calc, "Water window").ceiling_uA < math.inf
+
+    def test_no_check_outside_limit_bearing_moves_with_amplitude(self) -> None:
+        """C1.5's bracket test, re-run on an unbalanced biphasic protocol.
+
+        The invariant the whole placement decision rests on: a check that bears no ceiling
+        must return the same verdict at a femtoamp and at an amp, because that is what
+        licenses ``unsafe_at_any_amplitude`` to read a FAIL there as "no amplitude is
+        safe". C2.3 is the commit that could break it, so it is the commit that re-asserts
+        it.
+
+        Not tautological: the statuses are sampled at two amplitudes 18 decades apart and
+        compared with each other -- no literal verdict appears -- and the oracle's
+        ``amplitude_independent_failures`` witness is asserted alongside, which establishes
+        the same property across all 73 ladder probes.
+        """
+        from dataclasses import replace
+
+        from neurostim.safety.assessment import LIMIT_BEARING
+        from tests import oracles
+
+        calc = SafetyCalculator(
+            self._band(),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, charge_recovery_ratio=0.5),
+            capacitance_uF_cm2=250.0,
+        )
+
+        def statuses(current_uA: float) -> dict[str, Status]:
+            rebuilt = SafetyCalculator(
+                calc.e,
+                replace(calc.p, current_uA=current_uA),
+                capacitance_uF_cm2=250.0,
+            )
+            return {
+                c.name: c.status
+                for c in rebuilt.assess().checks
+                if c.name not in LIMIT_BEARING
+            }
+
+        low, high = statuses(1e-12), statuses(1e6)
+        assert low == high
+        assert set(low) == {"Validated envelope", "Charge balance"}
+        assert oracles.amplitude_independent_failures(calc) == ()
+
+    def test_the_ceiling_converges_to_the_monophasic_one_as_recovery_vanishes(
+        self,
+    ) -> None:
+        """The continuity the FAIL/CAUTION boundary at zero recovery could have hidden.
+
+        Charge balance's label jumps at ``charge_recovery_ratio == 0`` -- CAUTION above it,
+        FAIL at it -- because a waveform that recovers nothing is a monophasic waveform.
+        The *safe amplitude* must not jump there: it is set by the drift ceiling, which is
+        continuous in the unrecovered fraction. If the label moved while the number did
+        not, the structure would be hiding a discontinuity.
+
+        Not tautological: the expected limit is the ceiling the byte-identical monophasic
+        protocol reports, which is a separate assessment of a separate protocol, and the
+        monotonicity is a property of a sequence of ten independent assessments.
+        """
+        ratios = [0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0]
+        ceilings = [
+            _check(self._calc(charge_recovery_ratio=r), "Water window").ceiling_uA
+            for r in ratios
+        ]
+        monophasic = _check(self._calc(waveform="monophasic"), "Water window").ceiling_uA
+
+        assert all(
+            later < earlier for earlier, later in zip(ceilings, ceilings[1:])
+        ), ceilings
+        assert ceilings[-1] == pytest.approx(monophasic, rel=1e-12)
+        assert ceilings[0] == pytest.approx(2.0 * monophasic, rel=1e-9)

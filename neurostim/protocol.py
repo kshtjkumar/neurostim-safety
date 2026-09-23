@@ -237,8 +237,29 @@ class StimProtocol:
 
         Zero for an ideal charge-balanced biphasic pulse; equal to the full phase
         charge for a monophasic pulse. Any non-zero value accumulates over the train.
+
+        Signed: positive when the leading phase dominates, negative when the return phase
+        over-recovers. The sign is the direction the interface drifts, which the
+        water-window check needs in order to know which edge it is heading for.
         """
-        return self.charge_per_phase_uC - self.return_charge_uC
+        return self.net_charge_at_uA(self.current_uA)
+
+    def net_charge_at_uA(self, current_uA: float) -> float:
+        """Unrecovered charge per pulse at a given leading amplitude.
+
+        The companion to :meth:`return_phase_current_at_uA`, and there for the same
+        reason: the water-window drift ceiling is back-solved over amplitude, so the
+        predicate has to ask what this waveform leaves behind at an amplitude the
+        protocol was never configured at. One expression, so the reported DC and the
+        one the ceiling inverts cannot drift apart.
+        """
+        return charge_uC(current_uA, self.pulse_width_us) - charge_uC(
+            self.return_phase_current_at_uA(current_uA), self.return_phase_width_us
+        )
+
+    def net_dc_current_at_uA(self, current_uA: float) -> float:
+        """Time-averaged unrecovered current at a given leading amplitude."""
+        return self.net_charge_at_uA(current_uA) * self.frequency_hz
 
     @property
     def is_charge_balanced(self) -> bool:
@@ -265,7 +286,7 @@ class StimProtocol:
         drives irreversible faradaic reactions regardless of how favourable the
         per-pulse charge density looks.
         """
-        return self.net_charge_per_pulse_uC * self.frequency_hz
+        return self.net_dc_current_at_uA(self.current_uA)
 
     @property
     def total_charge_per_train_uC(self) -> float:
