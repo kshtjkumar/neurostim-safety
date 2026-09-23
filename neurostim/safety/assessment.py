@@ -110,6 +110,59 @@ reported as "no amplitude is safe" instead of as a number (ledger 84, fix plan D
 """
 
 
+CeilingInterval = Callable[["SafetyAssessment", "Check"], Interval]
+"""A limit-bearing check's ceiling across the published range that stands behind it."""
+
+
+def _exact_ceiling(assessment: SafetyAssessment, check: Check) -> Interval:
+    """No source in this bibliography gives a range for this check, so none is invented."""
+    return Interval.exact(check.ceiling_uA)
+
+
+def _shannon_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Interval:
+    """Shannon's ceiling over the whole ``k`` band he drew, 1.5-2.0."""
+    return shannon_mod.max_current_interval_uA(
+        assessment.electrode.area_cm2, assessment.protocol.pulse_width_us
+    )
+
+
+def _charge_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Interval:
+    """The charge-injection ceiling over the material's full published CIC range."""
+    if assessment.charge.max_current_interval_uA is not None:
+        return assessment.charge.max_current_interval_uA
+    # pragma: no cover - only if a caller builds ChargeResult by hand
+    return Interval.exact(assessment.charge.max_current_uA)
+
+
+def _chronic_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Interval:
+    """The dissolution ceiling over the material's stored threshold band."""
+    return _chronic_ceiling_interval_uA(
+        assessment.material, assessment.protocol, assessment.electrode.area_cm2
+    )
+
+
+CEILING_INTERVALS: dict[str, CeilingInterval] = {
+    "Shannon criterion": _shannon_ceiling_interval,
+    "Charge injection limit": _charge_ceiling_interval,
+    "Chronic degradation": _chronic_ceiling_interval,
+    "Water window": _exact_ceiling,
+    "Current density": _exact_ceiling,
+    "Microelectrode charge/phase": _exact_ceiling,
+    "Compliance voltage": _exact_ceiling,
+}
+"""How each :data:`LIMIT_BEARING` check's ceiling widens over its published range.
+
+A table beside :data:`CHECK_KINDS` for the reason that one is a table, plus one more: the
+lookup must *raise* on a name it does not know. It used to be three ``if check.name ==``
+branches falling through to ``Interval.exact``, so a check whose name stopped matching
+reported a point where the literature supports a band -- on ``DiscElectrode(100, "Pt")``
+at 80 uA the chronic band 7.853-19.63 uA became 19.63 uA with nothing raised (ledger 97),
+and the check names had already been rewritten wholesale once (ledger 95(a)). A check with
+no published range therefore says so explicitly with :func:`_exact_ceiling`, rather than
+reaching it by default; the keys are asserted equal to :data:`LIMIT_BEARING`.
+"""
+
+
 NO_SAFE_AMPLITUDE: frozenset[str] = frozenset({"Charge balance"})
 """Checks whose FAIL means no amplitude of this waveform is safe.
 
@@ -538,8 +591,9 @@ class SafetyAssessment:
         ``k`` 1.5-2.0, and chronic degradation over its stored threshold band. The rest
         contribute their ceiling exactly -- not because they are certain, but because no
         source in this bibliography gives a range for them, and inventing one here would
-        be the kind of unsourced number this package exists to avoid. A check that did not
-        run contributes nothing at all.
+        be the kind of unsourced number this package exists to avoid. Each check's
+        contribution is declared in :data:`CEILING_INTERVALS`, and a check missing from it
+        raises. A check that did not run contributes nothing at all.
 
         A wide result is not a defect of the calculation. It is what the literature
         actually supports, and narrowing it requires characterising your own electrodes.
@@ -554,21 +608,22 @@ class SafetyAssessment:
         return most_restrictive(candidates)
 
     def _ceiling_interval_uA(self, check: Check) -> Interval:
-        """One check's ceiling across whatever published range stands behind it."""
-        if check.name == "Shannon criterion":
-            return shannon_mod.max_current_interval_uA(
-                self.electrode.area_cm2, self.protocol.pulse_width_us
-            )
-        if check.name == "Charge injection limit":
-            if self.charge.max_current_interval_uA is not None:
-                return self.charge.max_current_interval_uA
-            # pragma: no cover - only if a caller builds ChargeResult by hand
-            return Interval.exact(self.charge.max_current_uA)
-        if check.name == "Chronic degradation":
-            return _chronic_ceiling_interval_uA(
-                self.material, self.protocol, self.electrode.area_cm2
-            )
-        return Interval.exact(check.ceiling_uA)
+        """One check's ceiling across whatever published range stands behind it.
+
+        Raises ``KeyError`` for a check :data:`CEILING_INTERVALS` does not declare, the
+        way :attr:`Check.kind` does: falling back to the point would silently narrow a
+        published band (ledger 97).
+        """
+        try:
+            provider = CEILING_INTERVALS[check.name]
+        except KeyError:
+            raise KeyError(
+                f"no ceiling interval declared for check {check.name!r}; add it to "
+                f"CEILING_INTERVALS. A check with no published range must declare "
+                f"_exact_ceiling rather than reach it by default, or a renamed check "
+                f"reports a point where the literature supports a band."
+            ) from None
+        return provider(self, check)
 
     @property
     def limiting_mechanism(self) -> str:

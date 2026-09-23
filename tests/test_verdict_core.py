@@ -2533,6 +2533,87 @@ class TestTheIntervalContainsThePointEstimate:
         )
 
 
+class TestEveryCeilingDeclaresItsInterval:
+    """Ledger 97. A check's published band is looked up by name, and a stale name raises.
+
+    ``_ceiling_interval_uA`` dispatched on three string literals and fell through to
+    ``Interval.exact(ceiling)``, so a check whose name stopped matching reported a *point*
+    where the literature supports a band -- on ``DiscElectrode(100, "Pt")`` at 80 uA the
+    chronic band 7.853-19.63 uA collapsed to 19.63 uA, and nothing raised. The names have
+    already been rewritten wholesale once in this repair (ledger 95(a)). The neighbouring
+    lookup on the same strings, :attr:`Check.kind`, raises; this one now does too.
+    """
+
+    @staticmethod
+    def _assessment():
+        return SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0)
+        ).assess()
+
+    def test_every_limit_bearing_check_declares_an_interval_provider(self):
+        """Exhaustiveness against the set, not against a list written here.
+
+        Not tautological: ``LIMIT_BEARING`` is cross-asserted against the oracle's
+        independent copy elsewhere, so a check added to it without a provider fails here,
+        and a provider left behind for a check that was renamed away fails here too.
+        """
+        from neurostim.safety.assessment import CEILING_INTERVALS, LIMIT_BEARING
+
+        assert set(CEILING_INTERVALS) == set(LIMIT_BEARING)
+
+    def test_the_published_chronic_band_is_still_a_band(self):
+        """Not tautological: 7.853981633974484 and 19.634954084936204 uA are Pt's 20 and
+        50 uC/cm^2 dissolution band times 7.853981633974483e-05 cm^2 over 200 us, the
+        numbers the ledger entry quotes; the fold is the band's own 2.5."""
+        assessment = self._assessment()
+        interval = assessment.limiting_current_interval_uA
+
+        assert assessment.limiting_mechanism == "Chronic degradation"
+        assert interval.low == pytest.approx(7.853981633974484, rel=1e-12)
+        assert interval.high == pytest.approx(19.634954084936204, rel=1e-12)
+        assert interval.fold_range == pytest.approx(2.5, rel=1e-12)
+
+    def test_a_renamed_check_raises_instead_of_collapsing_its_band(self, monkeypatch):
+        """The ledger's own reproduction: one name drifts, everywhere but the interval.
+
+        The rename is applied to the check, to ``LIMIT_BEARING`` and to ``CHECK_KINDS`` --
+        every table a rename would be caught by today -- and not to the interval dispatch,
+        which is the one that used to fall through. Before the fix this returned the
+        point 19.63 uA silently; it must raise and name the check.
+        """
+        from dataclasses import replace
+
+        from neurostim.safety import assessment as assessment_mod
+
+        stale = "Chronic dissolution"
+        monkeypatch.setattr(
+            assessment_mod,
+            "LIMIT_BEARING",
+            (assessment_mod.LIMIT_BEARING - {"Chronic degradation"}) | {stale},
+        )
+        monkeypatch.setitem(assessment_mod.CHECK_KINDS, stale, "electrode-chronic")
+        original = self._assessment()
+        renamed = replace(
+            original,
+            checks=tuple(
+                replace(c, name=stale) if c.name == "Chronic degradation" else c
+                for c in original.checks
+            ),
+        )
+        assert stale in {c.name for c in renamed._limit_bearing}  # the premise
+
+        with pytest.raises(KeyError, match="Chronic dissolution"):
+            _ = renamed.limiting_current_interval_uA
+
+    def test_an_unknown_check_raises(self):
+        """A check the table has never heard of is not given a point interval by default."""
+        from neurostim.safety.assessment import Check
+
+        stranger = Check(name="Not a check", status=Status.PASS, summary="", ceiling_uA=1.0)
+        with pytest.raises(KeyError, match="Not a check"):
+            self._assessment()._ceiling_interval_uA(stranger)
+
+
 class TestNonFiniteSettingsAreRejected:
     """Ledger 13 and 52. A setting that is not a number produced a verdict anyway.
 
