@@ -951,7 +951,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 2 | HIGH | BLOCKED | C2.3, C2.4 | T4 rewritten as four assertions; drift model supplies a *lower* limit |
 | 3 | HIGH | OK | C2.1, C2.3 | field renamed; FAIL criterion sourced |
 | 4 | HIGH | OK | C2.2 | §6 now books the limiting-current move |
-| 5 | HIGH | OK | C3.5 | default CAUTION; mutual term modelled |
+| 5 | HIGH | OK | C3.5 | **FIXED** `978c1da`; default CAUTION; mutual term modelled |
 | 6 | HIGH | TEST-WEAK | C2.5 | excursion deleted, so the percent/fraction trap is gone |
 | 7 | MED | LISTED-ONLY | C4.2 | split out, with a polarity test |
 | 8 | MED | LISTED-ONLY | C4.2 | split out, with the half-window test; ledger row repaired at C0.5 |
@@ -1034,7 +1034,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 67(b) | HIGH | OK | C2.1 | **re-assigned from C1.10** (Phase 1 review F9). The unbalanced-biphasic Charge-balance FAIL branch cannot be reached until imbalance is expressible, which is C2.1; C1.10 could not close it and correctly did not. The row was unsatisfiable as written and must not be used as a Phase-2 exit criterion against C1.10 |
 | 67(c) | HIGH | OK | C1.1 | |
 | 68 | MED | PARTIAL | C0.1, C7.6 | branch floor now implementable (§3) |
-| 69 | MED | PARTIAL | C0.2, C0.5, C1.11, C3.5 | T18 scheduled at C3.5; ledger gate at C0.5 |
+| 69 | MED | PARTIAL | C0.2, C0.5, C1.11, C3.5 | **FIXED** `978c1da` (T18 landed at C3.5); ledger gate at C0.5 |
 | 70 | — | N/A | — | vindication |
 | 71 | HIGH | OK | C4.5 | |
 | 72 | HIGH | OK | C4.6 | |
