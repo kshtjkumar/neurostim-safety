@@ -149,16 +149,19 @@ class ChargeResult:
             f"Charge injection ({self.material_key}, {self.policy}, "
             f"{self.polarity}) -> {verdict}",
             f"  applied   {self.charge_density_uC_cm2:.4g} uC/cm^2",
-            f"  limit     {self.cic_limit_uC_cm2:.4g} uC/cm^2 "
+            f"  limit     {format_limit(self.cic_limit_uC_cm2)} uC/cm^2 "
             f"({self.utilisation * 100:.1f} % used)",
             f"  max current {format_limit(self.max_current_uA)} uA",
         ]
         if self.limit_is_a_range:
             assert self.limit_interval_uC_cm2 is not None
             assert self.max_current_interval_uA is not None
-            lo, hi = self.limit_interval_uC_cm2.low, self.limit_interval_uC_cm2.high
+            # Both ends are limits, so both floor -- the same reason the uA interval
+            # beside them does. This line used to render them with `:.4g` by hand, which
+            # printed 7.143 for a low end of 7.142857142857143 (ledger 96).
             lines.append(
-                f"  published range {lo:.4g}-{hi:.4g} uC/cm^2 "
+                f"  published range "
+                f"{self.limit_interval_uC_cm2.describe('uC/cm^2', floor=True)} "
                 f"({self.limit_interval_uC_cm2.fold_range:.1f}x) "
                 f"-> {self.max_current_interval_uA.describe('uA', floor=True)}"
             )

@@ -45,10 +45,10 @@ Limiting current: 20.00 uA (Microelectrode charge/phase)
   INCOMPLETE: 1 limit-bearing check did not run (Shannon criterion), so the true limit may be lower
 
 [NOT_EVALUATED] Shannon criterion: not applicable: 0.000283 cm^2 is below the macro/micro boundary (k would read -0.04)
-[      CAUTION] Charge injection limit: 56.59 uC/cm^2 of 100 uC/cm^2 (57 % used)
+[      CAUTION] Charge injection limit: 56.59 uC/cm^2 of 100.0 uC/cm^2 (57 % used)
 [         PASS] Water window: peak -0.23 V, 0.37 V headroom
 [      CAUTION] Validated envelope: frequency 2.6x outside the fit conditions in a direction that reduces margin
-[      CAUTION] Current density: 0.2829 A/cm^2 of the 0.3057 A/cm^2 electroporation threshold (92.6 % used, chick-tissue derived)
+[      CAUTION] Current density: 0.2829 A/cm^2 of the 0.3056 A/cm^2 electroporation threshold (92.6 % used, chick-tissue derived)
 [         FAIL] Microelectrode charge/phase: 16 nC/phase exceeds the 4 nC/phase microelectrode damage threshold
 [         FAIL] Chronic degradation: 56.59 uC/cm^2 exceeds the 50 uC/cm^2 platinum dissolution threshold
 [         PASS] Charge balance: biphasic, fully charge-balanced

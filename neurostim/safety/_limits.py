@@ -18,6 +18,17 @@ onto the boundary from whichever side it landed.
 :func:`format_limit` does, to four significant digits, and verifies that what it printed
 parses back to something no larger than what it was given.
 
+**The rule is about maxima, not about microamps** (ledger 96). Ledger 49 was scoped to
+amplitude renders and the same defect survived a phase in other units: the in vivo derated
+charge-injection limit printed "7.143" for 7.142857142857143 uC/cm^2 on four surfaces
+including the PDF, and Butterwick's electroporation threshold -- a power law in pulse width
+and electrode size, so round only by accident -- overstated on 32 of 56 swept (diameter,
+pulse width) pairs, the worked example among them (0.3057 printed for 0.30567628563823 A/
+cm^2). Hand :func:`format_limit` any quantity a reader must stay at or below.
+
+*Applied* quantities keep round-to-nearest, deliberately. Flooring one understates what is
+being delivered, which is the wrong direction for the number a limit is compared against.
+
 The two are separate because they fail separately: a bit-exact back-solve still prints
 wrong, and a floored string still overstates if the value behind it does.
 

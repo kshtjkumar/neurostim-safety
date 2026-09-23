@@ -1369,6 +1369,171 @@ class TestSensitivityRefusesWhenNoAmplitudeIsSafe:
             assert names == ["Charge balance"], (override, names)
 
 
+class TestALimitFloorsWhateverItsUnit:
+    """Ledger 49 closed for amplitudes only; the same defect survived in other units.
+
+    D2's rule is about *maxima*, not about microamps: "a limit rounded to nearest is a
+    limit rounded UP", and a reader who programmes to a printed maximum must pass the check
+    whose maximum it claims to be. C1.3 routed every µA limit through ``format_limit`` and
+    stopped there, so ``:.4g`` still rounded a published charge density and a published
+    current density up on six surfaces including the PDF.
+
+    Both quantities only look round. ``cic_limit_uC_cm2`` is a stored constant *divided by
+    an in vivo derating factor*, and ``threshold_A_per_cm2`` is a power law in pulse width
+    and electrode size -- neither is round except by accident.
+
+    *Applied* quantities are deliberately left on round-to-nearest. Flooring one would
+    understate what is being delivered, which is the wrong direction for a value that is
+    compared *against* a limit.
+    """
+
+    def test_the_derated_charge_injection_limit_floors_on_every_surface(self):
+        """Pt's 50 uC/cm^2 over Cogan's conservative in vivo derating is 7.142857142857143.
+
+        Not tautological: 50.0 and the 7x derating are published constants, the quotient is
+        written out here, "7.143" is what ``:.4g`` prints and is asserted absent on each
+        surface, and "7.142" is the hand-floored four-digit form. The FAIL and the CAUTION
+        branches render the limit through different f-strings and are both asserted.
+        """
+        failing = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            medium="in_vivo",
+        ).assess()
+        cautioning = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(2.0, 200.0, 130.0, 1.0),
+            medium="in_vivo",
+        ).assess()
+
+        assert failing.charge.cic_limit_uC_cm2 == pytest.approx(
+            7.142857142857143, rel=1e-15
+        )
+        for assessment in (failing, cautioning):
+            check = next(
+                c for c in assessment.checks if c.name == "Charge injection limit"
+            )
+            assert "7.142" in check.summary, check.summary
+            assert "7.143" not in check.summary, check.summary
+            assert "7.142" in assessment.charge.describe()
+            assert "7.143" not in assessment.charge.describe()
+
+    def test_the_pdf_charge_injection_row_floors(self, tmp_path):
+        """The sixth surface, and the one a reader takes away from the room.
+
+        Not tautological: the PDF is rendered and its extracted text searched for the two
+        literal forms, neither of which the renderer is asked about.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            medium="in_vivo",
+        )
+        text = pdf_text(calc, tmp_path / "derated.pdf")
+
+        assert "7.142" in text
+        assert "7.143" not in text
+
+    def test_the_electroporation_threshold_floors(self):
+        """Butterwick's threshold is a power law, so it is round only by accident: 32 of 56
+        swept (diameter, pulse width) pairs print a threshold strictly above the threshold.
+
+        Not tautological: 9.348927087079717 A/cm^2 is recomputed here from
+        ``butterwick2007.threshold_A_per_cm2`` for this geometry -- the data module, not
+        the check -- "9.349" is what ``:.4g`` prints and is asserted absent, "9.348" is the
+        hand-floored form.
+        """
+        from neurostim.data import butterwick2007
+
+        expected = butterwick2007.threshold_A_per_cm2(100.0, 40.0)
+        assert expected == pytest.approx(9.348927087079717, rel=1e-15)
+        assert f"{expected:.4g}" == "9.349"  # what the defect printed
+
+        assessment = SafetyCalculator(
+            DiscElectrode(40.0, "Pt"), StimProtocol(5.0, 100.0, 130.0, 1.0)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Current density")
+
+        assert "9.348" in check.summary, check.summary
+        assert "9.349" not in check.summary, check.summary
+        assert "9.348" in check.detail
+        assert "9.349" not in check.detail
+
+    def test_the_applied_quantities_are_not_floored(self):
+        """The rule is about maxima. Flooring an applied value would understate what is
+        being delivered, which is the wrong direction for the number a limit is compared
+        against.
+
+        Not tautological: the applied density here is 203.71833174178533 uC/cm^2, whose
+        round-to-nearest four-digit form is "203.7" and whose floored form is also "203.7"
+        at four digits -- so the assertion is made on a value where the two differ:
+        0.39788735772973844 A/cm^2, which rounds to "0.3979" and floors to "0.3978".
+        """
+        assessment = SafetyCalculator(
+            DiscElectrode(40.0, "Pt"), StimProtocol(5.0, 100.0, 130.0, 1.0)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Current density")
+
+        assert "0.3979" in check.summary, check.summary
+        assert "0.3978" not in check.summary, check.summary
+
+    def test_every_constant_printed_with_g_renders_exactly(self):
+        """The ``:g`` sites are safe only because the constants behind them are round.
+
+        ``:g`` is six significant digits and rounds to nearest, so the chronic-degradation
+        band, the published CIC ends, the water-window bounds, Cogan's 4 nC/phase and the
+        ISO 14708-3 thermal limit are all printed without overstating *today* -- and would
+        start overstating the day a non-round value is added, silently. This turns "they
+        happen to be round" into a gate: adding a constant that does not survive its own
+        rendering fails here, and whoever adds it decides between flooring the site and
+        widening the format.
+
+        Not tautological: the property asserted is a round trip through the *rendering*,
+        ``float(f"{value:g}") == value``, which is a fact about IEEE and the format spec
+        and is false for most floats -- 7.142857142857143 and 9.348927087079717, the two
+        values this commit had to floor, both fail it.
+        """
+        from neurostim.data import cogan2016
+        from neurostim.materials import MATERIALS, get_material
+
+        def renders_exactly(value: float) -> bool:
+            return float(f"{value:g}") == value
+
+        # The two values that forced the rest of this commit fail the property, so it is
+        # not vacuous.
+        assert not renders_exactly(7.142857142857143)
+        assert not renders_exactly(9.348927087079717)
+
+        checked = 0
+        for key in sorted(MATERIALS):
+            material = get_material(key)
+            if material.chronic_threshold is not None:
+                for value in (
+                    material.chronic_threshold.low_uC_cm2,
+                    material.chronic_threshold.high_uC_cm2,
+                ):
+                    assert renders_exactly(value), (key, "chronic", value)
+                    checked += 1
+            if material.water_window is not None:
+                for value in (
+                    material.water_window.cathodic_V,
+                    material.water_window.anodic_V,
+                ):
+                    assert renders_exactly(value), (key, "window", value)
+                    checked += 1
+            for policy in ("conservative", "optimistic"):
+                for anodic_first in (True, False, None):
+                    value = material.cic_uC_cm2(policy, anodic_first)
+                    assert renders_exactly(value), (key, policy, anodic_first, value)
+                    checked += 1
+
+        assert renders_exactly(
+            cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE
+        )
+        assert renders_exactly(2.0)  # thermal.ThermalResult.limit_K, ISO 14708-3
+        assert checked > 60, checked
+
+
 class TestEveryLimitBearingCheckHasAMargin:
     """C1.4. Four of nine checks expose a margin today, so a minimum over them cannot see
     the other three (fix plan D3, ledger 1).

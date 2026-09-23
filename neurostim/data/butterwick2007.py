@@ -191,11 +191,23 @@ class ThresholdComparison:
         return self.applied_A_per_cm2 >= self.threshold_A_per_cm2
 
     def describe(self) -> str:
-        """Multi-line summary."""
+        """Multi-line summary, with the threshold floored (ledger 96).
+
+        The threshold is a maximum, and ``:.4g`` rounds a maximum up: 32 of 56 swept
+        (diameter, pulse width) pairs printed a threshold strictly above the threshold.
+        The applied density beside it keeps round-to-nearest -- flooring it would
+        understate what is being delivered.
+
+        Imported inside the function: ``neurostim.safety`` imports ``neurostim.data`` at
+        module scope, so a module-level import here would close the cycle.
+        ``uncertainty.Interval.describe`` does the same, for the same reason.
+        """
+        from ..safety._limits import format_limit
+
         return "\n".join(
             [
                 f"  applied     {self.applied_A_per_cm2:.4g} A/cm^2",
-                f"  threshold   {self.threshold_A_per_cm2:.4g} A/cm^2 "
+                f"  threshold   {format_limit(self.threshold_A_per_cm2)} A/cm^2 "
                 f"({self.utilisation * 100:.1f} % used, {self.margin:.2f}x margin)",
                 f"  conditions  {self.pulse_width_us:g} us, {self.n_pulses} pulses, "
                 f"{self.regime}",

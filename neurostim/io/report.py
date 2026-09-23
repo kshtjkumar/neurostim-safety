@@ -325,7 +325,8 @@ def build_report(
                 ),
                 (
                     "Charge-injection limit",
-                    f"{assessment.charge.cic_limit_uC_cm2:.4g} &micro;C/cm&sup2; "
+                    f"{format_limit(assessment.charge.cic_limit_uC_cm2)} "
+                    f"&micro;C/cm&sup2; "
                     f"({calc.policy} policy)",
                 ),
                 (

@@ -931,7 +931,7 @@ def _charge_check(result: charge_mod.ChargeResult) -> Check:
             status=Status.FAIL,
             summary=(
                 f"{result.charge_density_uC_cm2:.4g} uC/cm^2 exceeds the "
-                f"{result.cic_limit_uC_cm2:.4g} uC/cm^2 limit for "
+                f"{format_limit(result.cic_limit_uC_cm2)} uC/cm^2 limit for "
                 f"{result.material_key}; max {format_limit(result.max_current_uA)} uA"
             ),
             detail=result.describe(),
@@ -951,7 +951,7 @@ def _charge_check(result: charge_mod.ChargeResult) -> Check:
         status=status,
         summary=(
             f"{result.charge_density_uC_cm2:.4g} uC/cm^2 of "
-            f"{result.cic_limit_uC_cm2:.4g} uC/cm^2 "
+            f"{format_limit(result.cic_limit_uC_cm2)} uC/cm^2 "
             f"({result.utilisation * 100:.0f} % used)"
         ),
         detail=result.describe(),
@@ -1048,7 +1048,7 @@ def _current_density_check(result: jd_mod.CurrentDensityResult) -> Check:
             status=Status.FAIL,
             summary=(
                 f"{comparison.applied_A_per_cm2:.4g} A/cm^2 is at or above the "
-                f"{comparison.threshold_A_per_cm2:.4g} A/cm^2 electroporation threshold"
+                f"{format_limit(comparison.threshold_A_per_cm2)} A/cm^2 electroporation threshold"
             ),
             detail=result.describe(),
             margin=comparison.margin,
@@ -1058,7 +1058,7 @@ def _current_density_check(result: jd_mod.CurrentDensityResult) -> Check:
         status=Status.CAUTION if comparison.margin < CAUTION_MARGIN else Status.PASS,
         summary=(
             f"{comparison.applied_A_per_cm2:.4g} A/cm^2 of the "
-            f"{comparison.threshold_A_per_cm2:.4g} A/cm^2 electroporation threshold "
+            f"{format_limit(comparison.threshold_A_per_cm2)} A/cm^2 electroporation threshold "
             f"({comparison.utilisation * 100:.1f} % used, chick-tissue derived)"
         ),
         detail=result.describe(),
