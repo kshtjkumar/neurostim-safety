@@ -1545,6 +1545,22 @@ class TestALimitFloorsWhateverItsUnit:
                 ):
                     assert renders_exactly(value), (key, "window", value)
                     checked += 1
+            # What MeasuredRange.describe prints with :g: the ends in their stored units,
+            # plus every polarity sub-range end.
+            cic = material.cic
+            for value in (
+                cic.low,
+                cic.high,
+                *(cic.anodic_first_range or ()),
+                *(cic.cathodic_first_range or ()),
+            ):
+                assert renders_exactly(value), (key, "stored CIC end", value)
+                checked += 1
+            # The same ends converted to uC/cm^2, for every polarity. ``nominal`` is not
+            # a stored constant but a midpoint -- Pt's anodic-first one is
+            # 75.00000000000001 and fails this property -- so it is not gated here: its
+            # one render site is charge.py's policy warning, which floors, and
+            # TestTheDerivedChargeLimitsFloor walks every policy through that site.
             for policy in ("conservative", "optimistic"):
                 for anodic_first in (True, False, None):
                     value = material.cic_uC_cm2(policy, anodic_first)
@@ -1554,8 +1570,111 @@ class TestALimitFloorsWhateverItsUnit:
         assert renders_exactly(
             cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE
         )
-        assert renders_exactly(2.0)  # thermal.ThermalResult.limit_K, ISO 14708-3
-        assert checked > 60, checked
+        checked += 1
+        # The module's own value, not a literal standing in for it: rendered with :g at
+        # ThermalResult.describe, and defaulted twice (the dataclass and evaluate()).
+        import inspect
+
+        from neurostim.models import thermal
+
+        for value in (
+            thermal.ThermalResult.limit_K,
+            inspect.signature(thermal.evaluate).parameters["limit_K"].default,
+        ):
+            assert renders_exactly(value), ("thermal limit_K", value)
+            checked += 1
+        assert checked > 100, checked
+
+
+class TestTheDerivedChargeLimitsFloor:
+    """Ledger 100(b). The policy warning renders a *derived* limit, and it must floor.
+
+    ``charge.evaluate``'s policy warning printed ``limit`` and ``endorsed`` with ``:g``.
+    ``limit`` is the policy's value divided by any in vivo derating -- Pt's 50 uC/cm^2
+    over 7 is 7.142857142857143, which ``:g`` prints as "7.14286", above the limit -- and
+    ``nominal`` is a midpoint, not a stored constant. The stored-constant gate above cannot
+    reach either. Today only SS316LVM's source endorses an end and it has no derating, so
+    the site printed round numbers by luck of the database; this walks the site with every
+    material given an endorsement, so the luck is not what the test rests on.
+    """
+
+    @staticmethod
+    def _warnings():
+        """Every (material, policy, polarity, medium) that renders a policy warning.
+
+        Each material's CIC is given ``recommended_policy="conservative"`` so the warning
+        is reachable for all of them, then evaluated at the two policies that exceed it.
+        """
+        from dataclasses import replace
+
+        from neurostim.materials import MATERIALS, get_material
+        from neurostim.safety import charge
+
+        for key in sorted(MATERIALS):
+            base = get_material(key)
+            material = replace(base, cic=replace(base.cic, recommended_policy="conservative"))
+            for policy in ("nominal", "optimistic"):
+                for anodic_first in (True, False, None):
+                    for medium in ("saline", "in_vivo"):
+                        result = charge.evaluate(
+                            material,
+                            1.0,
+                            0.01,
+                            200.0,
+                            policy=policy,  # type: ignore[arg-type]
+                            medium=medium,
+                            anodic_first=anodic_first,
+                        )
+                        endorsed = material.cic_uC_cm2("conservative", anodic_first)
+                        yield key, policy, anodic_first, medium, result, endorsed
+
+    def test_every_number_in_the_policy_warning_is_at_or_below_its_limit(self):
+        """Not tautological: the two numbers are parsed back out of the rendered sentence
+        and compared with values computed here from the material record -- the policy's
+        own value over the derating the result reports -- not with anything the renderer
+        was handed."""
+        import re
+
+        from neurostim.materials import get_material
+
+        pattern = re.compile(
+            r"applies (\S+) uC/cm\^2, but .* end at (\S+) uC/cm\^2"
+        )
+        checked = 0
+        for key, policy, anodic_first, medium, result, endorsed in self._warnings():
+            case = (key, policy, anodic_first, medium, result.policy_warning)
+            match = pattern.search(result.policy_warning)
+            assert match is not None, case
+            applied_text, endorsed_text = match.groups()
+            limit = (
+                get_material(key).cic_uC_cm2(policy, anodic_first)  # type: ignore[arg-type]
+                / result.derating_applied
+            )
+            assert float(applied_text) <= limit, case
+            assert float(endorsed_text) <= endorsed, case
+            checked += 1
+        assert checked == 9 * 2 * 3 * 2, checked
+
+    def test_the_derated_platinum_limit_does_not_round_up(self):
+        """The review's own values. Pt's unpolarised range is 50-150 uC/cm^2 and Cogan's
+        worst in vivo reduction for it is 14x, so nominal is 100/14 = 7.142857142857143
+        and optimistic 150/14 = 10.714285714285714 -- printed "7.14286" and "10.7143" by
+        ``:g``, each above the limit it names. The floored forms are "7.142" and "10.71".
+        """
+        from neurostim.data import cogan2016
+
+        assert cogan2016.derating_for("Pt").worst == 14.0  # the fixture's premise
+        assert float("7.14286") > 100.0 / 14.0  # the defect's direction, written out
+        assert float("10.7143") > 150.0 / 14.0
+        seen = {}
+        for key, policy, anodic_first, medium, result, _ in self._warnings():
+            if key == "Pt" and medium == "in_vivo" and anodic_first is None:
+                seen[policy] = result.policy_warning
+        assert set(seen) == {"nominal", "optimistic"}
+        assert "applies 7.142 uC/cm^2" in seen["nominal"], seen["nominal"]
+        assert "applies 10.71 uC/cm^2" in seen["optimistic"], seen["optimistic"]
+        for warning in seen.values():
+            assert "7.14286" not in warning and "10.7143" not in warning, warning
 
 
 class TestEveryLimitBearingCheckHasAMargin:

@@ -514,7 +514,9 @@ class TestReportShowsSourceCaveats:
 
         flat = re.sub(r"\s+", " ", text)
         assert "POLICY:" in flat
-        assert "endorses the 'conservative' end at 20 uC/cm^2" in flat
+        # Floored to four significant digits since ledger 100: both numbers are maxima.
+        assert "endorses the 'conservative' end at 20.00 uC/cm^2" in flat
+        assert "applies 30.00 uC/cm^2" in flat
 
     def test_pulse_width_is_visible_next_to_the_limit(self, text):
         """The limit is only valid at the width it was measured at; show it."""

@@ -253,10 +253,12 @@ def evaluate(
     endorsed_policy = mat.cic.recommended_policy
     if endorsed_policy is not None and mat.cic.exceeds_recommendation(policy):
         endorsed = mat.cic_uC_cm2(endorsed_policy, anodic_first)
+        # Both are maxima, and `limit` may be derated or a midpoint -- round only by
+        # accident, so `:g` would print it high (ledger 100).
         policy_warning = (
-            f"the '{policy}' policy applies {limit:g} uC/cm^2, but the source for this "
-            f"limit endorses the '{endorsed_policy}' end at "
-            f"{endorsed:g} uC/cm^2"
+            f"the '{policy}' policy applies {format_limit(limit)} uC/cm^2, but the source "
+            f"for this limit endorses the '{endorsed_policy}' end at "
+            f"{format_limit(endorsed)} uC/cm^2"
         )
         if mat.cic.recommendation_note:
             policy_warning += f" -- {mat.cic.recommendation_note}"
