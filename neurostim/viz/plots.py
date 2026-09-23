@@ -251,7 +251,7 @@ def current_limit_sweep(
 
     binding_uA = assessment.limiting_current_uA
     if binding_uA is None:
-        refusal = assessment.unsafe_at_any_amplitude_note()
+        refusal = assessment.no_safe_amplitude_note()
         # In place of the amplitude, not beside it: a reader who sees a number will
         # programme it, however the sentence next to it is worded. The shaded region goes
         # with it, for the same reason -- it is a claim that everything below is safe.

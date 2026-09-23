@@ -130,7 +130,7 @@ def headline_text(assessment: SafetyAssessment) -> str:
     not_evaluated = assessment.not_evaluated_note()
     limit_uA = assessment.limiting_current_uA
     limit = (
-        assessment.unsafe_at_any_amplitude_note()
+        assessment.no_safe_amplitude_note()
         if limit_uA is None
         else (
             f"limiting current "

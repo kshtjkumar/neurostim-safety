@@ -126,7 +126,7 @@ def _limit(
     if limit_uA is None:
         raise UnsafeAtAnyAmplitude(
             f"no binding current limit for this setting -- "
-            f"{assessment.unsafe_at_any_amplitude_note()}."
+            f"{assessment.no_safe_amplitude_note()}."
         )
     return limit_uA
 
@@ -138,15 +138,16 @@ def _refusal(calc: SafetyCalculator) -> str:
     here, so this module cannot disagree with ``describe()``, the JSON, the PDF, the GUI
     and the figure about what it is refusing (ledger 84).
 
-    The baseline calculator is enough. ``analyse`` varies ``k``, ``policy``, ``medium``
-    and the tissue conductivity, and none of the four is an input to a check outside
-    ``LIMIT_BEARING``: charge balance is a property of the waveform and the validated
-    envelope of the protocol's timing, so an amplitude-independent failure is the same
-    for every variant. Pinned in
+    The baseline calculator is enough, for both halves of the refusal. ``analyse`` varies
+    ``k``, ``policy``, ``medium`` and the tissue conductivity. None of the four is an input
+    to a check in ``NO_SAFE_AMPLITUDE``: charge balance is a property of the waveform, so
+    an amplitude-independent failure is the same for every variant. Nor can any of them
+    open or close a zero ceiling: the two routes to one are a resting potential on the
+    window edge and a train with no end, and neither is varied here. Pinned in
     ``TestSensitivityRefusesWhenNoAmplitudeIsSafe::test_the_varied_settings_cannot_create_or_remove_that_refusal``;
     if it ever stops being true the refusal has to move into :func:`_limit`.
     """
-    return calc.assess().unsafe_at_any_amplitude_note()
+    return calc.assess().no_safe_amplitude_note()
 
 
 def analyse(calc: SafetyCalculator) -> list[Sensitivity]:

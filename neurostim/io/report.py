@@ -231,7 +231,7 @@ def build_report(
     # programme it whatever the sentence next to it says (ledger 84).
     limit_uA = assessment.limiting_current_uA
     headline = (
-        f"<b>{assessment.unsafe_at_any_amplitude_note()}</b>"
+        f"<b>{assessment.no_safe_amplitude_note()}</b>"
         if limit_uA is None
         else (
             f"limiting current "

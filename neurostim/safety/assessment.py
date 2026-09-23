@@ -109,6 +109,26 @@ reported as "no amplitude is safe" instead of as a number (ledger 84, fix plan D
 """
 
 
+NO_SAFE_AMPLITUDE: frozenset[str] = frozenset({"Charge balance"})
+"""Checks whose FAIL means no amplitude of this waveform is safe.
+
+Named, never inferred from :data:`LIMIT_BEARING`'s complement, and the difference is a
+defect waiting one commit away. Two checks sit outside ``LIMIT_BEARING`` and only one of
+them carries this meaning. ``Charge balance`` FAILs when the waveform recovers no charge,
+which no amplitude fixes: the argument is that no charge-density limit in this package was
+measured on such a waveform, so every other verdict beside it is inapplicable.
+``Validated envelope`` says the protocol sits outside the conditions the Shannon fit was
+derived at, which is a statement about evidence rather than about safety at any amplitude.
+
+It has no FAIL state today -- 60 CAUTION, 12 PASS and 0 FAIL over 72 swept configurations
+-- which is the only reason the inferred definition looked correct. C2.5 rewrites that
+check; the first time it FAILs, a protocol whose only fault is a high frequency would have
+been announced as having no safe amplitude at all. "Bears no ceiling" and "failure means no
+amplitude is safe" are different properties and the second is the one this is about, so it
+is written down (review decision after ledger 99).
+"""
+
+
 class Status(str, Enum):
     """Outcome vocabulary shared by every check."""
 
@@ -262,14 +282,14 @@ class SafetyAssessment:
 
     @property
     def unsafe_at_any_amplitude(self) -> tuple[Check, ...]:
-        """FAILing checks that impose no ceiling, so no amplitude clears them.
+        """FAILing checks whose failure is a property of the waveform, not the amplitude.
 
-        A check outside :data:`LIMIT_BEARING` has an amplitude-independent verdict by
-        construction -- that is what bearing no limit means. If such a check FAILs, it
-        FAILs at every amplitude, and the protocol is unsafe as a waveform rather than as
-        an amplitude. A monophasic protocol is the case on record: it FAILs Charge balance
-        at 1 fA and at 1 A alike, and the package still printed a limiting current of
-        15.3 mA for it (ledger 84).
+        Membership of :data:`NO_SAFE_AMPLITUDE`, which is a named set and not
+        ``LIMIT_BEARING``'s complement: see that constant for why the two are different
+        questions and why reading one for the other is a defect one commit away. A
+        monophasic protocol is the case on record -- it FAILs Charge balance at 1 fA and at
+        1 A alike, and the package still printed a limiting current of 15.3 mA for it
+        (ledger 84).
 
         The tuple rather than a boolean, because every surface has to **name** the check:
         "no amplitude is safe" without saying which check makes it so tells a user nothing
@@ -282,21 +302,63 @@ class SafetyAssessment:
         return tuple(
             c
             for c in self.checks
-            if c.status is Status.FAIL and c.name not in LIMIT_BEARING
+            if c.status is Status.FAIL and c.name in NO_SAFE_AMPLITUDE
         )
 
-    def unsafe_at_any_amplitude_note(self) -> str:
+    @property
+    def permits_no_current(self) -> tuple[Check, ...]:
+        """Limit-bearing checks whose ceiling is zero, so they permit nothing at all.
+
+        The second way a protocol has no safe amplitude, and the one the type did not
+        carry. ``limiting_current_uA`` promised ``None`` whenever no amplitude is safe and
+        returned ``0.0`` here, which every surface printed as ``Limiting current: 0 uA`` --
+        an amplitude ``StimProtocol`` itself rejects, so the package named as a limit a
+        value no user can set. 12 240 of 299 520 swept configurations produce one
+        (ledger 99).
+
+        Two real routes reach it: a resting potential exactly on the window edge, which
+        :func:`water_window.validate_resting_potential_V` accepts deliberately because its
+        boundary must agree with ``WaterWindow.contains``; and, since C2.3, a continuous
+        train carrying any unrecovered charge, whose drift ceiling is exactly zero under a
+        capacitive interface model.
+
+        Non-positive rather than ``== 0.0``: a negative ceiling would be a worse statement
+        of the same thing, and ``floor_to_pass`` returns non-positive values unchanged.
+        """
+        return tuple(
+            c
+            for c in self._limit_bearing
+            if c.status is not Status.NOT_EVALUATED and c.ceiling_uA <= 0.0
+        )
+
+    def no_safe_amplitude_note(self) -> str:
         """Sentence naming why no amplitude is safe; empty when one is.
 
-        One renderer for :meth:`describe`, ``report_to_json``, the PDF header and the GUI
-        headline, so the four cannot disagree about what they are refusing to print.
+        One renderer for :meth:`describe`, ``report()``, ``report_to_json``, the PDF
+        header, the GUI headline, the figure annotation and ``sensitivity``, so the seven
+        cannot disagree about what they are refusing to print. Emptiness is the boolean
+        :attr:`limiting_current_uA` branches on, so the sentence and the refusal cannot
+        come apart.
+
+        The two reasons are rendered as separate clauses because they carry different
+        instructions: one says the *waveform* is wrong at any amplitude, the other names a
+        limit that has closed to nothing under the settings given. A protocol can have
+        both.
         """
-        checks = self.unsafe_at_any_amplitude
-        if not checks:
+        clauses = []
+        waveform = self.unsafe_at_any_amplitude
+        if waveform:
+            names = ", ".join(c.name for c in waveform)
+            verb = "FAILs" if len(waveform) == 1 else "FAIL"
+            clauses.append(f"{names} {verb} at every amplitude")
+        zero = self.permits_no_current
+        if zero:
+            names = ", ".join(c.name for c in zero)
+            verb = "permits" if len(zero) == 1 else "permit"
+            clauses.append(f"{names} {verb} no current at all")
+        if not clauses:
             return ""
-        names = ", ".join(c.name for c in checks)
-        verb = "FAILs" if len(checks) == 1 else "FAIL"
-        return f"no amplitude is safe: {names} {verb} at every amplitude"
+        return "no amplitude is safe: " + "; ".join(clauses)
 
     @property
     def _limit_bearing(self) -> tuple[Check, ...]:
@@ -307,8 +369,15 @@ class SafetyAssessment:
     def limiting_current_uA(self) -> float | None:
         """Highest amplitude that is safe to programme, or ``None`` when none is.
 
-        ``None`` **exactly when** :attr:`unsafe_at_any_amplitude` is non-empty. That is the
-        whole of this property: the number itself is :attr:`limit_bearing_ceiling_uA`.
+        ``None`` **exactly when** :meth:`no_safe_amplitude_note` has something to say --
+        which is either :attr:`unsafe_at_any_amplitude` or :attr:`permits_no_current`. That
+        is the whole of this property: the number itself is
+        :attr:`limit_bearing_ceiling_uA`.
+
+        The second half was a promise the attribute did not keep. A limit-bearing ceiling
+        of exactly ``0.0`` returned a number, and every surface printed
+        ``Limiting current: 0 uA`` -- an amplitude ``StimProtocol`` rejects at construction
+        (ledger 99).
 
         The split is a repair, not a convenience. "Limiting current" in a safety package is
         read as *the highest amplitude you may use*, and for a protocol that FAILs a check
@@ -329,7 +398,7 @@ class SafetyAssessment:
         what a user needs in order to diagnose a protocol that is unsafe as a *waveform*,
         and a raise would take all three with it.
         """
-        if self.unsafe_at_any_amplitude:
+        if self.no_safe_amplitude_note():
             return None
         return self.limit_bearing_ceiling_uA
 
@@ -532,7 +601,7 @@ class SafetyAssessment:
         limit_uA = self.limiting_current_uA
         if limit_uA is None:
             lines.append(
-                f"Limiting current: none -- {self.unsafe_at_any_amplitude_note()}"
+                f"Limiting current: none -- {self.no_safe_amplitude_note()}"
             )
         else:
             lines += [
@@ -1692,7 +1761,7 @@ class SafetyCalculator:
         meanings; everything else is additive.
         """
         assessment = self.assess()
-        unsafe = assessment.unsafe_at_any_amplitude_note()
+        unsafe = assessment.no_safe_amplitude_note()
         return {
             # --- 0.1.0 keys ---
             "area_cm2": self.e.area_cm2,

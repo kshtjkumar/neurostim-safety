@@ -203,6 +203,12 @@ def report_to_json(
         "unsafe_at_any_amplitude": [
             c.name for c in assessment.unsafe_at_any_amplitude
         ],
+        # The other way ``results.limiting_current_uA`` is null: a limit-bearing check
+        # whose ceiling has closed to zero, so it permits no current at all under the
+        # settings given. A separate key from the one above because the two carry
+        # different instructions -- change the waveform, or change the setting that closed
+        # the limit (ledger 99).
+        "permits_no_current": [c.name for c in assessment.permits_no_current],
         # True means the limit was computed over a candidate set known to be missing a
         # member, so the true limit may be lower than ``results.limiting_current_uA``.
         "limits_incomplete": assessment.limits_incomplete,

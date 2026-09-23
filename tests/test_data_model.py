@@ -864,3 +864,209 @@ class TestDcDriftOutOfTheWaterWindow:
         ), ceilings
         assert ceilings[-1] == pytest.approx(monophasic, rel=1e-12)
         assert ceilings[0] == pytest.approx(2.0 * monophasic, rel=1e-9)
+
+
+class TestTheHeadlineRefusesWheneverNoAmplitudeIsSafe:
+    """Ledger 99, and the classification trap beside it.
+
+    ``limiting_current_uA`` documented "``None`` exactly when the protocol is unsafe at any
+    amplitude" and did not keep it. Two separate holes:
+
+    **A ceiling of exactly zero was printed as a number.** ``unsafe_at_any_amplitude``
+    collected only FAILs outside ``LIMIT_BEARING``, so a limit-bearing check permitting no
+    current at all returned ``0.0`` and every surface printed
+    ``Limiting current: 0 uA (Water window)`` -- an amplitude ``StimProtocol`` itself
+    rejects, so the package named as a limit a value no user can set. 12 240 of 299 520
+    swept configurations produce one. C2.3 widened the population: a continuous train with
+    any unrecovered charge drives the drift ceiling to exactly zero, and Charge balance is
+    only a CAUTION for a partial recovery, so nothing else refuses.
+
+    **"Not limit-bearing" was standing in for "failure means no amplitude is safe".** Two
+    checks sit outside ``LIMIT_BEARING`` and only one of them means that. ``Validated
+    envelope`` has no FAIL state today -- 60 CAUTION, 12 PASS, 0 FAIL over 72 swept
+    configurations -- which is the only reason the coupling is invisible. C2.5 rewrites
+    that check, and the first time it FAILs a protocol whose only sin is sitting outside
+    McCreery's fit envelope would be announced as having no safe amplitude at all. The
+    property is now named rather than inferred.
+    """
+
+    def _zero_by_resting_potential(self) -> SafetyCalculator:
+        """Ledger 99's own case: a Pt interface resting exactly on its cathodic edge.
+
+        Accepted deliberately -- ``validate_resting_potential_V`` is inclusive at both
+        ends, so the rejection cannot disagree with ``WaterWindow.contains`` about the
+        boundary itself.
+        """
+        return SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            resting_potential_V=-0.6,
+        )
+
+    def _zero_by_continuous_drift(self) -> SafetyCalculator:
+        """The door C2.3 opened: an unrecovered offset with no end to the train."""
+        return SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(
+                80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9
+            ),
+        )
+
+    @pytest.mark.parametrize(
+        "case", ["_zero_by_resting_potential", "_zero_by_continuous_drift"]
+    )
+    def test_a_zero_ceiling_refuses_rather_than_naming_an_unusable_amplitude(
+        self, case: str
+    ) -> None:
+        """Not tautological: the raw ceiling is asserted to still *be* 0.0 -- the value is
+        not being hidden, it is being refused -- and the refusal is checked against
+        ``StimProtocol``'s own rejection of that amplitude, which is what makes printing it
+        wrong rather than merely ugly.
+        """
+        calc = getattr(self, case)()
+        assessment = calc.assess()
+
+        assert assessment.limit_bearing_ceiling_uA == 0.0
+        with pytest.raises(ValueError, match="current_uA"):
+            StimProtocol(0.0, 200.0, 130.0, 1.0)
+
+        assert assessment.limiting_current_uA is None
+        assert calc.report()["limiting_current_uA"] is None
+
+    def test_the_refusal_names_the_check_that_permits_no_current(self) -> None:
+        """"No amplitude is safe" without saying which check makes it so is unactionable.
+
+        Not tautological: the named check is read from the tuple of zero-ceiling checks and
+        compared with the sentence, and the sentence is additionally required to differ
+        from the amplitude-independent wording -- the two reasons carry different
+        instructions to the reader and must not collapse into one string.
+        """
+        calc = self._zero_by_continuous_drift()
+        assessment = calc.assess()
+
+        assert [c.name for c in assessment.permits_no_current] == ["Water window"]
+        note = assessment.no_safe_amplitude_note()
+        assert "Water window" in note
+        assert "no amplitude is safe" in note
+        assert "at every amplitude" not in note
+
+    @pytest.mark.parametrize(
+        "case", ["_zero_by_resting_potential", "_zero_by_continuous_drift"]
+    )
+    def test_no_surface_prints_an_amplitude_for_a_zero_ceiling(
+        self, case: str, tmp_path
+    ) -> None:
+        """All six render surfaces, since a refusal honoured by five of them is ledger 84.
+
+        Not tautological: each assertion is on a *rendered* string -- ``describe()``, the
+        batch dict, the JSON document, the PDF's extracted text, the GUI headline free
+        function -- and what is asserted is the absence of a number beside the word
+        "Limiting", which no arithmetic in the package can produce.
+        """
+        import json
+
+        from neurostim.gui.app import headline_text
+        from neurostim.io.tabular import report_to_json
+        from tests.test_verdict_core import pdf_text
+
+        calc = getattr(self, case)()
+        assessment = calc.assess()
+
+        text = assessment.describe()
+        assert "Limiting current: none" in text
+        assert "Limiting current: 0 uA" not in text
+
+        assert "no amplitude is safe" in calc.report()["limiting_mechanism"]
+
+        payload = json.loads(report_to_json(calc))
+        assert payload["results"]["limiting_current_uA"] is None
+        assert payload["permits_no_current"] == ["Water window"]
+
+        assert "0 uA" not in headline_text(assessment)
+        assert "no amplitude is safe" in headline_text(assessment)
+
+        pdf = pdf_text(calc, tmp_path / f"{case}.pdf")
+        assert "no amplitude is safe" in pdf
+
+    def test_sensitivity_refuses_for_a_zero_ceiling_too(self) -> None:
+        """``analyse`` renders the limit nine times; a zero would be nine unusable numbers.
+
+        Not tautological: the exception type and the named check are asserted, and
+        ``describe`` is separately required to contain no amplitude -- the two paths are
+        different code.
+        """
+        from neurostim import sensitivity
+
+        calc = self._zero_by_continuous_drift()
+        with pytest.raises(sensitivity.UnsafeAtAnyAmplitude, match="Water window"):
+            sensitivity.analyse(calc)
+        text = sensitivity.describe(calc)
+        assert "none --" in text
+        assert "baseline:" not in text
+
+    def test_the_no_safe_amplitude_set_is_named_rather_than_inferred(self) -> None:
+        """Decision (d). "Not limit-bearing" is a classification, not this property.
+
+        Not tautological: the set is compared with the *complement* of ``LIMIT_BEARING``
+        over the checks an assessment actually emits, and the assertion is that it is a
+        strict subset -- which is the whole finding. A test asserting only the membership
+        of Charge balance would pass under the old inferred definition too.
+        """
+        from neurostim.safety.assessment import LIMIT_BEARING, NO_SAFE_AMPLITUDE
+
+        emitted = {
+            c.name
+            for c in SafetyCalculator(
+                DiscElectrode(500.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0)
+            ).assess().checks
+        }
+        not_limit_bearing = emitted - LIMIT_BEARING
+
+        assert not_limit_bearing == {"Charge balance", "Validated envelope"}
+        assert frozenset({"Charge balance"}) == NO_SAFE_AMPLITUDE
+        assert not_limit_bearing > NO_SAFE_AMPLITUDE
+
+    def test_a_failing_validated_envelope_does_not_refuse_the_headline(self) -> None:
+        """The trap C2.5 would have sprung. Scripted, because the check has no FAIL today.
+
+        ``Validated envelope`` returns CAUTION or PASS for every protocol the package can
+        build -- 60 and 12 of 72 swept, 0 FAIL -- so no real configuration exercises this.
+        The FAIL is substituted into an otherwise real assessment, which is the same device
+        C1.2 uses for the two ``NonMonotonePredicate`` guards: the scripted verdict is
+        written here, so the expected outcome is a property of the script rather than of
+        any package verdict.
+
+        Not tautological: the substituted check is asserted to be a FAIL and to sit outside
+        ``LIMIT_BEARING`` before the headline is read, so the test cannot pass by the
+        substitution silently failing to take.
+        """
+        from dataclasses import replace
+
+        from neurostim.safety.assessment import LIMIT_BEARING
+        from neurostim.safety.assessment import Status as S
+
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0)
+        )
+        real = calc.assess()
+        assert real.limiting_current_uA is not None
+
+        scripted = replace(
+            real,
+            checks=tuple(
+                replace(c, status=S.FAIL)
+                if c.name == "Validated envelope"
+                else c
+                for c in real.checks
+            ),
+        )
+        envelope = next(
+            c for c in scripted.checks if c.name == "Validated envelope"
+        )
+        assert envelope.status is S.FAIL
+        assert envelope.name not in LIMIT_BEARING
+
+        assert scripted.unsafe_at_any_amplitude == ()
+        assert scripted.no_safe_amplitude_note() == ""
+        assert scripted.limiting_current_uA == real.limiting_current_uA
+        assert scripted.status is S.FAIL
