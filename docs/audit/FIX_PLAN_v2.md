@@ -1076,7 +1076,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 105 | HIGH | — (found in Phase 2 review, F3) | **C2.9** | **FIXED** `1fc2cbc`; drift budget carries the excursion riding on the offset; the drift oracle is extended to partial recovery |
 | 106 | HIGH | — (found in Phase 2 review, F4) | **C2.10** | **FIXED** `4dbca6e`; booking only: the missing section 6 rows, and the C2.4 row corrected |
 | 107 | HIGH | — (found in Phase 2 review, F5) | **C2.11** | **FIXED** `3bd56f0`; README, CHANGELOG, module docstrings, GUI train_duty_cycle field, example_output regenerated |
-| 108 | MED | — (found in Phase 2 review, F6) | **C3.0** (own commit immediately before C3.1; moved from C5.11 at ledger 123) | render text: describe() must print the combined peak-and-drift verdict |
+| 108 | MED | — (found in Phase 2 review, F6) | **C3.0** (own commit immediately before C3.1; moved from C5.11 at ledger 123) | **FIXED** `5dc9eb1`; render text: describe() must print the combined peak-and-drift verdict |
 | 109 | MED | — (found in Phase 2 review, F7) | **unscheduled** | needs a decision on whether drift runs over on-time or wall-clock; conservative today. To be settled at the Phase 3 start, before C3.5 touches the voltage budget |
 | 110 | MED | — (found in Phase 2 review, F8) | C2.8, C2.9 | **FIXED** `1fc2cbc`; residual-net and partial-recovery populations at C2.8; partial-recovery oracle, `exits_during_train` boundary pair and over-recovery edge at C2.9 |
 | 111 | LOW | — (found in Phase 2 review, F9) | **unscheduled** | test-only. Run the oracle over the whole sweep with the set written literally; first Phase 3 commit |
