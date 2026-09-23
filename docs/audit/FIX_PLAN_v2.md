@@ -1064,8 +1064,8 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 100 | MEDIUM | — (found in Phase 1b review) | **C2.7** | **FIXED** — the policy warning floors through `format_limit` and is walked for every material × policy × polarity × medium; the stored-constant gate walks the stored ends and polarity sub-ranges and reads `limit_K` from the thermal module. `nominal` is a midpoint rather than a stored constant and is gated at its one render site instead. The `:g` round-trip gate walks two of three `Policy` values and cannot reach a derated quotient, so ledger 96's "structurally safe" claim is untrue of `charge.py:257`. Extend the gate to every policy and polarity, cover derived values, and replace the tautological `renders_exactly(2.0)` literal. Lands with 98 before Phase 2's exit gate |
 | 101 | MED | — (found executing C2.6) | **C2.6b** (`8f85f1e`) | **FIXED** — landed before 98 so every gate after it is plain `pytest -q`. Originally: CI's `pytest -q` fails 8 tests on `from tests import …` in `tests/test_data_model.py`; green only under `python -m pytest`. Must land before Phase 2's exit gate: the failing tests are the ones that close 2, 3 and 99 |
 | 102 | LOW | — (found in Phase 1b review, recorded at C2.7) | **unscheduled** — reported to the team lead | policy warning compares a derated `limit` with an underated `endorsed` under `medium="in_vivo"`; unreachable in the shipped database |
-| 103 | CRIT | — (found in Phase 2 review, F1) | **C2.8** | exact-linear unrecovered charge; drift gated on `is_charge_balanced`; the seed refuses a zero DC. MUST land before Phase 3 |
-| 104 | CRIT | — (found in Phase 2 review, F2) | **C2.8** | removed by the same exact-linear net, which makes the drift clause exactly monotone; sweep over r_a in {0.9,...,1-1e-6} |
+| 103 | CRIT | — (found in Phase 2 review, F1) | **C2.8** | **FIXED** `f4f08b8`; exact-linear unrecovered charge; drift gated on `is_charge_balanced`; the seed refuses a zero DC. MUST land before Phase 3 |
+| 104 | CRIT | — (found in Phase 2 review, F2) | **C2.8** | **FIXED** `f4f08b8`; removed by the same exact-linear net, which makes the drift clause exactly monotone; sweep over r_a in {0.9,...,1-1e-6} |
 | 105 | HIGH | — (found in Phase 2 review, F3) | **C2.9** | drift budget carries the excursion riding on the offset; the drift oracle is extended to partial recovery |
 | 106 | HIGH | — (found in Phase 2 review, F4) | **C2.10** | booking only: the missing section 6 rows, and the C2.4 row corrected |
 | 107 | HIGH | — (found in Phase 2 review, F5) | **C2.11** | README, CHANGELOG, module docstrings, GUI train_duty_cycle field, example_output regenerated |
@@ -1073,12 +1073,12 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 109 | MED | — (found in Phase 2 review, F7) | **unscheduled** | needs a decision on whether drift runs over on-time or wall-clock; conservative today. To be settled at the Phase 3 start, before C3.5 touches the voltage budget |
 | 110 | MED | — (found in Phase 2 review, F8) | C2.8, C2.9 | residual-net and partial-recovery populations at C2.8; partial-recovery oracle, `exits_during_train` boundary pair and over-recovery edge at C2.9 |
 | 111 | LOW | — (found in Phase 2 review, F9) | **unscheduled** | test-only. Run the oracle over the whole sweep with the set written literally; first Phase 3 commit |
-| 112 | LOW | — (found in Phase 2 review, F10) | C2.8 | removed by the exact-linear net: the balance test becomes amplitude-independent |
+| 112 | LOW | — (found in Phase 2 review, F10) | C2.8 | **FIXED** `f4f08b8`; removed by the exact-linear net: the balance test becomes amplitude-independent |
 | 113 | LOW | — (found in Phase 2 review, F11) | **unscheduled** | documentation-only today (not rendered); fix with the next change to the interval, or narrow the docstring |
 | 114 | LOW | — (found in Phase 2 review, F12) | C5.5 | batch CSV columns |
-| 115 | LOW | — (found in Phase 2 review, F13) | C2.8 | one sentence in D2 point 2 |
+| 115 | LOW | — (found in Phase 2 review, F13) | C2.8 | **FIXED** `f4f08b8`; one sentence in D2 point 2 |
 | 116 | LOW | — (found in Phase 2 review, F14) | C5.11 | viz |
-| 117 | LOW | — (found in Phase 2 review, F15) | C2.8, C4.2 | the nan term closes at C2.8; water_window.evaluate's argument contract at C4.2, which already reworks its polarity arguments; the charge-interval fallback at C4.2 |
+| 117 | LOW | — (found in Phase 2 review, F15) | C2.8, C4.2 | the nan term closes at C2.8; water_window.evaluate's argument contract at C4.2, which already reworks its polarity arguments; the charge-interval fallback at C4.2 — nan term **FIXED** at `f4f08b8` |
 | 118 | LOW | — (found in Phase 2 review, F16) | C4.3 | provisional propagation: set provisional on Water window whenever drift binds, and say 'no-leak bound' |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
