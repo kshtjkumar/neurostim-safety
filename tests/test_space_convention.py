@@ -611,3 +611,63 @@ class TestThePdfStatesWhichBudgetItUsed:
     def test_without_a_counter_the_assumption_is_on_the_row(self, tmp_path):
         text, _ = self._row(tmp_path)
         assert "monopolar single-interface budget" in text
+
+
+class TestShannonSaysItWasFitOnDiscs:
+    """Ledger 12 (C3.6). Shannon (1992): "the limit of safe stimulation is linearly related
+    to electrode diameter, not electrode area. This result is probably due to the charge
+    'building up' at the edges". The criterion ``Q_max = sqrt(A * 10^k)`` is written in
+    area and fit on disc-shaped surface electrodes, so a ring and a disc of equal area get
+    the same limit despite about three times the perimeter.
+
+    The limit's value is not changed: no source gives a perimeter form. What changes is
+    that a non-disc geometry cannot get an unqualified PASS, and its limit is flagged
+    ``provisional`` so the caveat is visible when it binds (physics m6).
+    """
+
+    PROTOCOL_KW = {"current_uA": 50.0, "pulse_width_us": 400.0, "frequency_hz": 50.0,
+                   "train_duration_s": 7 * 3600.0}
+
+    @classmethod
+    def _shannon(cls, electrode):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        assessment = SafetyCalculator(electrode, StimProtocol(**cls.PROTOCOL_KW)).assess()
+        return assessment, next(c for c in assessment.checks if c.name == "Shannon criterion")
+
+    def test_a_disc_keeps_its_unqualified_pass(self):
+        """The premise, asserted: this protocol on a real disc is a bare PASS."""
+        _, check = self._shannon(DiscElectrode(2000.0, "Pt"))
+        assert check.status.value == "PASS"
+        assert check.provisional is False
+
+    @pytest.mark.parametrize(
+        "electrode",
+        [
+            RingElectrode(2400.0, 1327.0, "Pt"),
+            RectangularElectrode(1000.0, 3141.6, "Pt"),
+            CylindricalBandElectrode(1270.0, 787.4, "PtIr"),
+            MicrowireElectrode(250.0, 3875.0, "flat"),
+            SphericalElectrode(1000.0, "Pt"),
+            HemisphericalElectrode(1414.2, "Pt"),
+            DiscElectrode(2000.0, "Pt", stands_in_for="a faceted tip"),
+        ],
+        ids=lambda e: e.shape_name,
+    )
+    def test_a_non_disc_is_never_a_bare_pass_and_is_provisional(self, electrode):
+        """Not tautological: the premise test above shows the same protocol is a bare PASS
+        on a disc; each of these is within a few per cent of the disc's area."""
+        disc_area = DiscElectrode(2000.0).area_cm2
+        assert electrode.area_cm2 == pytest.approx(disc_area, rel=0.03)  # the premise
+        _, check = self._shannon(electrode)
+        assert check.status.value == "CAUTION", check.summary
+        assert check.provisional is True
+        assert "diameter" in check.detail
+
+    def test_the_limit_value_does_not_move(self):
+        """Section 6 says so: the criterion's number is unchanged, only its standing."""
+        from neurostim.safety import shannon
+
+        ring = RingElectrode(2400.0, 1327.0, "Pt")
+        _, check = self._shannon(ring)
+        assert check.ceiling_uA == shannon.shannon_max_current_uA(ring.area_cm2, 400.0)

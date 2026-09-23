@@ -31,6 +31,13 @@ above the line showed damage; points below did not. Consequences worth keeping i
   unsupported by the fit itself.
 - ``k`` is a **choice**, not a measurement. 1.5 is the conservative edge of the fitted
   band and 2.0 the permissive edge.
+- It is written in **area** and fit on **discs**, while Shannon himself states that the
+  safe limit is "linearly related to electrode diameter, not electrode area", because
+  charge builds up at the edges. A ring or a band of the same area as a disc has a very
+  different perimeter and gets the same limit. No source here gives a perimeter form, so
+  the number is unchanged, but :func:`geometry_caveat` makes the assessment say so, never
+  return an unqualified PASS for a non-disc geometry, and mark the limit provisional
+  (ledger 12).
 """
 
 from __future__ import annotations
@@ -43,6 +50,7 @@ from ..units import charge_uC
 from ._limits import floor_to_pass, format_limit
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance
+    from ..geometry.base import Electrode
     from ..uncertainty import Interval
 
 K_SHANNON = 1.5
@@ -116,6 +124,31 @@ FIT_DURATION_H = 7.0
 
 FIT_PREPARATION = "adult cat parietal cortex, surface and penetrating electrodes"
 """Preparation the fit is derived from."""
+
+
+def geometry_caveat(electrode: Electrode | None) -> str:
+    """Why the criterion's number is uncertain for this geometry; empty for a real disc.
+
+    Shannon (1992): "the limit of safe stimulation is linearly related to electrode
+    diameter, not electrode area. This result is probably due to the charge 'building up'
+    at the edges, to create higher charge densities around the perimeter of the
+    electrode." The fit is in area and on disc-shaped surface electrodes, so any other
+    shape -- including a disc that stands in for one by area -- gets an extrapolated
+    limit.
+    """
+    from ..geometry.planar import DiscElectrode
+
+    if electrode is None:
+        return ""
+    if isinstance(electrode, DiscElectrode) and electrode.access_resistance_is_exact:
+        return ""
+    return (
+        f"GEOMETRY: the criterion was fit on disc-shaped electrodes and is written in "
+        f"area, while Shannon (1992) states the safe limit is linearly related to electrode "
+        f"diameter, not area, because charge builds up at the edges. This "
+        f"{electrode.shape_name} has the area of a disc but not its perimeter, so the "
+        f"limit is an extrapolation."
+    )
 
 
 def validate_k(k: float) -> None:

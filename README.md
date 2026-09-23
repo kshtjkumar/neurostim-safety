@@ -231,6 +231,10 @@ the electrode's own access resistance.
 
 - **Shannon** — an empirical separatrix through cat cortex histology, largely from
   macroelectrodes at frequencies below clinical rates. `k` is a choice, not a measurement.
+  It is written in area and fit on discs, while Shannon states the safe limit follows
+  electrode *diameter*, because charge builds up at the edges. For any non-disc geometry
+  the limit is an extrapolation: the check is at best CAUTION and the limit is marked
+  provisional. Its value is unchanged, since no source gives a perimeter form.
 - **Charge-injection limits** — quoted at their published pulse widths with **no** scaling
   applied. A caution is raised when your protocol is more than 2× from those conditions.
   Cogan also reports ~20 % temperature dependence (20 °C vs 37 °C) and strong area

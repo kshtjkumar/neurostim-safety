@@ -56,6 +56,17 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### Shannon says it was fit on discs
+
+Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,
+not electrode area", because charge builds up at the edges. The criterion is written in
+area, so a ring and a disc of equal area got the same limit despite about three times the
+perimeter, with no caveat. For every non-disc geometry the Shannon check is now at best
+CAUTION ("fit on discs, not this geometry"), its detail quotes that sentence, and its limit
+is marked `provisional`. This includes a preset disc that stands in for another shape.
+The limit's value is unchanged. Over a 168-configuration sweep no overall verdict moved,
+because the monopolar compliance CAUTION already held them there.
+
 ### The voltage budget includes the return path
 
 `SafetyCalculator` takes `counter_electrode` and `counter_separation_um`, which must be

@@ -1117,6 +1117,7 @@ def _shannon_check(
     protocol: StimProtocol | None = None,
     area_cm2: float | None = None,
     envelope: envelope_mod.EnvelopeResult | None = None,
+    geometry_note: str = "",
 ) -> Check:
     # Cogan et al. (2016): below the macro/micro boundary the charge-density /
     # charge-per-phase codependence does not hold, so reporting Shannon headroom here
@@ -1141,6 +1142,8 @@ def _shannon_check(
     k_note = shannon_mod.k_warning(k)
     if k_note:
         extra.append(f"THRESHOLD: {k_note}")
+    if geometry_note:
+        extra.append(geometry_note)
     if protocol is not None:
         cond = shannon_mod.conditions_warning(
             protocol.pulse_width_us, protocol.frequency_hz
@@ -1177,6 +1180,8 @@ def _shannon_check(
         notes.append("outside validated envelope")
     if thin:
         notes.append("margin below 2x")
+    if geometry_note:
+        notes.append("fit on discs, not this geometry")
     if k_note:
         # "threshold" is load-bearing. The summary already opens with the computed
         # metric, so a bare "k above Shannon's 1.5" reads as a claim about that number
@@ -1873,7 +1878,12 @@ class SafetyCalculator:
 
         raw_checks = (
             _shannon_check(
-                shannon_result, self.k, self.p, self.e.area_cm2, envelope_result
+                shannon_result,
+                self.k,
+                self.p,
+                self.e.area_cm2,
+                envelope_result,
+                geometry_note=shannon_mod.geometry_caveat(self.e),
             ),
             _charge_check(charge_result, self.p.waveform),
             _water_window_check(ww_result),
@@ -1916,7 +1926,9 @@ class SafetyCalculator:
                     self.p.pulse_width_us, self.p.frequency_hz
                 )
             )
-            or not envelope_result.supports_unqualified_pass,
+            or not envelope_result.supports_unqualified_pass
+            # Fit on discs and written in area; Shannon says diameter (ledger 12).
+            or bool(shannon_mod.geometry_caveat(self.e)),
             # An unverified constant, a pulse width far from the one it was measured at,
             # or a policy the source argues against.
             "Charge injection limit": bool(charge_result.condition_warning)
