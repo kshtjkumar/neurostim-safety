@@ -1586,3 +1586,199 @@ class TestTheTrainDutyCycleReplacesThePulseDuty:
                 "train_duty_cycle": 0.25,
             }
         ).train_duty_cycle == 0.25
+
+
+class TestTheRefusalContractHoldsInBothDirections:
+    """The equivalence the type now promises, asserted as an equivalence.
+
+    ``limiting_current_uA`` is ``None`` **if and only if** either a check in
+    :data:`NO_SAFE_AMPLITUDE` FAILs, or no positive amplitude clears every limit-bearing
+    check. A one-directional test would let the attribute refuse too often and still pass,
+    which is the mirror image of ledger 99 and just as wrong: a refusal where a limit
+    exists hides a usable number behind a sentence.
+
+    The sweep spans the shapes that reach each branch and the ordinary ones that reach
+    neither -- balanced and unbalanced, biphasic and monophasic, finite and continuous
+    trains, a resting potential on the window edge and one in the middle of it.
+    """
+
+    def _sweep(self):
+        """Every configuration and a short label, built once."""
+        cases = []
+        for material in ("Pt", "SIROF", "Ta2O5"):
+            for diameter_um in (100.0, 500.0, 2000.0):
+                electrode = DiscElectrode(diameter_um, material)
+                base = (80.0, 200.0, 130.0, 1.0)
+                cases += [
+                    (f"{material}/{diameter_um:g}/balanced", electrode, StimProtocol(*base), {}),
+                    (
+                        f"{material}/{diameter_um:g}/monophasic",
+                        electrode,
+                        StimProtocol(*base, waveform="monophasic"),
+                        {},
+                    ),
+                    (
+                        f"{material}/{diameter_um:g}/partial-recovery",
+                        electrode,
+                        StimProtocol(*base, charge_recovery_ratio=0.9),
+                        {},
+                    ),
+                    (
+                        f"{material}/{diameter_um:g}/continuous-unbalanced",
+                        electrode,
+                        StimProtocol(
+                            80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9
+                        ),
+                        {},
+                    ),
+                ]
+        # A resting potential exactly on the window edge, and one comfortably inside it.
+        disc = DiscElectrode(100.0, "Pt")
+        cases += [
+            ("Pt/edge-resting", disc, StimProtocol(80.0, 200.0, 130.0, 1.0),
+             {"resting_potential_V": -0.6}),
+            ("Pt/mid-resting", disc, StimProtocol(80.0, 200.0, 130.0, 1.0),
+             {"resting_potential_V": -0.2}),
+        ]
+        return cases
+
+    def test_none_exactly_when_no_amplitude_is_safe(self) -> None:
+        """Both directions, over the sweep.
+
+        Not tautological: the right-hand side is built from the *checks* -- a FAIL whose
+        name is in the named set, and a ceiling that admits no positive amplitude -- while
+        the left-hand side is the attribute. The attribute could satisfy either half alone
+        and fail the equivalence; it is the ``==`` between two independently formed
+        booleans that carries the contract, and ``limit_bearing_ceiling_uA`` is asserted to
+        be unchanged either way so the refusal cannot be implemented by hiding the number.
+        """
+        from neurostim.safety.assessment import NO_SAFE_AMPLITUDE
+
+        for label, electrode, protocol, settings in self._sweep():
+            assessment = SafetyCalculator(electrode, protocol, **settings).assess()
+
+            waveform_fails = any(
+                c.status is Status.FAIL and c.name in NO_SAFE_AMPLITUDE
+                for c in assessment.checks
+            )
+            no_positive_amplitude = assessment.limit_bearing_ceiling_uA <= 0.0
+            expected_none = waveform_fails or no_positive_amplitude
+
+            assert (assessment.limiting_current_uA is None) is expected_none, label
+            assert math.isfinite(assessment.limit_bearing_ceiling_uA) or math.isinf(
+                assessment.limit_bearing_ceiling_uA
+            ), label
+            if expected_none:
+                assert assessment.no_safe_amplitude_note() != "", label
+            else:
+                assert assessment.no_safe_amplitude_note() == "", label
+                assert assessment.limiting_current_uA == (
+                    assessment.limit_bearing_ceiling_uA
+                ), label
+
+    def test_the_reported_limit_is_always_an_amplitude_a_protocol_can_carry(
+        self,
+    ) -> None:
+        """The invariant that makes the zero question dissolve rather than need an answer.
+
+        ``StimProtocol`` accepts exactly the amplitudes strictly above zero. After this
+        phase, ``limiting_current_uA`` is either ``None`` or one of those -- so its domain
+        is the constructor's domain, and no render site can ever be handed a value a user
+        cannot programme. That is why ``format_limit(0.0)`` is left alone: the question of
+        whether it should print ``'0'`` or ``'0.000'`` cannot arise on a limit.
+
+        Not tautological: the positivity is checked by *constructing a protocol at the
+        reported limit*, which is the package's own domain test and not a comparison this
+        test invents.
+        """
+        from dataclasses import replace
+
+        for label, electrode, protocol, settings in self._sweep():
+            limit = SafetyCalculator(
+                electrode, protocol, **settings
+            ).assess().limiting_current_uA
+            if limit is None:
+                continue
+            assert limit > 0.0, label
+            # Constructible: the package's own domain test for an amplitude.
+            replace(protocol, current_uA=limit)
+
+    def test_format_limit_still_renders_zero_as_a_bare_zero(self) -> None:
+        """Left unchanged deliberately, and this records why that is safe.
+
+        ``format_limit(0.0)`` returns ``'0'``, not the ``'0.000'`` its four-significant-digit
+        promise would suggest. It is not repaired because no limit render can reach it: a
+        non-positive limit-bearing ceiling is refused by name before any formatting
+        happens. If a future change lets a zero through to a render site, the test above
+        fails first and names the configuration.
+
+        Not tautological: the two assertions are about different functions -- the
+        formatter's own output, and the refusal that keeps it from being called -- and the
+        second is what makes the first acceptable.
+        """
+        from neurostim.safety._limits import format_limit
+
+        assert format_limit(0.0) == "0"
+        assert format_limit(20.0) == "20.00"
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            resting_potential_V=-0.6,
+        )
+        assessment = calc.assess()
+        assert assessment.limit_bearing_ceiling_uA == 0.0
+        assert assessment.limiting_current_uA is None
+
+        # Scoped to the render site itself: "0 uA" also occurs inside "80 uA" in the
+        # protocol echo, and an assertion that matched that would pass for the wrong
+        # reason.
+        headline = next(
+            line
+            for line in assessment.describe().splitlines()
+            if line.startswith("Limiting current:")
+        )
+        assert headline.startswith("Limiting current: none --")
+        assert "Water window" in headline
+
+    def test_the_independent_bisection_agrees_that_no_amplitude_clears_the_checks(
+        self,
+    ) -> None:
+        """The right-hand side of the equivalence, from an oracle instead of a ceiling.
+
+        The sweep above reads ``limit_bearing_ceiling_uA``, which is the package's own
+        minimum. This asks the same question by binary search over ``assess().failed``,
+        reading one bit per probe and no ceiling, margin or limit at all -- and it carries a
+        witness, the name of the check that FAILs at every one of the 73 ladder probes.
+
+        Not tautological: ``tests/oracles/fail_ceiling`` writes out its own
+        ``LIMIT_BEARING`` rather than importing the package's, so the two partitions are
+        independent statements; and 0.0 from that search means "no probe anywhere in an
+        eighteen-decade bracket passes", which no expression in the package produces.
+        """
+        from tests import oracles
+
+        for label, settings in (
+            ("edge resting potential", {"resting_potential_V": -0.6}),
+        ):
+            calc = SafetyCalculator(
+                DiscElectrode(100.0, "Pt"),
+                StimProtocol(80.0, 200.0, 130.0, 1.0),
+                **settings,
+            )
+            assert oracles.fail_ceiling_uA(calc, names=oracles.LIMIT_BEARING) == 0.0, label
+            assert oracles.amplitude_independent_failures(
+                calc, names=oracles.LIMIT_BEARING
+            ) == ("Water window",), label
+            assert calc.assess().limiting_current_uA is None, label
+            assert "Water window" in calc.assess().no_safe_amplitude_note(), label
+
+        continuous = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9),
+        )
+        assert oracles.fail_ceiling_uA(continuous, names=oracles.LIMIT_BEARING) == 0.0
+        assert oracles.amplitude_independent_failures(
+            continuous, names=oracles.LIMIT_BEARING
+        ) == ("Water window",)
+        assert continuous.assess().limiting_current_uA is None
