@@ -1080,7 +1080,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 110 | MED | — (found in Phase 2 review, F8) | C2.8, C2.9 | **FIXED** `1fc2cbc`; residual-net and partial-recovery populations at C2.8; partial-recovery oracle, `exits_during_train` boundary pair and over-recovery edge at C2.9 |
 | 111 | LOW | — (found in Phase 2 review, F9) | **unscheduled** | test-only. Run the oracle over the whole sweep with the set written literally; first Phase 3 commit |
 | 112 | LOW | — (found in Phase 2 review, F10) | C2.8 | **FIXED** `f4f08b8`; removed by the exact-linear net: the balance test becomes amplitude-independent |
-| 113 | LOW | — (found in Phase 2 review, F11) | **P2b docs commit** (docstring narrowed; ledger 123) | documentation-only today (not rendered); fix with the next change to the interval, or narrow the docstring |
+| 113 | LOW | — (found in Phase 2 review, F11) | **P2b docs commit** (docstring narrowed; ledger 123) | **FIXED** `96ccae5`; documentation-only today (not rendered); fix with the next change to the interval, or narrow the docstring |
 | 114 | LOW | — (found in Phase 2 review, F12) | C5.5 | batch CSV columns |
 | 115 | LOW | — (found in Phase 2 review, F13) | C2.8 | **FIXED** `f4f08b8`; one sentence in D2 point 2 |
 | 116 | LOW | — (found in Phase 2 review, F14) | C5.11 | viz |
@@ -1088,9 +1088,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 118 | LOW | — (found in Phase 2 review, F16) | C4.3 | provisional propagation: set provisional on Water window whenever drift binds, and say 'no-leak bound' |
 | 119 | LOW | — (found in Phase 2b review, G1) | C4.2 (folded into 117) | the public `water_window.evaluate` keeps both old behaviours: no balance gate, and `recovered_charge_uC` defaults to 0.0. C4.2 makes the drift inputs one object, or makes the riding charge required with the DC, and applies the balance tolerance inside the function |
 | 120 | LOW | — (found in Phase 2b review, G2) | C5.5 | `report()["net_dc_current_uA"]` (a batch column) carries the raw 1.04e-12 residue for a pulse both checks call balanced; report 0.0 when balanced or document it as the raw residue |
-| 121 | LOW | — (found in Phase 2b review, G3) | **P2b docs commit** | mislabelled fixture in the section 6 C2.2 [106] row; relabelled |
-| 122 | LOW | — (found in Phase 2b review, G4) | **P2b docs commit** | the README water-window limitation described a pure double-layer capacitance; rewritten to the CIC-derived `C_eff` |
-| 123 | LOW | — (found in Phase 2b review, G5) | **P2b docs commit** | scheduling: 108 moved to its own commit before C3.1; 113 closed by narrowing the docstring |
+| 121 | LOW | — (found in Phase 2b review, G3) | **P2b docs commit** | **FIXED** `96ccae5`; mislabelled fixture in the section 6 C2.2 [106] row; relabelled |
+| 122 | LOW | — (found in Phase 2b review, G4) | **P2b docs commit** | **FIXED** `96ccae5`; the README water-window limitation described a pure double-layer capacitance; rewritten to the CIC-derived `C_eff` |
+| 123 | LOW | — (found in Phase 2b review, G5) | **P2b docs commit** | **FIXED** `96ccae5`; scheduling: 108 moved to its own commit before C3.1; 113 closed by narrowing the docstring |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
