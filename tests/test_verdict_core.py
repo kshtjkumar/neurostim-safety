@@ -1985,6 +1985,111 @@ class TestTheCeilingOracleSurvivesConstructionTimeValidation:
         assert not fail_ceiling.no_check_fails(calc, 1e6)
         assert fail_ceiling.fail_ceiling_uA(calc) == 50.0
 
+    def test_an_amplitude_below_a_future_floor_narrows_the_bracket(self, monkeypatch):
+        """The other side of the same guard, which was one-sided.
+
+        ``UNCONSTRUCTIBLE`` entered the per-check suffix invariant as if it were a check
+        name, so a rejection at the *bottom* of the ladder was a prefix rather than a
+        suffix and ``_assert_each_check_fails_upwards`` raised ``NonMonotonePredicate`` --
+        the crashed bisection the guard exists to prevent. A floor is the likelier of the
+        two future validations: the bracket already starts at 1e-12 uA specifically to
+        dodge ``StimProtocol``'s rejection of zero.
+
+        Not tautological: the floor and the script's own 500 uA boundary are both written
+        here, and the expected answer is a boundary property -- it passes, its successor
+        is 500.0 and fails -- asserted against the oracle's own probe, not against a
+        number this test computed.
+        """
+        import math
+
+        from oracles import fail_ceiling
+        from test_oracles import scripted_calculator
+
+        def script(current_uA: float) -> frozenset[str]:
+            return frozenset() if current_uA < 500.0 else frozenset({"Water window"})
+
+        script.rejects_below_uA = 1.0  # type: ignore[attr-defined]
+
+        calc = scripted_calculator(script, monkeypatch, current_uA=10.0)
+
+        assert not fail_ceiling.no_check_fails(calc, 1e-6)  # refused, so not passing
+        ceiling = fail_ceiling.fail_ceiling_uA(calc)
+        assert ceiling < 500.0
+        assert math.nextafter(ceiling, math.inf) == 500.0
+        assert fail_ceiling.brackets_the_ceiling(calc, ceiling)
+
+    def test_a_floor_and_a_ceiling_together_still_leave_the_suffix_rule_in_force(
+        self, monkeypatch
+    ):
+        """Narrowing the bracket must not become "ignore ``UNCONSTRUCTIBLE`` everywhere".
+
+        Not tautological: the ceiling 50.0 is the script's own declared upper rejection,
+        written here, and is below the 500 uA at which the script's check starts to fail
+        -- so an oracle that stopped treating a refused amplitude as failing would answer
+        the script's boundary instead, and one that still choked on the floor would raise.
+        """
+        from oracles import fail_ceiling
+        from test_oracles import scripted_calculator
+
+        def script(current_uA: float) -> frozenset[str]:
+            return frozenset() if current_uA < 500.0 else frozenset({"Water window"})
+
+        script.rejects_below_uA = 1.0  # type: ignore[attr-defined]
+        script.rejects_above_uA = 50.0  # type: ignore[attr-defined]
+
+        calc = scripted_calculator(script, monkeypatch, current_uA=10.0)
+
+        assert fail_ceiling.fail_ceiling_uA(calc) == 50.0
+
+    def test_a_zero_ceiling_above_a_floor_still_names_the_check_that_makes_it_zero(
+        self, monkeypatch
+    ):
+        """``fail_ceiling_uA`` never returns ``0.0`` without a witness (ledger 84).
+
+        The witness comes from the same probes the search uses, so it has to be narrowed
+        the same way: over the untrimmed ladder the intersection is empty, because the
+        refused probes at the bottom report only ``UNCONSTRUCTIBLE``, and the zero would
+        then arrive unexplained.
+
+        Not tautological: "Water window" is the name the script fails under, written here,
+        and it is read back from a function that never sees the script.
+        """
+        from oracles import fail_ceiling
+        from test_oracles import scripted_calculator
+
+        def script(current_uA: float) -> frozenset[str]:
+            return frozenset({"Water window"})
+
+        script.rejects_below_uA = 1.0  # type: ignore[attr-defined]
+
+        calc = scripted_calculator(script, monkeypatch, current_uA=10.0)
+
+        assert fail_ceiling.fail_ceiling_uA(calc) == 0.0
+        assert fail_ceiling.amplitude_independent_failures(calc) == ("Water window",)
+
+    def test_a_bracket_with_no_constructible_amplitude_is_reported_not_answered(
+        self, monkeypatch
+    ):
+        """``0.0`` means "a check fails at every amplitude". "the package refuses every
+        amplitude in this bracket" is a different statement and must not borrow that one.
+
+        Not tautological: the floor is set above the bracket's own 1e6 uA top, written
+        here, and the expected outcome is a raise -- no number the oracle could return
+        would satisfy it.
+        """
+        from oracles import fail_ceiling
+        from test_oracles import scripted_calculator
+
+        def script(current_uA: float) -> frozenset[str]:
+            return frozenset()
+
+        script.rejects_below_uA = 1e7  # type: ignore[attr-defined]
+
+        calc = scripted_calculator(script, monkeypatch, current_uA=1e8)
+
+        with pytest.raises(fail_ceiling.NoConstructibleAmplitude, match="1e-12"):
+            fail_ceiling.fail_ceiling_uA(calc)
+
     def test_the_guard_does_not_hide_a_misspelled_check_name(self):
         """The catch must be narrow. A ``ValueError`` from an unknown check name is a test
         defect and must still surface.

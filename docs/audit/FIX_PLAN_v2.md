@@ -1028,6 +1028,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 87 | LOW | — (found in Phase 0) | C5.9 | deferred out of Phase 0 because it changes package output bytes |
 | 88 | HIGH | — (found in the Phase 1 review) | C1.10 | **FIXED** — `_climb_to_boundary`'s relative bound is joined by a caller-declared absolute `plateau` (D2 point 3); `assess()` stopped raising on the 6.3 % of edge-clustered valid inputs that used to crash |
 | 89 | CRIT | — (found in the Phase 1 review) | C1.3, C1.5 | **FIXED** — `sensitivity.py` and `examples/worked_example.py` were byte-untouched by Phase 1 and are render surfaces for both conventions; §6 had no row for either file |
+| 90 | MED | — (found in the Phase 1 review) | C1.9 | **FIXED** — the `UNCONSTRUCTIBLE` guard was one-sided; a *lower* amplitude bound crashed the bisection where an upper bound was handled. No package number moves: the defect is in `tests/oracles/fail_ceiling.py` |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING

@@ -155,6 +155,17 @@ class ConstructorDrift(AssertionError):
     """
 
 
+class NoConstructibleAmplitude(AssertionError):
+    """The package refuses every amplitude in the bracket, so there is no ceiling to find.
+
+    Distinct from ``0.0``, and deliberately not merged with it. Under the ledger 84
+    convention ``0.0`` means "a check FAILs at every amplitude", and
+    :func:`amplitude_independent_failures` names that check. "no amplitude in this bracket
+    can be built" is a different statement with no such witness, and answering it with
+    ``0.0`` would put a second meaning on the one value that has to keep only one.
+    """
+
+
 class NonMonotonePredicate(AssertionError):
     """``assess().failed`` does not have the assumed shape, so no ceiling can be reported.
 
@@ -211,6 +222,15 @@ than a stack trace.
 Returned whatever ``names`` restricts to, deliberately: an amplitude that cannot be built
 is not one at which a named check passes. It is angle-bracketed so it cannot collide with
 a real check name.
+
+**Not a check, and so not subject to the per-check suffix invariant.** A refusal above some
+amplitude is a suffix and behaves like a failing check; a refusal *below* one is a prefix,
+and feeding it to :func:`_assert_each_check_fails_upwards` raised ``NonMonotonePredicate``
+-- the crashed bisection this stand-in exists to prevent, arrived at from the other side. A
+floor is also the likelier of the two future validations, since the bracket starts at
+``1e-12`` uA precisely to dodge ``StimProtocol``'s rejection of zero. So the leading run of
+refused probes narrows the bracket instead (:func:`_constructible_bracket`), and what
+remains is still held to the invariant.
 """
 
 
@@ -258,6 +278,44 @@ def no_check_fails(
     return not failing_checks(calculator, current_uA, names=names)
 
 
+def _constructible_bracket(
+    calculator: Any,
+    lower_uA: float,
+    upper_uA: float,
+    names: Collection[str] | None,
+) -> tuple[list[float], list[frozenset[str]]]:
+    """The probe ladder and its failing sets, with refused probes trimmed off the bottom.
+
+    :data:`UNCONSTRUCTIBLE` is not a check, and the one place that difference shows is
+    here. An amplitude the package will not build is not an amplitude at which anything
+    passes, so it belongs in the failing set -- but a *prefix* of refused probes is not a
+    check that un-fails, and the per-check suffix invariant read it as one. Raising the
+    lower end of the bracket to the smallest constructible probe says the same thing
+    without the false alarm: the ceiling is the largest amplitude that is both
+    constructible and passing, and nothing below the floor was ever a candidate.
+
+    A refusal *above* some amplitude is untouched: it is already a suffix, and treating it
+    as a failing check is what makes the ceiling land on the largest constructible
+    amplitude rather than on the predicate's own boundary above it.
+    """
+    ladder = probe_ladder(lower_uA, upper_uA)
+    failing = [
+        failing_checks(calculator, amplitude, names=names) for amplitude in ladder
+    ]
+    constructible = [
+        index for index, here in enumerate(failing) if UNCONSTRUCTIBLE not in here
+    ]
+    if not constructible:
+        raise NoConstructibleAmplitude(
+            f"the package refuses every one of the {len(ladder)} probe amplitudes across "
+            f"[{lower_uA!r}, {upper_uA!r}] uA, so there is no ceiling to search for. "
+            f"This is not a ceiling of 0.0: that means a check FAILs at every amplitude "
+            f"and carries the check's name as a witness."
+        )
+    first = constructible[0]
+    return ladder[first:], failing[first:]
+
+
 def amplitude_independent_failures(
     calculator: Any,
     *,
@@ -265,19 +323,20 @@ def amplitude_independent_failures(
     upper_uA: float = _DEFAULT_UPPER_uA,
     names: Collection[str] | None = None,
 ) -> tuple[str, ...]:
-    """Checks that FAIL at every probe across the bracket, sorted.
+    """Checks that FAIL at every constructible probe across the bracket, sorted.
 
     The witness for a ceiling of ``0.0``. Ledger 84's case -- ``Charge balance`` on a
     monophasic protocol -- is exactly this: a verdict that is a property of the waveform
     rather than of the amplitude. Asserting on the name is a far stronger statement than
     asserting on the zero, which is why ``fail_ceiling_uA`` never returns ``0.0`` without
     one of these existing.
+
+    Over the same narrowed bracket the search uses, for that reason: a refused probe
+    reports only :data:`UNCONSTRUCTIBLE`, so an intersection taken across it is empty and
+    the zero would arrive with no witness at all.
     """
-    ladder = probe_ladder(lower_uA, upper_uA)
-    always = frozenset.intersection(
-        *(failing_checks(calculator, amplitude, names=names) for amplitude in ladder)
-    )
-    return tuple(sorted(always))
+    _, failing = _constructible_bracket(calculator, lower_uA, upper_uA, names)
+    return tuple(sorted(frozenset.intersection(*failing)))
 
 
 def probe_ladder(
@@ -323,10 +382,10 @@ def fail_ceiling_uA(
     ``upper_uA`` -- an honest "no ceiling found", never a quiet fallback to the bracket's
     end. Raises :class:`NonMonotonePredicate` when the passing amplitudes are not a prefix
     of the probe ladder, or when the boundary it finds does not survive
-    :func:`brackets_the_ceiling`.
+    :func:`brackets_the_ceiling`. Raises :class:`NoConstructibleAmplitude` when the package
+    refuses every probe in the bracket.
     """
-    ladder = probe_ladder(lower_uA, upper_uA)
-    failing = [failing_checks(calculator, amplitude, names=names) for amplitude in ladder]
+    ladder, failing = _constructible_bracket(calculator, lower_uA, upper_uA, names)
     _assert_each_check_fails_upwards(ladder, failing)
 
     passes = [not names_here for names_here in failing]

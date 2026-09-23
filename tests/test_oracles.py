@@ -126,14 +126,21 @@ class ScriptedCalculator:
                 f"{name} did not survive the rebuild: {getattr(self, name)!r} "
                 f"against {expected!r}"
             )
-        # Optional: a script may declare an amplitude above which the calculator refuses
+        # Optional: a script may declare amplitudes outside which the calculator refuses
         # to exist, standing in for a future validation of `current_uA`. Nothing in the
         # package rejects an amplitude today, which is why it has to be scripted to be
-        # tested at all -- see fail_ceiling.UNCONSTRUCTIBLE.
+        # tested at all -- see fail_ceiling.UNCONSTRUCTIBLE. Both ends, because a floor is
+        # the likelier future validation of the two: the oracle's bracket starts at
+        # 1e-12 uA specifically to dodge `StimProtocol`'s rejection of zero.
         ceiling = getattr(electrode, "rejects_above_uA", math.inf)
         if protocol.current_uA > ceiling:
             raise ValueError(
                 f"current_uA must be <= {ceiling!r}, got {protocol.current_uA!r}"
+            )
+        floor = getattr(electrode, "rejects_below_uA", 0.0)
+        if protocol.current_uA < floor:
+            raise ValueError(
+                f"current_uA must be >= {floor!r}, got {protocol.current_uA!r}"
             )
 
     def assess(self) -> ScriptedAssessment:
