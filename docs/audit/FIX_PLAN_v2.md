@@ -1045,6 +1045,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 94 | MED | — (found in the Phase 1 review) | C1.6, C1.8 | **FIXED** — the by-kind test asserts hand-written per-kind ceilings instead of rebuilding them from the ceilings under test; the interval-containment docstring states what a structural guarantee can and cannot catch |
 | 95 | HIGH | — (found in the Phase 1 review) | C1.1, C1.4, C1.5, C1.6 | **FIXED (booking only)** — five movers added to §6; no code change, the moves already happened in Phase 1 |
 | 96 | HIGH | — (found in Phase 1b) | C1.3 | **FIXED** — D2's floor is about maxima, not about microamps; seven sites routed through `format_limit` and the `:g` constants gated by a round-trip test |
+| 97 | HIGH | — (found in Phase 1b review) | **C2.6** | `_ceiling_interval_uA` dispatches on check-name string literals and falls through to `Interval.exact`, silently narrowing a published band to a point (7.853–19.63 µA → 19.63 µA). Move the interval provider beside the kind in `CHECK_KINDS`, or onto `Check` where it is built, so a stale name raises the way `Check.kind` already does. Scheduled after Phase 2's data-model commits because it touches the same dispatch |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
