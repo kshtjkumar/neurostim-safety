@@ -2143,3 +2143,62 @@ class TestTheDriftBudgetCarriesThePulseRidingOnIt:
             drift.window_charge_uC / abs(drift.net_dc_current_uA), rel=1e-15
         )
 
+
+
+class TestTheWaterWindowDetailAgreesWithItsVerdict:
+    """Ledger 108 (Phase 2 review F6). A FAIL whose detail line said "-> PASS".
+
+    ``WaterWindowResult.describe()`` took its verdict from the peak alone. So on ledger 2's
+    own case the check FAILed on drift while its detail, in ``describe()`` and in the PDF,
+    printed "-> PASS" above "headroom +0.582 V". That is the text ledger 2 complained
+    about, now sitting under the FAIL.
+    """
+
+    @staticmethod
+    def _band_calc(**protocol_kw):
+        from neurostim import CylindricalBandElectrode
+
+        return SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, **protocol_kw),
+            capacitance_uF_cm2=250.0,
+        )
+
+    def test_a_drift_fail_does_not_print_pass(self) -> None:
+        """Not tautological: the premise, a FAIL whose peak is inside the window, is
+        asserted from the assessment first; then the detail text is searched."""
+        assessment = self._band_calc(waveform="monophasic").assess()
+        check = next(c for c in assessment.checks if c.name == "Water window")
+        assert check.status is Status.FAIL
+        assert assessment.water_window.passes  # the peak alone is inside
+
+        header = check.detail.splitlines()[0]
+        assert "-> PASS" not in check.detail, header
+        assert "EXCEEDS" in header, header
+        assert "drift" in header, header
+        # The headroom that remains is the peak's, and says so.
+        assert "peak headroom" in check.detail
+        assert "\n  headroom " not in check.detail
+
+    def test_a_drift_caution_says_the_drift_lands_after_the_train(self) -> None:
+        """A drift that reaches the edge after the train is not an exceedance, and the
+        header must not call the check clean either."""
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(10.0, 50.0, 130.0, 1.0, charge_recovery_ratio=0.99),
+        )
+        assessment = calc.assess()
+        check = next(c for c in assessment.checks if c.name == "Water window")
+        assert check.status is Status.CAUTION, check.summary
+        header = check.detail.splitlines()[0]
+        assert "EXCEEDS" not in header, header
+        assert "after the train" in header, header
+
+    def test_a_balanced_protocol_is_unchanged(self) -> None:
+        """No drift, no change: the header is exactly what it was."""
+        assessment = self._band_calc().assess()
+        header = next(
+            c for c in assessment.checks if c.name == "Water window"
+        ).detail.splitlines()[0]
+        assert header == "Water window (PtIr, cathodic phase) -> PASS"
+        assert "\n  headroom      +" in assessment.water_window.describe()

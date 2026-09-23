@@ -347,13 +347,25 @@ class WaterWindowResult:
                 f"  no potential limits on record for this material in the cited source"
             )
         verdict = "PASS" if self.passes else "EXCEEDS"
+        drift = self.drift
+        if drift is not None and drift.drifts:
+            # The verdict is both clauses, not the peak alone. A drift FAIL used to print
+            # "-> PASS" above the peak headroom, the ledger-2 text under a FAIL (ledger 108).
+            peak = "peak within window" if self.passes else "peak EXCEEDS"
+            if drift.exits_during_train:
+                verdict = f"EXCEEDS ({peak}; drift reaches the edge within the train)"
+            else:
+                verdict = (
+                    f"{verdict} ({peak}; drift reaches the edge after the train)"
+                )
         lines = [
             f"Water window ({self.material_key}, {self.polarity} phase) -> {verdict}",
             f"  window        {self.window.describe()}",
             f"  rest -> peak  {self.resting_potential_V:+.3f} V -> "
             f"{self.peak_potential_V:+.3f} V "
             f"(excursion {self.excursion_V:.3f} V)",
-            f"  headroom      {self.headroom_V:+.3f} V",
+            f"  {'peak headroom' if drift is not None and drift.drifts else 'headroom':<13}"
+            f" {self.headroom_V:+.3f} V",
             f"  interface     {self.interface_model}, "
             f"C_dl = {self.capacitance_uF_cm2:g} uF/cm^2",
         ]
