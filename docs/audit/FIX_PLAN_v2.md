@@ -955,7 +955,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 5 | HIGH | OK | C3.5 | **FIXED** `978c1da`; default CAUTION; mutual term modelled |
 | 6 | HIGH | TEST-WEAK | C2.5 | excursion deleted, so the percent/fraction trap is gone |
 | 7 | MED | LISTED-ONLY | C4.2 | split out, with a polarity test |
-| 8 | MED | LISTED-ONLY | C4.2 | split out, with the half-window test; ledger row repaired at C0.5 |
+| 8 | MED | LISTED-ONLY | C4.2 | split out, with the half-window test; ledger row repaired at C0.5. **C4.2 must also re-check C3.5's counter-electrode 2× relation for Pt/PtIr** (`TestTheCounterElectrodeEntersTheVoltageBudget` pins exactly 2× on TiN only, because Pt/PtIr's polarity-specific C_eff differs 125 vs 250 µF/cm²); update that test if the asymmetry changes |
 | 9 | HIGH | OK | C1.3 | T2 split into T2a (here) and T2b (C1.6) |
 | 10 | MED | OK | C3.3 | **FIXED** `c327cee`; elliptic-disc pin |
 | 11 | MED | OK | C1.1 | T17 verified reachable |
