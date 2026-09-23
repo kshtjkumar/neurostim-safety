@@ -961,7 +961,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 15 | LOW | OK | C2.1 | |
 | 16 | LOW | BLOCKED | — (DOC, §8) | cylinder override rejected; documented limitation |
 | 17 | HIGH | BLOCKED | C3.1 | **FIXED** `a010103`; Pin A + Pin B replace the false invariant |
-| 18 | HIGH | OK | C3.2 | signature change named |
+| 18 | HIGH | OK | C3.2 | **FIXED** `0c3e79a`; signature change named |
 | 19 | HIGH | OK | C4.3 | |
 | 20 | MED | BLOCKED | C3.1 | **FIXED** `a010103`; equal-area sphere |
 | 21 | MED | OK | C3.1 | **FIXED** `a010103` |
