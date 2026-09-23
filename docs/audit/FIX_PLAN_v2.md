@@ -959,7 +959,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 9 | HIGH | OK | C1.3 | T2 split into T2a (here) and T2b (C1.6) |
 | 10 | MED | OK | C3.3 | **FIXED** `c327cee`; elliptic-disc pin |
 | 11 | MED | OK | C1.1 | T17 verified reachable |
-| 12 | MED | DOC | C3.6 | value unchanged; `provisional` flag added |
+| 12 | MED | DOC | C3.6 | **FIXED** `114604a`; value unchanged; `provisional` flag added |
 | 13 | LOW | OK | C1.9 | |
 | 14 | LOW | OK | C1.2, C1.9 | split: the window check lands at C1.2 (D2's monotonicity precondition), the non-finite class at C1.9 |
 | 15 | LOW | OK | C2.1 | |
