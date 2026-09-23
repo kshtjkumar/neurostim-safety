@@ -40,6 +40,17 @@ potential, or the interpulse bias several materials require to reach their quote
 Those genuinely move the excursion and are not captured anywhere else. Supplying a
 measured ``capacitance_uF_cm2`` overrides the derivation entirely.
 
+**And what the train leaves behind** (ledger 2, C2.3). Every per-pulse limit here was
+measured or derived on a charge-balanced waveform. A waveform that recovers less than it
+injects charges the same capacitor a little more with every pulse, and :class:`DcDrift`
+asks when that offset, together with the part of each pulse that rides on top of it
+(ledger 105), reaches the window edge. Reaching it before the train ends is a FAIL, and
+afterwards a CAUTION, so an unbalanced waveform never gets a bare PASS. The capacitor has
+no leakage, so the time is a lower bound. A continuous train with any unrecovered charge
+therefore permits no current at all, which is a bound from the model, not a sourced
+threshold (ledger 118). Inside ``SafetyCalculator.assess`` the clause runs only when
+Charge balance calls the waveform unbalanced, so the two checks read one test.
+
 The ohmic ``I * R_access`` drop across the tissue is *not* part of the electrode
 potential and is excluded here; it belongs to the compliance-voltage calculation.
 """

@@ -543,6 +543,33 @@ class TestTheProtocolFormCanExpressPhase2Faults:
         default = StimProtocol.__dataclass_fields__["charge_recovery_ratio"].default
         assert window.charge_recovery.value() == pytest.approx(default)
 
+    def test_the_train_duty_box_opens_at_the_library_default(self, window):
+        """Ledger 107 (F5): C2.5 added ``train_duty_cycle`` and section 6 booked a GUI
+        input for it; there was none. 1.0, taken from the dataclass."""
+        from neurostim.protocol import StimProtocol
+
+        default = StimProtocol.__dataclass_fields__["train_duty_cycle"].default
+        assert window.train_duty.value() == pytest.approx(default)
+
+    def test_train_duty_reaches_the_protocol(self, window):
+        """Not tautological: the expected pulse count is ``T * f * duty`` from the boxes'
+        own values, against a protocol the window builds; the default would give twice
+        it."""
+        window.frequency.setValue(130.0)
+        window.train.setValue(2.0)
+        window.train_duty.setValue(0.5)
+
+        protocol = window._build_calculator().p
+
+        assert protocol.train_duty_cycle == pytest.approx(0.5)
+        assert protocol.n_pulses == pytest.approx(2.0 * 130.0 * 0.5, rel=1e-12)
+
+    def test_the_train_duty_box_recomputes(self, window):
+        """A box that does not trigger a recompute shows a stale verdict."""
+        window.train_duty.setValue(0.25)
+        assert window._calc is not None
+        assert window._calc.p.train_duty_cycle == pytest.approx(0.25)
+
     def test_charge_recovery_reaches_the_protocol(self, window):
         """Not tautological: the expected net charge is ``(1 - r_a) * I * W * 1e-6``,
         computed here from the three boxes' own values, against a protocol the window

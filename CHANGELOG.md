@@ -56,6 +56,46 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### Charge imbalance, return phases and DC drift
+
+A return phase that does not recover what the leading phase injected could not be entered
+at all, and neither could anything that follows from it. That is the commonest real DC
+fault. Now:
+
+- **`StimProtocol.charge_recovery_ratio`** (default 1.0) is the fraction of the injected
+  charge the return phase recovers. **`train_duty_cycle`** (default 1.0) is the train's
+  on/off schedule. It scales the pulse count, the mean current and the RMS current, and
+  replaces the intra-pulse duty in the validated-envelope comparison, which made McCreery's
+  own fit protocol read as 25x outside its own envelope. Both are in the JSON protocol
+  block, the batch columns and the GUI form. At their defaults every earlier number is
+  unchanged.
+- **The return phase is evaluated.** Current density compares each phase against its own
+  threshold, and compliance budgets the larger of the two phase voltages. For
+  `return_phase_ratio = 0.2` on a clinical band the required compliance goes from 0.52 V to
+  2.59 V, and the limit moves from Shannon (15.3 mA) to current density (9.57 mA).
+- **Water window models DC drift.** Unrecovered charge accumulates on the interface
+  capacitance. The check FAILs when the edge is reached before the train ends, and
+  CAUTIONs with the time when it is reached afterwards. The recovered part of each pulse
+  rides on the accumulated offset, so it is spent from the same budget. A monophasic
+  3000 µA train on a clinical band used to PASS with 0.58 V of headroom; it now FAILs at
+  0.256 s.
+- **Monophasic delivery gets no charge-injection limit**, because none was measured on such
+  a waveform, and its limit-bearing ceiling is capped at the biphasic answer. Charge
+  balance FAILs for any waveform that recovers nothing, so the headline refuses a number.
+- **The headline also refuses when a limit closes to zero**, for example a resting
+  potential on the window edge, or a continuous train with any unrecovered charge. It
+  prints `no amplitude is safe: Water window permits no current at all` instead of
+  `0 uA`. The JSON gains `permits_no_current` and `monotonicity_capped`.
+
+**Consumers of `current_sweep.csv` and batch output:** `limiting_mechanism` holds a
+sentence, not a check name, for every row whose headline refuses.
+
+Two arithmetic defects in the first version of the drift clause are fixed in the same
+release. A balanced pulse with `return_phase_ratio != 1` could crash `assess()` or report a
+limit above an amplitude that FAILed. A partial recovery near 99 % could raise
+`LimitDidNotSettle`. The unrecovered charge is now computed as one product, not a
+difference of two.
+
 ## 0.15.0 — a permissive setting could improve the verdict
 
 Reading a generated report surfaced a defect no test was watching for. On 316LVM,

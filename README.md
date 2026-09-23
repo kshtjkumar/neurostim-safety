@@ -78,9 +78,9 @@ change. Exports the PDF report and the four-panel summary figure.
 | Check | Basis | Source |
 |---|---|---|
 | Shannon criterion | `k = log₁₀(Q²/A)`, damage separatrix | Shannon 1992; Merrill 2005 eq. 5.1 |
-| Charge-injection limit | Material CIC vs applied charge density | Cogan 2008 Table 2 |
-| Water window | Interfacial potential excursion vs electrolysis limits | Cogan 2008; Merrill 2005 |
-| Charge balance | Net DC per pulse and over the train | Merrill 2005 |
+| Charge-injection limit | Material CIC vs applied charge density. NOT_EVALUATED for monophasic delivery, because every CIC was measured biphasic | Cogan 2008 Table 2; Merrill 2005 |
+| Water window | Peak interfacial excursion vs electrolysis limits, plus DC drift: when the charge a waveform leaves behind (with each pulse riding on it) reaches the edge, against the train duration | Cogan 2008; Merrill 2005 |
+| Charge balance | Fraction of charge recovered and the resulting net DC. FAIL only when nothing is recovered; CAUTION for a partial recovery, whose consequence is judged by Water window | Merrill 2005 |
 | Compliance voltage | `I(R_access + R_lead) + ΔV_polarisation` | Newman 1966 |
 
 Plus models, each documenting its own validity range:
@@ -238,6 +238,17 @@ the electrode's own access resistance.
 - **Water window** — models the interface as a pure double-layer capacitance. Conservative
   for pseudocapacitive materials such as Pt and iridium oxide, where part of the injected
   charge goes into reversible surface reactions instead.
+- **DC drift** — the interface is a leak-free capacitor charged by the net unrecovered
+  current, so drift times are lower bounds. A real interface leaks and can reach a steady
+  state (Merrill 2005 §2.4). A continuous train with *any* unrecovered charge therefore
+  gets a zero water-window ceiling and the headline refuses a number. That is a bound from
+  the model, not a sourced damage threshold. The drift runs over the wall-clock
+  `train_duration_s` and does not yet scale with `train_duty_cycle`, which is
+  conservative.
+- **Monophasic delivery** — no charge-injection limit is applied, because none was
+  measured on such a waveform. Charge balance FAILs, so the headline refuses a number. The
+  limit-bearing ceiling is still computed, and is capped at what the same electrode and
+  protocol would report biphasic.
 - **Thermal** — spreading-resistance heating only. Tissue properties are now IT'IS v4.2
   with uncertainty, but the model still omits electrode and lead self-heating and any
   encapsulation layer. Gives millikelvin rises for clinical DBS parameters, well below the

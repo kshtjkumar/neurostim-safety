@@ -55,7 +55,12 @@ from ..geometry import (
     SphericalElectrode,
 )
 from ..materials import Policy, list_materials
-from ..protocol import DEFAULT_CHARGE_RECOVERY_RATIO, StimProtocol, Waveform
+from ..protocol import (
+    DEFAULT_CHARGE_RECOVERY_RATIO,
+    DEFAULT_TRAIN_DUTY_CYCLE,
+    StimProtocol,
+    Waveform,
+)
 from ..safety import SafetyCalculator, shannon
 from ..safety._limits import format_limit
 from ..safety.assessment import SafetyAssessment, Status
@@ -212,6 +217,9 @@ class SafetyWindow(QMainWindow):
         self.charge_recovery = _spin(
             0.0, 2.0, DEFAULT_CHARGE_RECOVERY_RATIO, decimals=4
         )
+        # The on/off schedule McCreery varied (C2.5), seeded the same way. Section 6 booked
+        # a form input for it and it had none (ledger 107).
+        self.train_duty = _spin(0.001, 1.0, DEFAULT_TRAIN_DUTY_CYCLE, decimals=3)
         p_form.addRow("Amplitude (uA)", self.current)
         p_form.addRow("Pulse width (us)", self.pulse_width)
         p_form.addRow("Frequency (Hz)", self.frequency)
@@ -219,6 +227,7 @@ class SafetyWindow(QMainWindow):
         p_form.addRow("Waveform", self.waveform)
         p_form.addRow("Interphase gap (us)", self.interphase)
         p_form.addRow("Charge recovery (fraction)", self.charge_recovery)
+        p_form.addRow("Train duty cycle (fraction on)", self.train_duty)
         p_form.addRow("", self.anodic_first)
         layout.addWidget(p_box)
 
@@ -245,7 +254,7 @@ class SafetyWindow(QMainWindow):
 
         for spin in (
             self.current, self.pulse_width, self.frequency, self.train,
-            self.interphase, self.charge_recovery, self.k_value, self.sigma,
+            self.interphase, self.charge_recovery, self.train_duty, self.k_value, self.sigma,
             self.compliance,
         ):
             spin.valueChanged.connect(self.recompute)
@@ -344,6 +353,7 @@ class SafetyWindow(QMainWindow):
             interphase_gap_us=self.interphase.value(),
             anodic_first=self.anodic_first.isChecked(),
             charge_recovery_ratio=self.charge_recovery.value(),
+            train_duty_cycle=self.train_duty.value(),
         )
         return SafetyCalculator(
             electrode,

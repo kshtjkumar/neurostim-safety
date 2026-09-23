@@ -11,6 +11,16 @@ pulse width and the dependence is material- and film-specific -- Cogan (2008) re
 sputtered iridium oxide limits that differ several-fold between sub-millisecond and
 10 ms pulsing. Rather than invent a correction, this module reports the measurement
 conditions alongside the limit and raises a caution when the protocol is far from them.
+
+**Not applied to monophasic delivery** (ledger 2, C2.4). Every CIC in this database was
+measured with a charge-balanced biphasic waveform (Merrill et al. 2005), and a CIC is the
+density reachable *given that the return phase recovers it*. For delivery that recovers
+nothing, the assessment reports the Charge injection check as NOT_EVALUATED and sets
+``limits_incomplete``, rather than borrowing a number measured on a different waveform.
+:func:`evaluate` still computes the biphasic figure. The refusal is made in
+``assessment._charge_check``, which knows the waveform. What replaces this limit for a
+monophasic protocol is the water window's DC-drift clause and the cap at the biphasic
+twin's limit (``SafetyAssessment.biphasic_ceiling_uA``).
 """
 
 from __future__ import annotations
