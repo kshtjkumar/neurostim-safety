@@ -109,6 +109,13 @@ class MicrowireElectrode(Electrode):
                     "cone_height_um is required when tip_shape='conical'"
                 )
             _check_positive("cone_height_um", self.cone_height_um)
+        elif self.cone_height_um is not None:
+            # It would be silently ignored: a flat or hemispherical tip has no cone, so the
+            # area would be the plain wire's whatever height was given (ledger 29).
+            raise ValueError(
+                f"cone_height_um applies only to tip_shape='conical'; got "
+                f"{self.cone_height_um!r} with tip_shape={self.tip_shape!r}"
+            )
         if self.exposed_length_um == 0 and self.tip_shape == "flat":
             # A flat-tipped wire with no shaft exposure is just a disc; allowed, but
             # the caller probably wants DiscElectrode.

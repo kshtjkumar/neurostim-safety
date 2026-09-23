@@ -56,6 +56,15 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### Geometry inputs that meant nothing are refused
+
+- `linear_array` and `grid_array` refuse a non-finite pitch. `pitch_um <= 0` let NaN
+  through, giving an array whose minimum pitch was NaN.
+- `ElectrodeArray` refuses two sites at the same point, which gave a pitch of 0.0 and a
+  field that diverges between them. `ArraySite` refuses a non-finite position.
+- `MicrowireElectrode` refuses `cone_height_um` unless the tip is conical. Before, it was
+  ignored and the area was the plain wire's.
+
 ### The equal-area substitution errs high, not low, for rings and strips
 
 The ring and rectangle docstrings stated the direction of their access-resistance

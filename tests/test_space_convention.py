@@ -371,3 +371,45 @@ class TestTheEqualAreaDiscIsAnUpperBoundForPlanarShapes:
         assert "overestimates" in doc
         assert "underestimates" not in doc
         assert "higher access resistance than the equal-area" not in doc
+
+
+class TestContradictoryGeometryInputsAreRefused:
+    """Ledgers 28 and 29 (C3.4). Inputs that silently produced a meaningless geometry."""
+
+    def test_a_nan_pitch_is_refused(self):
+        """``pitch_um <= 0`` is False for NaN, so ``linear_array(disc, 3, nan)`` built an
+        array whose minimum pitch was NaN."""
+        from neurostim.geometry import grid_array, linear_array
+
+        disc = DiscElectrode(100.0)
+        for bad in (math.nan, math.inf, -math.inf):
+            with pytest.raises(ValueError, match="pitch_um"):
+                linear_array(disc, 3, bad)
+            with pytest.raises(ValueError, match="pitch_um"):
+                grid_array(disc, 2, 2, bad)
+
+    def test_coincident_sites_are_refused(self):
+        """Two sites at one point returned a minimum pitch of 0.0 and a field that
+        diverges between them."""
+        from neurostim.geometry.arrays import ArraySite, ElectrodeArray
+
+        disc = DiscElectrode(100.0)
+        with pytest.raises(ValueError, match="coincide"):
+            ElectrodeArray(sites=(ArraySite(disc, 0, 0, 0), ArraySite(disc, 0, 0, 0)))
+
+    def test_a_non_finite_site_position_is_refused(self):
+        from neurostim.geometry.arrays import ArraySite
+
+        with pytest.raises(ValueError, match="finite"):
+            ArraySite(DiscElectrode(100.0), x_um=math.nan)
+
+    @pytest.mark.parametrize("tip", ["flat", "hemispherical"])
+    def test_a_cone_height_on_a_non_conical_tip_is_refused(self, tip):
+        """``MicrowireElectrode(50, 0, "flat", 999999.)`` had the area of the plain flat
+        wire: the cone height was silently ignored."""
+        with pytest.raises(ValueError, match="cone_height_um"):
+            MicrowireElectrode(50.0, 0.0, tip, 999999.0)
+
+    def test_a_conical_tip_still_needs_and_uses_its_height(self):
+        wire = MicrowireElectrode(50.0, 0.0, "conical", 100.0)
+        assert wire.tip_area_um2 == pytest.approx(math.pi * 25.0 * math.sqrt(25.0**2 + 100.0**2))

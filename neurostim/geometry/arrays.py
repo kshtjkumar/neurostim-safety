@@ -24,6 +24,11 @@ class ArraySite:
     z_um: float = 0.0
     label: str = ""
 
+    def __post_init__(self) -> None:
+        for name, value in (("x_um", self.x_um), ("y_um", self.y_um), ("z_um", self.z_um)):
+            if not math.isfinite(value):
+                raise ValueError(f"site position {name} must be finite, got {value!r}")
+
     def position_um(self) -> tuple[float, float, float]:
         """Cartesian position tuple."""
         return (self.x_um, self.y_um, self.z_um)
@@ -43,6 +48,18 @@ class ElectrodeArray:
     def __post_init__(self) -> None:
         if not self.sites:
             raise ValueError("An ElectrodeArray needs at least one site")
+        # Two sites at one point are one site twice: a minimum pitch of 0.0 and a field
+        # that diverges between them (ledger 28). A pitch too small to be physical is the
+        # caller's to judge; zero is not a pitch at all.
+        seen: dict[tuple[float, float, float], str] = {}
+        for index, site in enumerate(self.sites):
+            label = site.label or f"#{index}"
+            position = site.position_um()
+            if position in seen:
+                raise ValueError(
+                    f"sites {seen[position]} and {label} coincide at {position} um"
+                )
+            seen[position] = label
 
     def __len__(self) -> int:
         return len(self.sites)
@@ -108,8 +125,7 @@ def linear_array(
     """Build an evenly spaced 1-D array of identical sites, e.g. a DBS lead."""
     if n_sites < 1:
         raise ValueError(f"n_sites must be >= 1, got {n_sites}")
-    if pitch_um <= 0:
-        raise ValueError(f"pitch_um must be > 0, got {pitch_um}")
+    _check_pitch(pitch_um)
     if axis not in ("x", "y", "z"):
         raise ValueError(f"axis must be x, y or z, got {axis!r}")
 
@@ -135,8 +151,7 @@ def grid_array(
     """Build a rectangular grid of identical sites in the x-y plane, e.g. a Utah array."""
     if n_rows < 1 or n_cols < 1:
         raise ValueError(f"n_rows and n_cols must be >= 1, got {n_rows}x{n_cols}")
-    if pitch_um <= 0:
-        raise ValueError(f"pitch_um must be > 0, got {pitch_um}")
+    _check_pitch(pitch_um)
 
     sites = tuple(
         ArraySite(
@@ -149,3 +164,9 @@ def grid_array(
         for col in range(n_cols)
     )
     return ElectrodeArray(sites=sites, name=name)
+
+
+def _check_pitch(pitch_um: float) -> None:
+    """Finite and positive. ``pitch_um <= 0`` alone is False for NaN (ledger 28)."""
+    if not math.isfinite(pitch_um) or pitch_um <= 0:
+        raise ValueError(f"pitch_um must be finite and > 0, got {pitch_um!r}")
