@@ -1037,6 +1037,44 @@ class TestPartialRecoveryExitTime:
         body = text.split("def partial_recovery_exit_time_s(", 1)[1]
         assert "closed_form" not in body
 
+class TestPlanarBounds:
+    """Oracle (e): exact elliptic disc and the thin-ring asymptote (ledger 10)."""
+
+    def test_k_of_zero_recovers_newman(self) -> None:
+        """K(0) = pi/2, so R = (pi/2)/(2 pi sigma a) = 1/(4 sigma a)."""
+        from oracles import planar_bounds
+
+        assert planar_bounds.complete_elliptic_k(0.0) == pytest.approx(math.pi / 2, rel=1e-15)
+        assert planar_bounds.elliptic_disc_resistance_ohm(0.35, 100e-6, 100e-6) == pytest.approx(
+            1.0 / (4.0 * 0.35 * 100e-6), rel=1e-14
+        )
+
+    def test_the_geometry_audits_elliptic_table(self) -> None:
+        """audit_geometry.md: an ellipse of the area of a 100 um disc at sigma 0.35, by
+        aspect -- 6934.1, 6133.6, 5314.2 and 3407.5 ohm at 2, 5, 10 and 50."""
+        from oracles import planar_bounds
+
+        for aspect, expected in ((2, 6934.1), (5, 6133.6), (10, 5314.2), (50, 3407.5)):
+            a = 100e-6 * math.sqrt(aspect)
+            b = 100e-6 / math.sqrt(aspect)
+            assert planar_bounds.elliptic_disc_resistance_ohm(0.35, a, b) == pytest.approx(
+                expected, abs=0.05
+            )
+
+    def test_the_geometry_audits_thin_ring(self) -> None:
+        """audit_geometry.md: 200 um diameter, 1 um strip: about 11 682 ohm."""
+        from oracles import planar_bounds
+
+        assert planar_bounds.thin_ring_resistance_ohm(0.35, 200e-6, 1e-6) == pytest.approx(
+            11682.2, abs=0.1
+        )
+
+    def test_the_oracle_imports_nothing_from_the_package(self) -> None:
+        from oracles import planar_bounds
+
+        text = Path(planar_bounds.__file__ or "").read_text(encoding="utf-8")
+        assert "neurostim" not in text.split('"""', 2)[2]
+
 class TestFdBandReference:
     """Oracle (d): the converged Laplace solve for a band on an insulating shaft."""
 

@@ -259,7 +259,9 @@ the electrode's own access resistance.
   insulating shaft or a microwire. The equal-area sphere is used. Against a converged
   finite-difference solve it is within 2 % from aspect 0.39 to 2.0 (the clinical 3389
   contact reads 329.5 Ω against 335.1 Ω) and 17 % high by aspect 10. Ring and rectangle
-  take Newman's equal-area disc.
+  take Newman's equal-area disc, which *over*estimates them. The disc is the most
+  resistive plane shape of its area, so the substitution is an upper bound: 1.34× high
+  for a 10:1 strip, 4.3× for a ring 1 % as wide as it is across.
 - **Thermal** — spreading-resistance heating only. Tissue properties are now IT'IS v4.2
   with uncertainty, but the model still omits electrode and lead self-heating and any
   encapsulation layer. Gives millikelvin rises for clinical DBS parameters, well below the

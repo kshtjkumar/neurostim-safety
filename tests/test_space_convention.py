@@ -325,3 +325,49 @@ class TestTheCurrentDistributionIsTheGeometrys:
         with_electrode = jd.evaluate(100.0, electrode.area_cm2, 200.0, electrode=electrode)
         assert with_electrode.threshold == without.threshold
         assert with_electrode.average_A_per_cm2 == without.average_A_per_cm2
+
+
+class TestTheEqualAreaDiscIsAnUpperBoundForPlanarShapes:
+    """Ledger 10 (C3.3). Among plane shapes of equal area the disc has the least capacity,
+    so the most resistance (Polya & Szego). The equal-area disc therefore *over*estimates
+    a ring's or a rectangle's access resistance: an upper bound, conservative for
+    compliance. Both docstrings said the opposite, so a reader correcting in the stated
+    direction would add margin the wrong way.
+    """
+
+    @pytest.mark.parametrize(
+        ("aspect", "ratio"), [(2, 1.030), (5, 1.165), (10, 1.344), (50, 2.096)]
+    )
+    def test_an_elongated_shape_is_below_its_equal_area_disc(self, aspect, ratio):
+        """Not tautological: the reference is the exact elliptic disc,
+        ``K(e) / (2 pi sigma a)``, computed by the oracle with an AGM, for an ellipse of
+        the rectangle's area and aspect."""
+        from oracles import planar_bounds
+
+        width = 100.0 * math.sqrt(math.pi / aspect)
+        rect = RectangularElectrode(width, width * aspect, "Pt")
+        a = 100e-6 * math.sqrt(aspect)
+        b = 100e-6 / math.sqrt(aspect)
+        exact_ellipse = planar_bounds.elliptic_disc_resistance_ohm(SIGMA, a, b)
+        package = rect.access_resistance_ohm(SIGMA)
+        assert package > exact_ellipse
+        assert package / exact_ellipse == pytest.approx(ratio, abs=5e-4)
+
+    def test_a_thin_ring_is_far_below_its_equal_area_disc(self):
+        """The audit's case: 200 um across, 1 um wide. The equal-area disc gives
+        50 634 ohm and the thin-ring asymptote about 11 682, so the substitution is 4.33x
+        high, not low."""
+        from oracles import planar_bounds
+
+        ring = RingElectrode(200.0, 198.0, "Pt")
+        package = ring.access_resistance_ohm(SIGMA)
+        thin = planar_bounds.thin_ring_resistance_ohm(SIGMA, 200e-6, 1e-6)
+        assert package == pytest.approx(50634.4, abs=0.1)
+        assert package / thin == pytest.approx(4.33, abs=0.01)
+
+    @pytest.mark.parametrize("cls", [RingElectrode, RectangularElectrode])
+    def test_the_docstring_states_the_direction_the_inequality_shows(self, cls):
+        doc = " ".join((cls.__doc__ or "").split())
+        assert "overestimates" in doc
+        assert "underestimates" not in doc
+        assert "higher access resistance than the equal-area" not in doc

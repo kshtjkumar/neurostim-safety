@@ -83,9 +83,13 @@ class RingElectrode(Electrode):
     Constructed as ``RingElectrode(outer_diameter_um, inner_diameter_um, material)``.
 
     Access resistance has no simple exact form for an annulus, so the equal-area disc
-    substitution from :class:`~neurostim.geometry.base.Electrode` is used. For a thin
-    ring this *underestimates* the resistance, because a thin ring concentrates current
-    at two edges rather than spreading it over a filled disc of the same area.
+    substitution from :class:`~neurostim.geometry.base.Electrode` is used. It
+    **overestimates** the resistance, and the error grows as the ring thins. Among plane
+    shapes of equal area the disc has the least capacity and therefore the most spreading
+    resistance (Polya & Szego 1951), so the substitution is an upper bound: conservative
+    for the compliance budget. For a ring 200 um across and 1 um wide it is 50 634 ohm,
+    against about 11 682 ohm from the thin-ring asymptote, 4.33x high (ledger 10: this
+    docstring used to state the direction backwards).
     """
 
     outer_diameter_um: float
@@ -130,9 +134,13 @@ class RingElectrode(Electrode):
 class RectangularElectrode(Electrode):
     """A rectangular pad, e.g. a lithographically patterned surface contact.
 
-    Access resistance uses the equal-area disc substitution. The error grows with
-    aspect ratio: a long thin strip has a higher access resistance than the equal-area
-    disc because current crowds at its long edges.
+    Access resistance uses the equal-area disc substitution, which **overestimates** it
+    by an amount that grows with aspect ratio. Spreading resistance is set by the largest
+    linear dimension, not by ``sqrt(area)``, and the disc is the most resistive plane shape
+    of a given area (Polya & Szego 1951). Against the exact elliptic disc of the same area
+    and aspect, ``K(e) / (2 pi sigma a)``, the substitution is 1.03x high at aspect 2,
+    1.34x at 10 and 2.10x at 50. An upper bound, conservative for the compliance budget
+    (ledger 10: this docstring used to state the direction backwards).
     """
 
     width_um: float

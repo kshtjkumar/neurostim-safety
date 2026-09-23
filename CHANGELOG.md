@@ -56,6 +56,16 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### The equal-area substitution errs high, not low, for rings and strips
+
+The ring and rectangle docstrings stated the direction of their access-resistance
+approximation backwards. The equal-area disc *over*estimates both: it is the most
+resistive plane shape of its area, so the substitution is an upper bound and is
+conservative for the compliance budget. Against the exact elliptic disc it is 1.34× high
+at aspect 10, and against the thin-ring asymptote 4.3× for a ring 1 % as wide as it is
+across. No number changes; a reader adding margin in the stated direction would have
+double-counted it.
+
 ### The current-density detail describes the electrode's own distribution
 
 The Current density check printed a disc's primary distribution for every electrode:
