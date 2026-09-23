@@ -413,3 +413,201 @@ class TestContradictoryGeometryInputsAreRefused:
     def test_a_conical_tip_still_needs_and_uses_its_height(self):
         wire = MicrowireElectrode(50.0, 0.0, "conical", 100.0)
         assert wire.tip_area_um2 == pytest.approx(math.pi * 25.0 * math.sqrt(25.0**2 + 100.0**2))
+
+
+class TestTheCounterElectrodeEntersTheVoltageBudget:
+    """Ledger 5 (C3.5, fix plan D7). The budget modelled one interface and one spreading
+    resistance; a two-terminal pair has two of each.
+
+    ``counter_electrode=None`` keeps the old arithmetic exactly, but the check says it is
+    assuming a monopolar single-interface budget and is never a bare PASS: under-estimating
+    the required voltage is the anti-conservative direction, and the stimulator drops out
+    of regulation silently.
+    """
+
+    BAND = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+
+    def _compliance(self, **kwargs):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            self.BAND,
+            StimProtocol(1000.0, 90.0, 130.0, 1.0),
+            capacitance_uF_cm2=250.0,
+            compliance_V=10.0,
+            **kwargs,
+        )
+        assessment = calc.assess()
+        check = next(c for c in assessment.checks if c.name == "Compliance voltage")
+        return assessment.compliance, check
+
+    def test_without_a_counter_the_number_is_unchanged_but_the_check_cautions(self):
+        """0.3354767487193873 V is C3.1's value for this protocol, a pre-change literal."""
+        result, check = self._compliance()
+        assert result.required_V == 0.3354767487193873
+        assert result.utilisation < 0.8  # would have been a bare PASS
+        assert check.status.value == "CAUTION"
+        assert "monopolar" in check.summary
+        assert "counter_electrode" in check.summary
+
+    def test_two_identical_immersed_contacts_are_not_twice_one(self):
+        """D7: ``R = (1/(2 pi sigma)) (1/a - 1/d)`` for two equal-area spheres of radius a
+        at separation d. Two 3389 contacts at 2 mm: about 431.6 ohm against 658.9 naive.
+
+        Not tautological: the expected resistance is D7's formula written out on the band's
+        equal-area sphere radius, not the package's superposition expression.
+        """
+        result, _ = self._compliance(counter_electrode=self.BAND, counter_separation_um=2000.0)
+        a_m = math.sqrt(self.BAND.area_um2 * 1e-12 / (4.0 * math.pi))
+        expected = (1.0 / (2.0 * math.pi * 0.35)) * (1.0 / a_m - 1.0 / 2e-3)
+        assert result.total_resistance_ohm == pytest.approx(expected, rel=1e-12)
+        assert result.total_resistance_ohm == pytest.approx(431.56, abs=0.01)
+
+    def test_the_ratio_is_between_one_and_two(self):
+        mono, _ = self._compliance()
+        near, _ = self._compliance(counter_electrode=self.BAND, counter_separation_um=2000.0)
+        far, _ = self._compliance(counter_electrode=self.BAND, counter_separation_um=1e12)
+        ratio = near.required_V / mono.required_V
+        assert 1.0 < ratio <= 2.0 + 1e-12
+        assert near.required_V < far.required_V
+
+    def test_far_apart_two_identical_interfaces_need_exactly_twice_one(self):
+        """The mutual term vanishes and ohmic and polarisation terms each double.
+
+        TiN, not Pt: the counter carries the opposite phase, and the package derives each
+        material's capacitance per polarity from its own CIC and half-window. For Pt the
+        two polarities differ (125 against 250 uF/cm^2), so a Pt counter polarises twice as
+        much as the Pt contact and the ratio is not 2 (ledger 8's half-window is revisited
+        at C4.2). TiN's two polarities agree, so here the interfaces really are identical.
+        """
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.safety.water_window import effective_capacitance_uF_cm2
+
+        band = CylindricalBandElectrode(1270.0, 1500.0, "TiN")
+        assert effective_capacitance_uF_cm2(
+            "TiN", anodic_first=True
+        ) == effective_capacitance_uF_cm2("TiN", anodic_first=False)  # the premise
+
+        def required(**kwargs):
+            return SafetyCalculator(
+                band, StimProtocol(1000.0, 90.0, 130.0, 1.0), compliance_V=10.0, **kwargs
+            ).assess().compliance.required_V
+
+        far = required(counter_electrode=band, counter_separation_um=1e12)
+        assert far / required() == pytest.approx(2.0, rel=1e-8)
+
+    def test_two_flush_discs_share_a_half_space(self):
+        """Two flush discs on one insulating plane see each other through the half-space
+        point source, ``I / (2 pi sigma d)`` per side, so the mutual term is
+        ``2 / (2 pi sigma d)``."""
+        from neurostim import SafetyCalculator, StimProtocol
+
+        disc = DiscElectrode(500.0, "Pt")
+        result = SafetyCalculator(
+            disc,
+            StimProtocol(100.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+            counter_electrode=disc,
+            counter_separation_um=5000.0,
+        ).assess().compliance
+        newman = 1.0 / (4.0 * 0.35 * 250e-6)
+        expected = 2.0 * newman - 2.0 / (2.0 * math.pi * 0.35 * 5e-3)
+        assert result.total_resistance_ohm == pytest.approx(expected, rel=1e-12)
+
+    def test_the_counter_interface_polarises_too(self):
+        """A large, low-polarisation counter adds little; a small one adds its own
+        excursion, charge over its own area."""
+        small = SphericalElectrode(200.0, "Pt")
+        large = SphericalElectrode(20000.0, "Pt")
+        with_small, _ = self._compliance(counter_electrode=small, counter_separation_um=1e7)
+        with_large, _ = self._compliance(counter_electrode=large, counter_separation_um=1e7)
+        assert with_small.counter_polarisation_V > 100 * with_large.counter_polarisation_V
+
+    def test_a_counter_clears_the_assumption_caution(self):
+        _, check = self._compliance(counter_electrode=self.BAND, counter_separation_um=2000.0)
+        assert check.status.value == "PASS"
+        assert "monopolar" not in check.summary
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"counter_electrode": DiscElectrode(500.0)},
+            {"counter_separation_um": 2000.0},
+            {"counter_electrode": DiscElectrode(500.0), "counter_separation_um": math.nan},
+            {"counter_electrode": DiscElectrode(500.0), "counter_separation_um": 400.0},
+            {"counter_electrode": SphericalElectrode(500.0), "counter_separation_um": 5000.0},
+            {
+                "counter_electrode": DiscElectrode(500.0),
+                "counter_separation_um": 5000.0,
+                "measured_impedance_ohm": 1000.0,
+            },
+        ],
+        ids=["no-separation", "no-counter", "nan", "overlapping", "mixed-space", "measured"],
+    )
+    def test_contradictory_counter_settings_are_refused(self, kwargs):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        with pytest.raises(ValueError, match="counter"):
+            SafetyCalculator(
+                DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 130.0, 1.0), **kwargs
+            ).assess()
+
+
+class TestTheLeadResistanceIsInTheBudget:
+    """T18 (ledger 69). ``lead_resistance_ohm`` was non-zero nowhere in the suite, so a
+    mutant dropping it from the budget survived."""
+
+    def test_two_kiloohms_add_ohms_law_and_lower_the_limit(self):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        def compliance(lead):
+            return SafetyCalculator(
+                DiscElectrode(500.0, "Pt"),
+                StimProtocol(1000.0, 200.0, 130.0, 1.0),
+                compliance_V=5.0,
+                lead_resistance_ohm=lead,
+            ).assess().compliance
+
+        bare, leaded = compliance(0.0), compliance(2000.0)
+        assert leaded.required_V - bare.required_V == pytest.approx(1000e-6 * 2000.0, rel=1e-12)
+        assert leaded.max_current_uA < bare.max_current_uA
+
+
+class TestThePdfStatesWhichBudgetItUsed:
+    """The PDF's "Required compliance" row broke the requirement into ohmic plus
+    polarisation. With a counter electrode that sum would omit the counter's own
+    polarisation and stop adding up; without one it would hide the assumption."""
+
+    @staticmethod
+    def _row(tmp_path, **kwargs):
+        import re
+        import shutil
+        import subprocess
+
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.io import build_report
+
+        if shutil.which("pdftotext") is None:  # pragma: no cover - environment dependent
+            pytest.skip("pdftotext (poppler) not available")
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        calc = SafetyCalculator(
+            band, StimProtocol(3000.0, 90.0, 130.0, 1.0), compliance_V=10.0, **kwargs
+        )
+        out = build_report(calc, tmp_path / "r.pdf")
+        text = subprocess.run(
+            ["pdftotext", "-layout", str(out), "-"], capture_output=True, text=True,
+            check=True,
+        ).stdout
+        return re.sub(r"\s+", " ", text), calc.assess().compliance
+
+    def test_with_a_counter_the_breakdown_adds_up(self, tmp_path):
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        text, result = self._row(
+            tmp_path, counter_electrode=band, counter_separation_um=2000.0
+        )
+        assert f"{result.counter_polarisation_V:.3f} V counter polarisation" in text
+        assert "counter electrode at 2000 um" in text
+
+    def test_without_a_counter_the_assumption_is_on_the_row(self, tmp_path):
+        text, _ = self._row(tmp_path)
+        assert "monopolar single-interface budget" in text

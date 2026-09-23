@@ -120,6 +120,8 @@ def _limit(
         measured_impedance_ohm=calc.measured_impedance_ohm,
         resting_potential_V=calc.resting_potential_V,
         capacitance_uF_cm2=calc.capacitance_uF_cm2,
+        counter_electrode=calc.counter_electrode,
+        counter_separation_um=calc.counter_separation_um,
     )
     assessment = varied.assess()
     limit_uA = assessment.limiting_current_uA

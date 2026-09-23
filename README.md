@@ -52,7 +52,7 @@ Limiting current: 20.00 uA (Microelectrode charge/phase)
 [         FAIL] Microelectrode charge/phase: 16 nC/phase exceeds the 4 nC/phase microelectrode damage threshold
 [         FAIL] Chronic degradation: 56.59 uC/cm^2 exceeds the 50 uC/cm^2 platinum dissolution threshold
 [         PASS] Charge balance: biphasic, fully charge-balanced
-[         PASS] Compliance voltage: 0.83 V of 10.00 V (8 % used)
+[      CAUTION] Compliance voltage: 0.83 V of 10.00 V (8 % used); monopolar single-interface budget assumed -- supply counter_electrode for a two-terminal estimate
 ```
 
 Each check also prints the conditions its limit was measured under and the
@@ -81,7 +81,7 @@ change. Exports the PDF report and the four-panel summary figure.
 | Charge-injection limit | Material CIC vs applied charge density. NOT_EVALUATED for monophasic delivery, because every CIC was measured biphasic | Cogan 2008 Table 2; Merrill 2005 |
 | Water window | Peak interfacial excursion vs electrolysis limits, plus DC drift: when the charge a waveform leaves behind (with each pulse riding on it) reaches the edge, against the train duration | Cogan 2008; Merrill 2005 |
 | Charge balance | Fraction of charge recovered and the resulting net DC. FAIL only when nothing is recovered; CAUTION for a partial recovery, whose consequence is judged by Water window | Merrill 2005 |
-| Compliance voltage | `I(R_access + R_lead) + ΔV_polarisation` | Newman 1966 |
+| Compliance voltage | `I(R_access + R_lead) + ΔV_polarisation`; with a `counter_electrode`, `I(R_a + R_c − 2/(Gσd) + R_lead) + ΔV_a + ΔV_c`. Without one, CAUTION: a single-interface budget is assumed | Newman 1966 |
 
 Plus models, each documenting its own validity range:
 
@@ -262,6 +262,12 @@ the electrode's own access resistance.
   take Newman's equal-area disc, which *over*estimates them. The disc is the most
   resistive plane shape of its area, so the substitution is an upper bound: 1.34× high
   for a 10:1 strip, 4.3× for a ring 1 % as wide as it is across.
+- **Compliance voltage** — without a `counter_electrode` the budget has one interface and
+  one spreading resistance, which under-estimates a two-terminal pair, so the check is
+  CAUTION at best. With a counter the mutual term is first-order superposition of two
+  compact sources, not a solved two-body problem. The equilibrium-potential difference
+  between two dissimilar materials is not modelled. No compliance-voltage measurement in
+  this bibliography pins the two-terminal model.
 - **Thermal** — spreading-resistance heating only. Tissue properties are now IT'IS v4.2
   with uncertainty, but the model still omits electrode and lead self-heating and any
   encapsulation layer. Gives millikelvin rises for clinical DBS parameters, well below the

@@ -56,6 +56,30 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### The voltage budget includes the return path
+
+`SafetyCalculator` takes `counter_electrode` and `counter_separation_um`, which must be
+given together. With them, the required compliance voltage has both interfaces and both
+spreading resistances, less the mutual term of two sources sharing the medium. So two 3389
+contacts 2 mm apart need 1.349 V at 3000 µA/90 µs, not the single-contact 1.006 V and
+not twice it. Far apart, two identical interfaces need exactly twice one.
+
+**Without a counter electrode the Compliance voltage check is now CAUTION, never PASS.**
+The number is unchanged, but the check says it assumes a monopolar single-interface
+budget, which under-estimates a real two-terminal pair. The README quick-start line
+changes accordingly.
+
+A counter with `measured_impedance_ohm` is refused, because the measurement may already
+include the return path. So are a counter whose environment differs from the active
+electrode's and a separation that lets the two overlap.
+
+Where the counter electrode reaches so far: `SafetyCalculator`, `compliance.evaluate`,
+the Compliance check and its detail, the PDF's "Required compliance" row (whose breakdown
+now includes the counter's polarisation or states the single-interface assumption), and
+`sensitivity`. **Not yet:** the batch CSV (`assess_batch` has no counter columns), the GUI
+form, and the settings recorded by `report_to_json` and `audit`. Those surfaces assess
+every protocol monopolar, and say so through the CAUTION above.
+
 ### Geometry inputs that meant nothing are refused
 
 - `linear_array` and `grid_array` refuse a non-finite pitch. `pitch_um <= 0` let NaN

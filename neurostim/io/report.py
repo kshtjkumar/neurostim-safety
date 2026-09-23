@@ -32,6 +32,7 @@ from ..references import cite
 from ..safety import SafetyCalculator
 from ..safety._limits import format_limit
 from ..safety.assessment import SafetyAssessment, Status
+from ..safety.compliance import ComplianceResult
 
 _STATUS_HEX = {
     Status.PASS: "#1a7f37",
@@ -198,6 +199,24 @@ def _checks_table(assessment: SafetyAssessment, styles) -> Table:
     return table
 
 
+def _required_compliance_text(calc: SafetyCalculator, result: ComplianceResult) -> str:
+    """The requirement and a breakdown that adds up, naming the budget it assumes.
+
+    With a counter electrode the counter's own polarisation is a third term; without one
+    the single-interface assumption is stated on the row (ledger 5, C3.5).
+    """
+    text = (
+        f"{result.required_V:.3f} V ({result.ohmic_drop_V:.3f} V ohmic + "
+        f"{result.polarisation_V:.3f} V polarisation"
+    )
+    if result.counter_modelled:
+        return (
+            f"{text} + {result.counter_polarisation_V:.3f} V counter polarisation; "
+            f"counter electrode at {calc.counter_separation_um:g} um)"
+        )
+    return f"{text}; monopolar single-interface budget assumed)"
+
+
 def build_report(
     calc: SafetyCalculator,
     path: str | Path,
@@ -344,9 +363,7 @@ def build_report(
                 ),
                 (
                     "Required compliance",
-                    f"{assessment.compliance.required_V:.3f} V "
-                    f"({assessment.compliance.ohmic_drop_V:.3f} V ohmic + "
-                    f"{assessment.compliance.polarisation_V:.3f} V polarisation)",
+                    _required_compliance_text(calc, assessment.compliance),
                 ),
             ],
             styles,

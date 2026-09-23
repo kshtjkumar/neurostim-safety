@@ -134,11 +134,13 @@ CARRIED_ARGUMENTS: frozenset[str] = frozenset(
         "measured_impedance_ohm",
         "resting_potential_V",
         "capacitance_uF_cm2",
+        "counter_electrode",
+        "counter_separation_um",
     }
 )
 """Every argument ``SafetyCalculator`` takes, as of the commit that froze this set.
 
-:func:`rebuild_at` names all twelve, and checks this set against the live signature before
+:func:`rebuild_at` names all fourteen, and checks this set against the live signature before
 it builds anything. See :class:`ConstructorDrift` for why the naming alone is not enough.
 """
 
@@ -201,6 +203,8 @@ def rebuild_at(calculator: Any, current_uA: float) -> Any:
         measured_impedance_ohm=calculator.measured_impedance_ohm,
         resting_potential_V=calculator.resting_potential_V,
         capacitance_uF_cm2=calculator.capacitance_uF_cm2,
+        counter_electrode=calculator.counter_electrode,
+        counter_separation_um=calculator.counter_separation_um,
     )
 
 

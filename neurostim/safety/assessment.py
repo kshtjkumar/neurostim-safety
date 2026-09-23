@@ -1671,12 +1671,22 @@ def _compliance_check(result: compliance_mod.ComplianceResult) -> Check:
             margin=result.max_current_uA / result.current_uA,
         )
     status = Status.CAUTION if result.utilisation > 0.8 else Status.PASS
+    assumption = ""
+    if not result.counter_modelled:
+        # Never a bare PASS on a single-interface budget: a two-terminal pair needs more,
+        # and under-estimating the requirement is the direction in which the stimulator
+        # drops out of regulation silently (ledger 5, fix plan D7).
+        status = Status.CAUTION
+        assumption = (
+            "; monopolar single-interface budget assumed -- supply counter_electrode "
+            "for a two-terminal estimate"
+        )
     return Check(
         name="Compliance voltage",
         status=status,
         summary=(
             f"{result.required_V:.2f} V of {result.available_V:.2f} V "
-            f"({result.utilisation * 100:.0f} % used)"
+            f"({result.utilisation * 100:.0f} % used){assumption}"
         ),
         detail=result.describe(),
         margin=result.max_current_uA / result.current_uA,
@@ -1707,8 +1717,16 @@ class SafetyCalculator:
         measured_impedance_ohm: float | None = None,
         resting_potential_V: float = 0.0,
         capacitance_uF_cm2: float | None = None,
+        counter_electrode: Electrode | None = None,
+        counter_separation_um: float | None = None,
     ) -> None:
         shannon_mod.validate_k(k)
+        # At construction, as every other setting is (ledger 13): half a counter-electrode
+        # input, or one the two-terminal budget cannot model, is refused here rather than
+        # producing a voltage for a return path that was never described.
+        compliance_mod.validate_counter(
+            electrode, counter_electrode, counter_separation_um, measured_impedance_ohm
+        )
         _require_finite_above(
             "tissue_conductivity_S_per_m",
             tissue_conductivity_S_per_m,
@@ -1737,6 +1755,8 @@ class SafetyCalculator:
         self.measured_impedance_ohm = measured_impedance_ohm
         self.resting_potential_V = resting_potential_V
         self.capacitance_uF_cm2 = capacitance_uF_cm2
+        self.counter_electrode = counter_electrode
+        self.counter_separation_um = counter_separation_um
 
         chosen = material if material is not None else electrode.material
         self.material = (
@@ -1847,6 +1867,8 @@ class SafetyCalculator:
             compliance_V=self.compliance_V,
             measured_impedance_ohm=self.measured_impedance_ohm,
             capacitance_uF_cm2=self.capacitance_uF_cm2,
+            counter_electrode=self.counter_electrode,
+            counter_separation_um=self.counter_separation_um,
         )
 
         raw_checks = (

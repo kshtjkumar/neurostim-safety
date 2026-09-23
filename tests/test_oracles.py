@@ -58,6 +58,8 @@ SCRIPTED_SETTINGS = {
     "measured_impedance_ohm": 4321.0,
     "resting_potential_V": 0.11,
     "capacitance_uF_cm2": 37.5,
+    "counter_electrode": "scripted counter",
+    "counter_separation_um": 2345.0,
 }
 
 
@@ -87,7 +89,7 @@ class ScriptedCalculator:
     """A calculator whose failing checks come from a callable, not from any physics.
 
     The constructor signature is ``SafetyCalculator``'s, argument for argument, because
-    ``rebuild_at`` names all twelve and checks them against
+    ``rebuild_at`` names all fourteen and checks them against
     ``fail_ceiling.CARRIED_ARGUMENTS`` before it builds anything. Each carried value is
     asserted on arrival against :data:`SCRIPTED_SETTINGS`, so a forward that is quietly
     dropped fails the test instead of scripting the same answer anyway.
@@ -108,6 +110,8 @@ class ScriptedCalculator:
         measured_impedance_ohm=None,
         resting_potential_V=0.0,
         capacitance_uF_cm2=None,
+        counter_electrode=None,
+        counter_separation_um=None,
     ) -> None:
         self.e = electrode  # the script
         self.p = protocol
@@ -121,6 +125,8 @@ class ScriptedCalculator:
         self.measured_impedance_ohm = measured_impedance_ohm
         self.resting_potential_V = resting_potential_V
         self.capacitance_uF_cm2 = capacitance_uF_cm2
+        self.counter_electrode = counter_electrode
+        self.counter_separation_um = counter_separation_um
         for name, expected in SCRIPTED_SETTINGS.items():
             assert getattr(self, name) == expected, (
                 f"{name} did not survive the rebuild: {getattr(self, name)!r} "
@@ -687,6 +693,8 @@ class TestFailCeiling:
                 "measured_impedance_ohm",
                 "resting_potential_V",
                 "capacitance_uF_cm2",
+                "counter_electrode",
+                "counter_separation_um",
             }
         ) == fail_ceiling.CARRIED_ARGUMENTS
         signature = inspect.signature(SafetyCalculator.__init__)

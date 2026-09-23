@@ -22,6 +22,28 @@ The voltage budget modelled here is
 - ``Delta V_polarisation`` is the interfacial excursion from the water-window module,
   computed under the same conservative pure-capacitance assumption.
 
+**The return path** (ledger 5, fix plan D7). Current leaves through a counter electrode,
+and a two-terminal pair has two interfaces and two spreading resistances. Supply
+``counter_electrode`` and ``counter_separation_um`` and the budget becomes
+
+.. math::
+
+    V = I\\,(R_a + R_c - 2/(G \\sigma d) + R_{lead}) + \\Delta V_a + \\Delta V_c
+
+with each electrode's own access resistance, ``G = 4 pi`` in a full space or ``2 pi`` for
+two electrodes flush on one insulating plane (the convention of
+:attr:`~neurostim.geometry.base.Electrode.environment`), and each interface's own
+polarisation. The counter's capacitance is derived from its own material at the opposite
+phase polarity. The mutual term is first-order superposition of two compact sources, so
+two identical immersed contacts are *not* twice one: two 3389 contacts at 2 mm give
+431.6 ohm against a naive 658.9. At large separation it vanishes, and the requirement
+exactly doubles.
+
+Without a counter electrode the arithmetic is the single-interface budget above,
+unchanged. The check says so and is at best CAUTION, because under-estimating the
+required voltage is the anti-conservative direction. The equilibrium-potential difference
+between two dissimilar electrode materials is **not** modelled.
+
 If you have measured the electrode impedance directly, pass it as
 ``measured_impedance_ohm``: that supersedes the geometric estimate, and the result
 records which path was taken. An impedance measured at 1 kHz is the usual laboratory
@@ -52,8 +74,13 @@ def required_voltage_V(
     pulse_width_us: float,
     area_cm2: float,
     capacitance_uF_cm2: float,
+    counter_area_cm2: float = 0.0,
+    counter_capacitance_uF_cm2: float = 0.0,
 ) -> float:
     """Voltage the stimulator must supply to deliver ``current_uA`` into this load.
+
+    ``counter_area_cm2 = 0`` means no counter interface is modelled; otherwise the same
+    charge polarises the counter over its own area (ledger 5).
 
     One expression, used both to report the requirement and to back-solve the limit. The
     back-solve used to scale the requested current by the voltage ratio, which is exact in
@@ -64,8 +91,13 @@ def required_voltage_V(
     rather than an approximation of one.
     """
     ohmic = (current_uA * 1e-6) * total_resistance_ohm
-    density = charge_density_uC_cm2(charge_uC(current_uA, pulse_width_us), area_cm2)
-    return ohmic + polarisation_V(density, capacitance_uF_cm2)
+    charge = charge_uC(current_uA, pulse_width_us)
+    density = charge_density_uC_cm2(charge, area_cm2)
+    required = ohmic + polarisation_V(density, capacitance_uF_cm2)
+    if counter_area_cm2 > 0.0:
+        counter_density = charge_density_uC_cm2(charge, counter_area_cm2)
+        required += polarisation_V(counter_density, counter_capacitance_uF_cm2)
+    return required
 
 
 @dataclass(frozen=True)
@@ -97,6 +129,20 @@ class ComplianceResult:
     """
     return_required_V: float = 0.0
     """Voltage the return phase alone demands, at the configured amplitude."""
+    counter_access_resistance_ohm: float = 0.0
+    """The counter electrode's own spreading resistance; 0.0 when none is modelled."""
+    mutual_resistance_ohm: float = 0.0
+    """``2/(G sigma d)``, subtracted from the two access resistances."""
+    counter_area_cm2: float = 0.0
+    """The counter's geometric area; 0.0 means the monopolar budget (no counter)."""
+    counter_capacitance_uF_cm2: float = 0.0
+    counter_polarisation_V: float = 0.0
+    """The counter interface's excursion at the configured amplitude, leading phase."""
+
+    @property
+    def counter_modelled(self) -> bool:
+        """Whether the budget includes a counter electrode, or assumes one interface."""
+        return self.counter_area_cm2 > 0.0
 
     @property
     def has_return_phase(self) -> bool:
@@ -125,6 +171,8 @@ class ComplianceResult:
             pulse_width_us=self.pulse_width_us,
             area_cm2=self.area_cm2,
             capacitance_uF_cm2=self.capacitance_uF_cm2,
+            counter_area_cm2=self.counter_area_cm2,
+            counter_capacitance_uF_cm2=self.counter_capacitance_uF_cm2,
         )
         if not self.has_return_phase:
             return leading
@@ -134,6 +182,8 @@ class ComplianceResult:
             pulse_width_us=self.return_phase_width_us,
             area_cm2=self.area_cm2,
             capacitance_uF_cm2=self.capacitance_uF_cm2,
+            counter_area_cm2=self.counter_area_cm2,
+            counter_capacitance_uF_cm2=self.counter_capacitance_uF_cm2,
         )
         return max(leading, returning)
 
@@ -194,12 +244,25 @@ class ComplianceResult:
         ]
         if self.conductivity_note:
             lines.append(f"  {self.conductivity_note}")
+        if self.counter_modelled:
+            lines += [
+                f"  counter R     {self.counter_access_resistance_ohm:.0f} ohm",
+                f"  mutual        -{self.mutual_resistance_ohm:.0f} ohm (the two "
+                f"electrodes share the medium)",
+            ]
+        else:
+            lines.append(
+                "  monopolar single-interface budget assumed; supply counter_electrode "
+                "for a two-terminal estimate"
+            )
         if self.lead_resistance_ohm:
             lines.append(f"  lead R        {self.lead_resistance_ohm:.0f} ohm")
         lines += [
             f"  ohmic drop    {self.ohmic_drop_V:.3f} V",
             f"  polarisation  {self.polarisation_V:.3f} V",
         ]
+        if self.counter_modelled:
+            lines.append(f"  counter pol.  {self.counter_polarisation_V:.3f} V")
         if self.has_return_phase:
             lines.append(
                 f"  return phase  {self.return_required_V:.3f} V "
@@ -236,8 +299,17 @@ def evaluate(
     compliance_V: float | None = None,
     measured_impedance_ohm: float | None = None,
     capacitance_uF_cm2: float | None = None,
+    counter_electrode: Electrode | None = None,
+    counter_separation_um: float | None = None,
 ) -> ComplianceResult:
-    """Compute the voltage a stimulator must supply to deliver ``protocol``."""
+    """Compute the voltage a stimulator must supply to deliver ``protocol``.
+
+    ``counter_electrode`` and ``counter_separation_um`` go together. See
+    :func:`validate_counter` for what is refused and why.
+    """
+    validate_counter(
+        electrode, counter_electrode, counter_separation_um, measured_impedance_ohm
+    )
     if lead_resistance_ohm < 0 or not math.isfinite(lead_resistance_ohm):
         raise ValueError(
             f"lead_resistance_ohm must be finite and >= 0, got {lead_resistance_ohm!r}"
@@ -271,7 +343,22 @@ def evaluate(
         else:
             conductivity_note = ""
 
-    total_r = access_r + lead_resistance_ohm
+    counter_r = 0.0
+    mutual_r = 0.0
+    counter_area = 0.0
+    counter_capacitance = 0.0
+    if counter_electrode is not None and counter_separation_um is not None:
+        counter_r = counter_electrode.access_resistance_ohm(tissue_conductivity_S_per_m)
+        factor = 2.0 * math.pi if electrode.environment == "half_space" else 4.0 * math.pi
+        mutual_r = 2.0 / (factor * tissue_conductivity_S_per_m * counter_separation_um * 1e-6)
+        counter_area = counter_electrode.area_cm2
+        # The counter carries the opposite phase, so it sees the other polarity.
+        counter_capacitance = effective_capacitance_uF_cm2(
+            get_material(counter_electrode.material),
+            anodic_first=not protocol.anodic_first,
+        )
+
+    total_r = access_r + counter_r - mutual_r + lead_resistance_ohm
     current_A = protocol.current_uA * 1e-6
     ohmic = current_A * total_r
 
@@ -301,6 +388,8 @@ def evaluate(
         pulse_width_us=protocol.pulse_width_us,
         area_cm2=electrode.area_cm2,
         capacitance_uF_cm2=capacitance_uF_cm2,
+        counter_area_cm2=counter_area,
+        counter_capacitance_uF_cm2=counter_capacitance,
     )
     return_required = 0.0
     if return_factor > 0.0 and protocol.return_phase_width_us > 0.0:
@@ -310,7 +399,17 @@ def evaluate(
             pulse_width_us=protocol.return_phase_width_us,
             area_cm2=electrode.area_cm2,
             capacitance_uF_cm2=capacitance_uF_cm2,
+            counter_area_cm2=counter_area,
+            counter_capacitance_uF_cm2=counter_capacitance,
         )
+    counter_polar = (
+        polarisation_V(
+            charge_density_uC_cm2(protocol.charge_per_phase_uC, counter_area),
+            counter_capacitance,
+        )
+        if counter_area > 0.0
+        else 0.0
+    )
 
     return ComplianceResult(
         current_uA=protocol.current_uA,
@@ -331,4 +430,71 @@ def evaluate(
         return_phase_width_us=protocol.return_phase_width_us,
         return_current_factor=return_factor,
         return_required_V=return_required,
+        counter_access_resistance_ohm=counter_r,
+        mutual_resistance_ohm=mutual_r,
+        counter_area_cm2=counter_area,
+        counter_capacitance_uF_cm2=counter_capacitance,
+        counter_polarisation_V=counter_polar,
     )
+
+
+def validate_counter(
+    electrode: Electrode,
+    counter_electrode: Electrode | None,
+    counter_separation_um: float | None,
+    measured_impedance_ohm: float | None = None,
+) -> None:
+    """Refuse a counter-electrode setting the two-terminal budget cannot honestly model.
+
+    * a counter without a separation, or a separation without a counter: half an input;
+    * a separation that is not finite, or not larger than the two equal-area radii: the
+      superposition that gives the mutual term needs two separate bodies;
+    * a half-space electrode with a full-space counter, or the reverse: no single
+      superposition applies to one source flush in a plane and one immersed;
+    * a counter with ``measured_impedance_ohm``: a measured impedance may already include
+      the return path, and adding the counter's own resistance would count it twice.
+    """
+    if counter_electrode is None and counter_separation_um is None:
+        return
+    if counter_electrode is None:
+        raise ValueError(
+            "counter_separation_um was given without a counter_electrode"
+        )
+    if counter_separation_um is None:
+        raise ValueError(
+            "counter_electrode requires counter_separation_um (centre to centre, um)"
+        )
+    if not math.isfinite(counter_separation_um):
+        raise ValueError(
+            f"counter_separation_um must be finite, got {counter_separation_um!r}"
+        )
+    if counter_electrode.environment != electrode.environment:
+        raise ValueError(
+            f"counter_electrode is {counter_electrode.environment} and electrode is "
+            f"{electrode.environment}: the mutual resistance of one source flush in a plane "
+            f"and one immersed has no single superposition, so the two-terminal budget "
+            f"cannot be computed"
+        )
+    if measured_impedance_ohm is not None:
+        raise ValueError(
+            f"measured_impedance_ohm ({measured_impedance_ohm!r} ohm) and counter_electrode "
+            f"together are ambiguous: the measurement may already include the counter's "
+            f"return path, and adding the counter's resistance would count it twice. "
+            f"Supply one or the other"
+        )
+    # The equal-area radius of the body each resistance substitutes: the sphere in a full
+    # space, the disc in a half-space.
+    closest = _substitute_radius_um(electrode) + _substitute_radius_um(counter_electrode)
+    if counter_separation_um <= closest:
+        raise ValueError(
+            f"counter_separation_um ({counter_separation_um!r} um) must exceed the sum of "
+            f"the electrode's and counter_electrode's equal-area radii ({closest:.4g} um): "
+            f"at that distance the two overlap, and the superposition that gives the mutual "
+            f"term needs two separate bodies"
+        )
+
+
+def _substitute_radius_um(electrode: Electrode) -> float:
+    if electrode.environment == "full_space":
+        return electrode.equivalent_sphere_radius_um
+    return electrode.equivalent_radius_um
