@@ -22,6 +22,7 @@ Status vocabulary
 
 from __future__ import annotations
 
+import copy
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, replace
@@ -240,6 +241,23 @@ class SafetyAssessment:
     compliance: compliance_mod.ComplianceResult
     k: float
     policy: str
+    biphasic_ceiling_uA: float = math.inf
+    """The ceiling the same electrode and protocol report as a biphasic waveform.
+
+    ``inf`` for a biphasic protocol, and for a monophasic one whose biphasic counterpart
+    cannot be built -- a return phase doubles the active duration, which may no longer fit
+    the period, and there is then no biphasic limit to compare against.
+
+    A monophasic protocol is a strictly worse waveform, so it can never earn a higher
+    limit than the biphasic one; :attr:`limit_bearing_ceiling_uA` takes the minimum. The
+    cap is load bearing rather than decorative: refusing to apply a biphasic-measured
+    charge-injection capacity to monophasic delivery removes a candidate from a minimum,
+    which can only raise it. The DC-drift ceiling replaces that candidate for every
+    material with a water window on record; Ta2O5 has none, and the cap is what holds its
+    four inverted configurations (of 216 swept) at the biphasic value.
+    """
+    biphasic_mechanism: str | None = None
+    """The check that binds the biphasic counterpart, named when the cap is what binds."""
 
     @property
     def status(self) -> Status:
@@ -351,10 +369,12 @@ class SafetyAssessment:
             names = ", ".join(c.name for c in waveform)
             verb = "FAILs" if len(waveform) == 1 else "FAIL"
             clauses.append(f"{names} {verb} at every amplitude")
-        zero = self.permits_no_current
-        if zero:
-            names = ", ".join(c.name for c in zero)
-            verb = "permits" if len(zero) == 1 else "permit"
+        if self.limit_bearing_ceiling_uA <= 0.0:
+            zero = self.permits_no_current
+            names = (
+                ", ".join(c.name for c in zero) if zero else self.limiting_mechanism
+            )
+            verb = "permits" if len(zero) <= 1 else "permit"
             clauses.append(f"{names} {verb} no current at all")
         if not clauses:
             return ""
@@ -427,12 +447,27 @@ class SafetyAssessment:
         A check that did not run contributes ``inf``, so it cannot bind; that is what
         makes :attr:`limiting_mechanism` always name a check that ran.
 
+        **Capped at the biphasic answer for a monophasic protocol** (ledger 2). See
+        :attr:`biphasic_ceiling_uA`: a strictly worse waveform cannot earn a higher limit,
+        and refusing to apply biphasic-measured charge-injection capacities to monophasic
+        delivery would otherwise do exactly that.
+
         Always a float, and defined for every protocol including one no amplitude is safe
         for -- it is the quantity :attr:`limiting_current_by_kind` decomposes, the one
         :attr:`limiting_current_interval_uA` must contain, and the one the fail-ceiling
         oracle brackets. :attr:`limiting_current_uA` is this value with the refusal applied.
         """
+        return min(self._check_ceiling_uA, self.biphasic_ceiling_uA)
+
+    @property
+    def _check_ceiling_uA(self) -> float:
+        """The minimum over the seven, before the monotonicity cap."""
         return min(c.ceiling_uA for c in self._limit_bearing)
+
+    @property
+    def monotonicity_capped(self) -> bool:
+        """Whether the biphasic cap, rather than one of this protocol's own checks, binds."""
+        return self.biphasic_ceiling_uA < self._check_ceiling_uA
 
     @property
     def limits_incomplete(self) -> bool:
@@ -547,8 +582,24 @@ class SafetyAssessment:
         because the criterion does not apply below the macro/micro boundary (ledger 1,
         §9b.1). A check that did not run now carries a ceiling of ``inf``, so it cannot
         be the minimum, and the name is looked up rather than composed.
+
+        When the monotonicity cap binds, the check named is the one that binds the
+        *biphasic* counterpart -- which is the honest answer, because that is the limit
+        being inherited. Still a check name, never a composed phrase;
+        :attr:`monotonicity_capped` is how a surface knows to say where it came from.
         """
+        if self.monotonicity_capped and self.biphasic_mechanism is not None:
+            return self.biphasic_mechanism
         return min(self._limit_bearing, key=lambda c: c.ceiling_uA).name
+
+    def monotonicity_cap_note(self) -> str:
+        """Sentence saying the limit is inherited from the biphasic waveform; else empty."""
+        if not self.monotonicity_capped:
+            return ""
+        return (
+            f"capped at the biphasic limit ({self.biphasic_mechanism}): a monophasic "
+            f"waveform is strictly worse and cannot earn a higher limit"
+        )
 
     def _published_range_note(self) -> str:
         """What the interval beside it does and does not span.
@@ -612,6 +663,9 @@ class SafetyAssessment:
                 f"{self._published_range_note()}",
                 f"  by kind: {self._by_kind_line()}",
             ]
+            capped = self.monotonicity_cap_note()
+            if capped:
+                lines.append(f"  {capped}")
             incomplete = self.limits_incomplete_note()
             if incomplete:
                 lines.append(f"  {incomplete}")
@@ -1041,7 +1095,41 @@ def _shannon_check(
     )
 
 
-def _charge_check(result: charge_mod.ChargeResult) -> Check:
+def _charge_check(result: charge_mod.ChargeResult, waveform: str) -> Check:
+    """The material's charge-injection capacity, for the waveform it was measured on.
+
+    NOT_EVALUATED for a monophasic protocol, and that is the whole of ledger 2's first
+    half. Every charge-injection capacity in this database was measured with a
+    charge-balanced biphasic waveform (Merrill et al. 2005) -- the quantity is defined as
+    the charge density reachable without driving irreversible reactions *given that the
+    return phase recovers it*. Applying the number to delivery that recovers nothing
+    asserts more than the measurement supports, in the anti-conservative direction.
+
+    Removing a candidate from a minimum can only raise it, so this alone would let a
+    strictly worse waveform earn a higher limit. Two things stop it: the DC-drift ceiling
+    the water window gained at C2.3, which is the binding candidate for most materials, and
+    the monotonicity cap in :meth:`SafetyCalculator.assess`, which holds the rest at the
+    biphasic value. Measured over 216 configurations: this branch alone inverts 4 of them,
+    every one Ta2O5 -- the single shipped material with no water window on record and
+    therefore no drift ceiling -- and the cap closes exactly those.
+    """
+    if waveform == "monophasic":
+        return Check(
+            name="Charge injection limit",
+            status=Status.NOT_EVALUATED,
+            summary=(
+                f"the {format_limit(result.cic_limit_uC_cm2)} uC/cm^2 limit for "
+                f"{result.material_key} was measured with a charge-balanced biphasic "
+                f"waveform; no source here validates it for monophasic delivery"
+            ),
+            detail=(
+                "Merrill et al. (2005): a charge-injection capacity is the charge density "
+                "reachable without irreversible reactions *given that the return phase "
+                "recovers it*. Monophasic delivery recovers none, so the measurement does "
+                "not describe it and the number is not applied.\n"
+                + result.describe()
+            ),
+        )
     if not result.passes:
         return Check(
             name="Charge injection limit",
@@ -1658,7 +1746,7 @@ class SafetyCalculator:
             _shannon_check(
                 shannon_result, self.k, self.p, self.e.area_cm2, envelope_result
             ),
-            _charge_check(charge_result),
+            _charge_check(charge_result, self.p.waveform),
             _water_window_check(ww_result),
             _envelope_check(envelope_result),
             _current_density_check(jd_result),
@@ -1741,6 +1829,7 @@ class SafetyCalculator:
                 for check in raw_checks
             )
         )
+        cap_uA, cap_mechanism = self._biphasic_cap()
         return SafetyAssessment(
             electrode=self.e,
             protocol=self.p,
@@ -1752,7 +1841,42 @@ class SafetyCalculator:
             compliance=compliance_result,
             k=self.k,
             policy=self.policy,
+            biphasic_ceiling_uA=cap_uA,
+            biphasic_mechanism=cap_mechanism,
         )
+
+    def _biphasic_cap(self) -> tuple[float, str | None]:
+        """The limit the same electrode and protocol report as a biphasic waveform.
+
+        A monophasic protocol is a strictly worse waveform and cannot earn a higher limit
+        (ledger 2). See :attr:`SafetyAssessment.biphasic_ceiling_uA` for why the cap is
+        needed at all.
+
+        The counterpart is built with ``copy.copy`` and one attribute replaced, rather than
+        by re-running ``__init__`` with every argument named. Enumerating the constructor a
+        second time is how an argument gets silently left at its default one phase later --
+        the failure mode ``tests/oracles/fail_ceiling.ConstructorDrift`` exists to catch --
+        and a shallow copy carries every field that exists, including ones added after this
+        line is written. The validation ``__init__`` performs was already passed by ``self``
+        and none of it reads the waveform.
+
+        Returns ``inf`` when there is no counterpart to compare against: a biphasic
+        protocol is its own answer, and a monophasic one whose return phase would no longer
+        fit the period has no biphasic twin at all -- ``StimProtocol`` refuses to build it,
+        and a fabricated cap would be worse than none.
+
+        Recurses exactly once: the twin is biphasic, so its own call returns immediately.
+        """
+        if self.p.waveform != "monophasic":
+            return math.inf, None
+        try:
+            counterpart = replace(self.p, waveform="biphasic")
+        except ValueError:
+            return math.inf, None
+        twin = copy.copy(self)
+        twin.p = counterpart
+        assessment = twin.assess()
+        return assessment.limit_bearing_ceiling_uA, assessment.limiting_mechanism
 
     def report(self) -> dict:
         """Flat dictionary of results.

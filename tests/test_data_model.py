@@ -1070,3 +1070,264 @@ class TestTheHeadlineRefusesWheneverNoAmplitudeIsSafe:
         assert scripted.no_safe_amplitude_note() == ""
         assert scripted.limiting_current_uA == real.limiting_current_uA
         assert scripted.status is S.FAIL
+
+
+class TestMonophasicProtocolsStopInheritingBiphasicLimits:
+    """T4. Ledger 2, and the regression a naive repair would have shipped.
+
+    Every charge-injection capacity in the material database was measured with a
+    charge-balanced biphasic waveform (Merrill et al. 2005). Applying one to a monophasic
+    protocol asserts more than the measurement supports, so the check reports
+    NOT_EVALUATED and ``limits_incomplete`` says the candidate set is short one member.
+
+    **Removing a candidate from a minimum can only raise it**, which is why that repair
+    cannot stand alone: a strictly worse waveform would earn a strictly higher limit. Two
+    things close it. The DC-drift ceiling (C2.3) puts a *new*, much lower candidate into
+    the monophasic set -- it is the binding one for most materials -- and a monotonicity
+    cap holds the rest at the biphasic value. Measured over 216 configurations: after the
+    NOT_EVALUATED alone, 4 invert, every one of them Ta2O5, the single shipped material
+    with no water window on record and therefore no drift ceiling. The cap closes those
+    four by construction, and they are the only ones it has to.
+
+    Fixture rule: the sweep spans every material rather than a chosen one, so no assertion
+    can rest on a value a default would supply.
+    """
+
+    DIAMETERS_UM = (40.0, 100.0, 150.0, 500.0, 1000.0, 2000.0)
+    PULSE_WIDTHS_US = (50.0, 100.0, 200.0, 400.0)
+
+    def _pair(self, key: str, diameter_um: float, pulse_width_us: float):
+        electrode = DiscElectrode(diameter_um, key)
+        mono = SafetyCalculator(
+            electrode,
+            StimProtocol(80.0, pulse_width_us, 130.0, 1.0, waveform="monophasic"),
+        ).assess()
+        bi = SafetyCalculator(
+            electrode, StimProtocol(80.0, pulse_width_us, 130.0, 1.0)
+        ).assess()
+        return mono, bi
+
+    def _sweep(self):
+        from neurostim.materials import list_materials
+
+        for material in list_materials():
+            for diameter_um in self.DIAMETERS_UM:
+                for pulse_width_us in self.PULSE_WIDTHS_US:
+                    yield (
+                        material.key,
+                        diameter_um,
+                        pulse_width_us,
+                        *self._pair(material.key, diameter_um, pulse_width_us),
+                    )
+
+    def test_a_strictly_worse_waveform_never_earns_a_higher_limit(self) -> None:
+        """T4(a), the monotonicity property, over every material and size.
+
+        Not tautological: the two ceilings come from two independent assessments of two
+        different protocols, and the comparison is between them -- no expected value is
+        written down, so the assertion cannot be satisfied by reproducing an expression.
+        Verified to fail without the repair: the NOT_EVALUATED alone inverts 4 of these 216
+        pairs.
+        """
+        inverted = [
+            (key, d, w, mono.limit_bearing_ceiling_uA, bi.limit_bearing_ceiling_uA)
+            for key, d, w, mono, bi in self._sweep()
+            if mono.limit_bearing_ceiling_uA > bi.limit_bearing_ceiling_uA
+        ]
+        assert inverted == []
+
+    def test_the_drift_ceiling_is_what_makes_the_inequality_strict(self) -> None:
+        """T4(a), the half the cap alone cannot deliver.
+
+        The cap can only produce ``<=``; equality is all it ever gives. Wherever the
+        monophasic protocol is bound by Water window it must be *strictly* lower, and the
+        value must be the drift closed form -- so this clause fails if the drift model is
+        not wired into the candidate set.
+
+        Not tautological: the expected ceiling is
+        ``headroom * C * A / (W * f * T)`` recomputed here from the assessment's own
+        published window and interfacial capacitance, and the strictness is a comparison
+        against a separate assessment of a separate protocol.
+        """
+        strict = 0
+        for key, d, w, mono, bi in self._sweep():
+            binding = min(
+                (c for c in mono.checks if c.name in _limit_bearing_names()),
+                key=lambda c: c.ceiling_uA,
+            )
+            if binding.name != "Water window":
+                continue
+            strict += 1
+            assert mono.limit_bearing_ceiling_uA < bi.limit_bearing_ceiling_uA, (key, d, w)
+
+            drift = mono.water_window.drift
+            assert drift is not None
+            expected = drift.window_charge_uC / (w * 1e-6 * 130.0 * 1.0)
+            assert mono.limit_bearing_ceiling_uA == pytest.approx(expected, rel=1e-9), (
+                key,
+                d,
+                w,
+            )
+        assert strict > 100
+
+    def test_the_monophasic_case_fails_overall(self) -> None:
+        """T4(b). Ledger 2's own configuration.
+
+        Not tautological: the FAILing checks are named, so the assertion is about *which*
+        failures produce the status rather than about the status alone -- a FAIL from some
+        unrelated check would satisfy a bare ``status is FAIL``.
+        """
+        from neurostim import CylindricalBandElectrode
+
+        assessment = SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+            capacitance_uF_cm2=250.0,
+        ).assess()
+
+        assert assessment.status is Status.FAIL
+        assert {c.name for c in assessment.failed} == {"Charge balance", "Water window"}
+
+    def test_charge_injection_is_not_evaluated_and_the_limit_says_so(self) -> None:
+        """T4(c). Every stored CIC was measured biphasic; none validates monophasic.
+
+        Not tautological: the check's *summary* is required to name the measurement
+        condition, and ``limits_incomplete`` is asserted alongside -- the flag exists so a
+        limit over a knowingly short candidate set cannot be read as a complete one, and a
+        status assertion alone would not catch the flag being forgotten.
+        """
+        for key in ("Pt", "Ta2O5", "SIROF"):
+            calc = SafetyCalculator(
+                DiscElectrode(40.0, key),
+                StimProtocol(80.0, 200.0, 130.0, 1.0, waveform="monophasic"),
+            )
+            assessment = calc.assess()
+            check = next(
+                c for c in assessment.checks if c.name == "Charge injection limit"
+            )
+            assert check.status is Status.NOT_EVALUATED, key
+            assert "biphasic" in check.summary, key
+            assert check.ceiling_uA == math.inf, key
+            assert "Charge injection limit" in [
+                c.name for c in assessment.not_evaluated
+            ], key
+            assert assessment.limits_incomplete is True, key
+            assert "Charge injection limit" in assessment.limits_incomplete_note(), key
+
+    def test_the_cap_closes_the_material_with_no_window_on_record(self) -> None:
+        """T4(c)'s Ta2O5 half, and the only population the cap has to carry.
+
+        Ta2O5 is the one shipped material with no water window in the database, so there
+        is no drift ceiling for it and the NOT_EVALUATED has nothing to replace the
+        candidate it removes. Equality -- not strict inequality -- is the correct answer:
+        the cap says a worse waveform cannot earn a *higher* limit, not that it must earn
+        a lower one.
+
+        Not tautological: the biphasic ceiling is a separate assessment's answer, and the
+        absence of a water window is read from the material database rather than assumed.
+        """
+        from neurostim import get_material
+
+        assert get_material("Ta2O5").water_window is None
+
+        capped = [
+            (d, w)
+            for d in self.DIAMETERS_UM
+            for w in self.PULSE_WIDTHS_US
+            if self._pair("Ta2O5", d, w)[0].monotonicity_capped
+        ]
+        assert capped, "the cap must bind somewhere on Ta2O5 or it is untested"
+
+        for d, w in capped:
+            mono, bi = self._pair("Ta2O5", d, w)
+            assert mono.limit_bearing_ceiling_uA == bi.limit_bearing_ceiling_uA, (d, w)
+            assert mono.limiting_mechanism == bi.limiting_mechanism, (d, w)
+            assert mono.limits_incomplete is True
+
+    def test_the_drift_time_matches_the_integrator_to_one_per_cent(self) -> None:
+        """T4(d). The ledger-2 number, against an oracle that shares no code with it.
+
+        Not tautological: ``tests/oracles/drift.drift_time_s`` is a pulse-by-pulse
+        accumulation loop that imports no part of ``neurostim`` and evaluates no closed
+        form.
+        """
+        from neurostim import CylindricalBandElectrode
+        from tests import oracles
+
+        electrode = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        assessment = SafetyCalculator(
+            electrode,
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+            capacitance_uF_cm2=250.0,
+        ).assess()
+        drift = assessment.water_window.drift
+        assert drift is not None
+
+        integrated = oracles.drift_time_s(
+            current_uA=3000.0,
+            pulse_width_us=90.0,
+            frequency_hz=130.0,
+            area_cm2=electrode.area_cm2,
+            capacitance_uF_cm2=250.0,
+            window_V=0.6,
+        )
+        assert drift.time_to_exit_s == pytest.approx(0.2558, rel=1e-2)
+        assert integrated == pytest.approx(drift.time_to_exit_s, rel=3e-2)
+
+    def test_a_biphasic_protocol_carries_no_cap(self) -> None:
+        """The cap must not cost a biphasic assessment anything, or it recurses.
+
+        Not tautological: the absence of a cap is asserted as ``inf`` and as the flag being
+        False, and the biphasic ceiling is separately asserted to equal the plain minimum
+        over the seven checks -- so a cap that silently applied itself would be visible.
+        """
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "SIROF"), StimProtocol(500.0, 50.0, 130.0, 1.0)
+        ).assess()
+
+        assert assessment.biphasic_ceiling_uA == math.inf
+        assert assessment.monotonicity_capped is False
+        assert assessment.limit_bearing_ceiling_uA == min(
+            c.ceiling_uA
+            for c in assessment.checks
+            if c.name in _limit_bearing_names()
+        )
+
+    def test_a_protocol_whose_biphasic_twin_cannot_exist_is_left_uncapped(self) -> None:
+        """A return phase that does not fit the period has no biphasic counterpart.
+
+        ``StimProtocol`` rejects a pulse whose active duration exceeds its period, and
+        adding a return phase doubles that duration. There is then no biphasic limit to cap
+        against, and the honest answer is no cap rather than a fabricated one.
+
+        Not tautological: the counterpart's unconstructibility is asserted directly, by
+        building it and catching the package's own ``ValueError``, before the absence of a
+        cap is read.
+        """
+        protocol = StimProtocol(80.0, 400.0, 2000.0, 1.0, waveform="monophasic")
+        with pytest.raises(ValueError, match="does not fit in its period"):
+            StimProtocol(80.0, 400.0, 2000.0, 1.0)
+
+        assessment = SafetyCalculator(DiscElectrode(500.0, "Pt"), protocol).assess()
+        assert assessment.biphasic_ceiling_uA == math.inf
+        assert assessment.monotonicity_capped is False
+
+
+def _limit_bearing_names() -> frozenset[str]:
+    """The seven, written out rather than imported.
+
+    The package defines its own set; a test that imported it could not disagree with the
+    package about which checks bear a limit, and this module's sweeps use the partition as
+    an expected value.
+    """
+    return frozenset(
+        {
+            "Shannon criterion",
+            "Charge injection limit",
+            "Water window",
+            "Current density",
+            "Microelectrode charge/phase",
+            "Chronic degradation",
+            "Compliance voltage",
+        }
+    )

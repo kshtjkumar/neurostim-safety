@@ -212,6 +212,10 @@ def report_to_json(
         # True means the limit was computed over a candidate set known to be missing a
         # member, so the true limit may be lower than ``results.limiting_current_uA``.
         "limits_incomplete": assessment.limits_incomplete,
+        # True means the limit is inherited from the biphasic counterpart rather than set
+        # by one of this protocol's own checks: a monophasic waveform is strictly worse
+        # and cannot earn a higher limit than the biphasic one (ledger 2).
+        "monotonicity_capped": assessment.monotonicity_capped,
         "limiting_current_by_kind": {
             kind: None if value == float("inf") else value
             for kind, value in assessment.limiting_current_by_kind.items()
