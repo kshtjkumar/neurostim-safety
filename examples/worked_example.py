@@ -34,6 +34,7 @@ from neurostim import (
 from neurostim.io import build_report, current_sweep, report_to_json, write_csv
 from neurostim.models import strength_duration as sd
 from neurostim.models import thermal, vta
+from neurostim.safety._limits import format_limit
 from neurostim.viz import safety_summary, save_publication, strength_duration
 
 
@@ -53,11 +54,16 @@ def main(output_dir: Path) -> int:
 
     rule("2. What amplitude is actually usable?")
     assessment = calc.assess()
+    # Every amplitude below is a maximum, so it is floored rather than rounded to
+    # nearest: `:.4g` printed the charge-injection ceiling 141.37166941154072 as
+    # "141.4 uA", and programming 141.4 uA FAILs the check whose maximum it claims to be
+    # (ledger 49). `format_limit` is the same renderer the report, the PDF, the GUI and
+    # the figure use.
     print(f"Requested:        {protocol.current_uA:g} uA")
-    print(f"Binding limit:    {assessment.limiting_current_uA:.4g} uA")
+    print(f"Binding limit:    {format_limit(assessment.limiting_current_uA)} uA")
     print(f"Set by:           {assessment.limiting_mechanism}")
-    print(f"Shannon allows:   {assessment.shannon.max_current_uA:.4g} uA")
-    print(f"Electrode allows: {assessment.charge.max_current_uA:.4g} uA")
+    print(f"Shannon allows:   {format_limit(assessment.shannon.max_current_uA)} uA")
+    print(f"Electrode allows: {format_limit(assessment.charge.max_current_uA)} uA")
     print(
         "\nNote the gap: the tissue-damage criterion is satisfied with 7x headroom "
         "while\nthe electrode itself cannot deliver the charge reversibly. Passing "
@@ -85,8 +91,10 @@ def main(output_dir: Path) -> int:
         failing = result.failed
         reason = failing[0].name if failing else result.limiting_mechanism
         print(
-            f"  {key:10s} {material.cic_uC_cm2('conservative'):8.1f} uC/cm^2  "
-            f"{result.status.value:<8s} {result.limiting_current_uA:8.1f}  {reason}"
+            f"  {key:10s} "
+            f"{format_limit(material.cic_uC_cm2('conservative')):>8s} uC/cm^2  "
+            f"{result.status.value:<8s} "
+            f"{format_limit(result.limiting_current_uA):>8s}  {reason}"
         )
     print(
         "\nA higher charge-injection limit does not rescue this protocol. At "
@@ -104,10 +112,10 @@ def main(output_dir: Path) -> int:
         note="voltage-transient measurement, hypothetical batch",
     )
     print(measured.cic.describe())
-    print(
-        f"  max current with measured limit: "
-        f"{SafetyCalculator(electrode, protocol, material=measured).max_current_cic_uA:.1f} uA"
-    )
+    measured_max_uA = SafetyCalculator(
+        electrode, protocol, material=measured
+    ).max_current_cic_uA
+    print(f"  max current with measured limit: {format_limit(measured_max_uA)} uA")
 
     rule("6. Clinical DBS contact, for contrast")
     dbs = CylindricalBandElectrode(1270, 1500, "PtIr")

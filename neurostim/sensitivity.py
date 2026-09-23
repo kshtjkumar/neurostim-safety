@@ -26,9 +26,21 @@ from typing import TYPE_CHECKING, cast
 from .data import cogan2016, gabriel1996
 from .models import field as field_mod
 from .safety import shannon
+from .safety._limits import format_limit
 
 if TYPE_CHECKING:  # pragma: no cover
     from .safety.assessment import SafetyCalculator
+
+
+class UnsafeAtAnyAmplitude(ValueError):
+    """No amplitude clears every check, so there is no binding limit to be sensitive to.
+
+    Raised rather than returned, and rather than answered with a number. Every row this
+    module produces *is* two amplitudes, and ledger 84 is the record of what printing one
+    for such a protocol does: the monophasic band was told its ceiling was 15.3 mA while
+    its own assessment says no amplitude is safe. A caller that catches this has been told
+    which check to fix; a caller that receives a list has been told a ceiling exists.
+    """
 
 
 @dataclass(frozen=True)
@@ -54,11 +66,18 @@ class Sensitivity:
         return self.fold > 2.0
 
     def describe(self) -> str:
-        """One-line rendering."""
+        """One-line rendering, with both limits floored (ledger 49).
+
+        ``:.4g`` rounds to nearest, and a maximum rounded to nearest is a maximum rounded
+        up: a 60 um Pt disc at 100 us binds at 14.137166941154069 uA and this line used to
+        print "14.14", which FAILs the check whose maximum it claims to be. Swept over 9
+        diameters x 9 materials x 3 pulse widths, 100 of 243 configurations printed a
+        limit strictly larger than the limit.
+        """
         return (
             f"{self.parameter:26s} {self.fold:5.2f}x   "
-            f"{self.low_value} -> {self.low_limit_uA:.4g} uA, "
-            f"{self.high_value} -> {self.high_limit_uA:.4g} uA"
+            f"{self.low_value} -> {format_limit(self.low_limit_uA)} uA, "
+            f"{self.high_value} -> {format_limit(self.high_limit_uA)} uA"
         )
 
 
@@ -95,8 +114,40 @@ def _limit(
     return varied.assess().limiting_current_uA
 
 
+def _refusal(calc: SafetyCalculator) -> str:
+    """The assessment's own sentence when no amplitude is safe; empty when one is.
+
+    Read from :meth:`SafetyAssessment.unsafe_at_any_amplitude_note` rather than composed
+    here, so this module cannot disagree with ``describe()``, the JSON, the PDF, the GUI
+    and the figure about what it is refusing (ledger 84).
+
+    The baseline calculator is enough. ``analyse`` varies ``k``, ``policy``, ``medium``
+    and the tissue conductivity, and none of the four is an input to a check outside
+    ``LIMIT_BEARING``: charge balance is a property of the waveform and the validated
+    envelope of the protocol's timing, so an amplitude-independent failure is the same
+    for every variant. Pinned in
+    ``TestSensitivityRefusesWhenNoAmplitudeIsSafe::test_the_varied_settings_cannot_create_or_remove_that_refusal``;
+    if it ever stops being true the refusal has to move into :func:`_limit`.
+    """
+    return calc.assess().unsafe_at_any_amplitude_note()
+
+
 def analyse(calc: SafetyCalculator) -> list[Sensitivity]:
-    """Rank the inputs by how much each moves the binding current limit."""
+    """Rank the inputs by how much each moves the binding current limit.
+
+    Raises :class:`UnsafeAtAnyAmplitude` when the protocol has no safe amplitude at all.
+    There is then no binding limit for these choices to move, and each row would be two
+    more bare amplitudes for a protocol whose own assessment prints
+    "Limiting current: none" (ledger 84, fix plan D3).
+    """
+    refusal = _refusal(calc)
+    if refusal:
+        raise UnsafeAtAnyAmplitude(
+            f"the binding current limit is not defined for this protocol -- {refusal}. "
+            f"No setting varied here can change that: it is a property of the waveform, "
+            f"not of the amplitude or of any published range."
+        )
+
     results: list[Sensitivity] = []
 
     results.append(
@@ -160,12 +211,32 @@ def analyse(calc: SafetyCalculator) -> list[Sensitivity]:
 
 
 def describe(calc: SafetyCalculator) -> str:
-    """Ranked sensitivity report."""
+    """Ranked sensitivity report, or the refusal in place of it.
+
+    In place of the ranking and not beside it, for the reason ``SafetyAssessment.describe``
+    gives: a reader who sees an amplitude will programme it, however the sentence next to
+    it is worded -- and this report renders the limit nine times.
+    """
+    refusal = _refusal(calc)
+    if refusal:
+        return "\n".join(
+            [
+                "Sensitivity of the binding current limit to each defensible choice",
+                f"  none -- {refusal}",
+                "",
+                "  No choice among the settings this report varies can move that: it is "
+                "a property\n  of the waveform, not of the amplitude or of any published "
+                "range. Fix the check\n  named above before asking what the limit is "
+                "sensitive to.",
+            ]
+        )
+
+    assessment = calc.assess()
     rows = analyse(calc)
     lines = [
         "Sensitivity of the binding current limit to each defensible choice",
-        f"  baseline: {calc.assess().limiting_current_uA:.4g} uA "
-        f"({calc.assess().limiting_mechanism})",
+        f"  baseline: {format_limit(assessment.limiting_current_uA)} uA "
+        f"({assessment.limiting_mechanism})",
         "",
     ]
     lines += [f"  {row.describe()}" for row in rows]

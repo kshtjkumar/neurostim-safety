@@ -895,6 +895,168 @@ class TestEveryRenderSiteFloors:
         assert "39.27" not in binding[0]
 
 
+    def test_the_sensitivity_report_floors_its_baseline_and_every_row(self):
+        """``sensitivity`` is a sixth render surface and was byte-untouched by C1.3.
+
+        Not tautological: 14.137166941154069 is the binding limit on this electrode,
+        written out here; "14.14" is what ``:.4g`` prints and is asserted absent, "14.13"
+        is the hand-floored four-digit form. Swept over 9 diameters x 9 materials x 3
+        pulse widths, 100 of 243 configurations printed a limit strictly larger than the
+        limit.
+        """
+        from neurostim import sensitivity
+
+        calc = SafetyCalculator(
+            DiscElectrode(60.0, "Pt"), StimProtocol(30.0, 100.0, 130.0, 1.0)
+        )
+        assert calc.assess().limiting_current_uA == pytest.approx(
+            14.137166941154069, rel=1e-12
+        )
+
+        lines = sensitivity.describe(calc).splitlines()
+        baseline = next(row for row in lines if row.strip().startswith("baseline:"))
+        row = next(row for row in lines if "saline ->" in row)
+
+        assert "14.13" in baseline
+        assert "14.14" not in baseline
+        assert "14.13" in row
+        assert "14.14" not in row
+
+    def test_the_worked_example_never_prints_an_amplitude_above_the_limit(self):
+        """``examples/worked_example.py`` renders four limits and was never repaired.
+
+        Not tautological: each expected string is the hand-floored form of a value printed
+        in the test's own assertion message by the example itself -- Shannon 472.7877282,
+        the charge-injection ceiling 141.37166941154072, and the measured-CIC ceiling
+        87.65043503515524 -- and the round-to-nearest form that overstates each is
+        asserted absent. The assertion runs against the example's real stdout, not against
+        a re-render of the same expression.
+        """
+        import subprocess
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as work:
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve().parents[1] / "examples" / "worked_example.py"),
+                    str(Path(work) / "out"),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        printed = completed.stdout
+
+        assert "472.7 uA" in printed and "472.8" not in printed
+        assert "141.3 uA" in printed and "141.4" not in printed
+        assert "87.65 uA" in printed and "87.7 uA" not in printed
+
+
+class TestSensitivityRefusesWhenNoAmplitudeIsSafe:
+    """Ledger 84 reaches ``sensitivity`` too, and C1.5 could not reach it.
+
+    ``sensitivity.describe`` renders the binding current limit nine times -- a baseline
+    and both ends of four varied settings. For the monophasic band that ledger 84 is
+    written about it printed all nine as bare amplitudes, headed
+    ``baseline: 1.529e+04 uA (Shannon criterion)``, for a protocol whose own assessment
+    says ``Limiting current: none -- no amplitude is safe: Charge balance FAILs at every
+    amplitude``. ``_limit`` returns the raw attribute and ``Sensitivity.describe`` renders
+    it with no access to the assessment, so the refusal has to be hoisted into
+    ``analyse``/``describe``.
+    """
+
+    @staticmethod
+    def _monophasic() -> SafetyCalculator:
+        from neurostim import CylindricalBandElectrode
+
+        return SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+        )
+
+    def test_the_assessment_this_is_about_refuses_to_report_a_limit(self):
+        """The precondition, asserted here rather than assumed, so the tests below are
+        about a protocol the package itself declares unsafe at any amplitude.
+
+        Not tautological: it reads ``unsafe_at_any_amplitude`` and the ``describe()``
+        headline, neither of which ``sensitivity`` consults today.
+        """
+        assessment = self._monophasic().assess()
+
+        assert [c.name for c in assessment.unsafe_at_any_amplitude] == ["Charge balance"]
+        assert "Limiting current: none" in assessment.describe()
+
+    def test_analyse_refuses_rather_than_ranking_an_amplitude_that_does_not_exist(self):
+        """The programmatic surface: a list of ``Sensitivity`` rows *is* eight amplitudes.
+
+        Not tautological: the expected outcome is a raise naming the check, so no number
+        the module could compute would satisfy it.
+        """
+        from neurostim import sensitivity
+
+        with pytest.raises(sensitivity.UnsafeAtAnyAmplitude, match="Charge balance"):
+            sensitivity.analyse(self._monophasic())
+
+    def test_describe_prints_the_refusal_in_place_of_nine_amplitudes(self):
+        """The text surface, in place of the number and not beside it -- a reader who sees
+        an amplitude will programme it, however the sentence next to it is worded.
+
+        Not tautological: "1.529e+04" and "4750" are two of the nine amplitudes the report
+        printed before, written out here, and the expected text is the assessment's own
+        refusal sentence rather than anything this module composes.
+        """
+        from neurostim import sensitivity
+
+        text = sensitivity.describe(self._monophasic())
+
+        assert "no amplitude is safe" in text
+        assert "Charge balance" in text
+        assert "1.529e+04" not in text
+        assert "4750" not in text
+        assert " uA" not in text
+
+    def test_the_varied_settings_cannot_create_or_remove_that_refusal(self):
+        """Why checking the baseline once is sufficient.
+
+        ``analyse`` varies ``k``, ``policy``, ``medium`` and the tissue conductivity, none
+        of which is an input to a check outside ``LIMIT_BEARING``: charge balance is a
+        property of the waveform and the validated envelope of the protocol's timing. If
+        that ever stopped being true, the refusal would have to move into ``_limit``.
+
+        Not tautological: the eight variant calculators are built here with the same
+        settings ``_limit`` uses, and the assertion is on each one's own
+        ``unsafe_at_any_amplitude``, read from the assessment rather than from the flag
+        ``analyse`` consulted.
+        """
+        from neurostim.models import field as field_mod
+        from neurostim.safety import shannon as shannon_mod
+
+        base = self._monophasic()
+        variants = (
+            [{"k": k} for k in (shannon_mod.K_SHANNON, shannon_mod.K_DAMAGE_OBSERVED)]
+            + [{"policy": p} for p in ("conservative", "optimistic")]
+            + [{"medium": m} for m in ("in_vivo", "saline")]
+            + [
+                {"tissue_conductivity_S_per_m": sigma}
+                for sigma in (0.11, field_mod.GREY_MATTER_CONDUCTIVITY_S_PER_M)
+            ]
+        )
+        settings = {
+            "k": base.k,
+            "material": base.material,
+            "policy": base.policy,
+            "medium": base.medium,
+            "tissue_conductivity_S_per_m": base.tissue_conductivity_S_per_m,
+        }
+        for override in variants:
+            varied = SafetyCalculator(base.e, base.p, **{**settings, **override})
+            names = [c.name for c in varied.assess().unsafe_at_any_amplitude]
+            assert names == ["Charge balance"], (override, names)
+
+
 class TestEveryLimitBearingCheckHasAMargin:
     """C1.4. Four of nine checks expose a margin today, so a minimum over them cannot see
     the other three (fix plan D3, ledger 1).
