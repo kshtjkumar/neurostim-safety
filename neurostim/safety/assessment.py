@@ -506,9 +506,16 @@ class SafetyAssessment:
         delivery would otherwise do exactly that.
 
         Always a float, and defined for every protocol including one no amplitude is safe
-        for -- it is the quantity :attr:`limiting_current_by_kind` decomposes, the one
-        :attr:`limiting_current_interval_uA` must contain, and the one the fail-ceiling
-        oracle brackets. :attr:`limiting_current_uA` is this value with the refusal applied.
+        for -- it is the quantity :attr:`limiting_current_by_kind` decomposes and the one
+        the fail-ceiling oracle brackets. :attr:`limiting_current_uA` is this value with the
+        refusal applied.
+
+        :attr:`limiting_current_interval_uA` contains it whenever the monotonicity cap does
+        not bind. The interval is built from this protocol's own checks, so when the
+        biphasic cap binds this value can sit below the interval's low end: monophasic
+        ``DiscElectrode(40, "Ta2O5")`` at 80 uA / 50 us gives 22.116812281272146 against
+        ``[80.0, 80.0]`` (ledger 113). Not rendered, since the headline is ``None`` for
+        every monophasic protocol.
         """
         return min(self._check_ceiling_uA, self.biphasic_ceiling_uA)
 

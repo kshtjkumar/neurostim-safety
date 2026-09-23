@@ -235,9 +235,13 @@ the electrode's own access resistance.
   dependence for SIROF; neither is corrected for.
 - **PEDOT's headline limit is not peer reviewed** — it comes from a meeting abstract, and
   is flagged `NOT PEER REVIEWED` at every point of use.
-- **Water window** — models the interface as a pure double-layer capacitance. Conservative
-  for pseudocapacitive materials such as Pt and iridium oxide, where part of the injected
-  charge goes into reversible surface reactions instead.
+- **Water window** — models the interface as a linear capacitance `C_eff`, derived from
+  the material's own charge-injection limit and window. Injecting exactly the CIC then
+  reaches the window edge, and the 20 µF/cm² double-layer value, which ignores
+  pseudocapacitance and would contradict the measured CIC tenfold for Pt, is not used. So
+  the peak clause is not an independent test of charge density. What it adds is the effect
+  of a resting potential or bias. Supply a measured `capacitance_uF_cm2` to override the
+  derivation.
 - **DC drift** — the interface is a leak-free capacitor charged by the net unrecovered
   current, so drift times are lower bounds. A real interface leaks and can reach a steady
   state (Merrill 2005 §2.4). A continuous train with *any* unrecovered charge therefore
