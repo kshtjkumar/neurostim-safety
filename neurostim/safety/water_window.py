@@ -156,6 +156,102 @@ def polarisation_V(
     return charge_density_uC_cm2 / capacitance_uF_cm2
 
 
+def drift_headroom_V(
+    window: WaterWindow, resting_potential_V: float, *, anodic: bool
+) -> float:
+    """Volts between rest and the window edge the net DC is heading for.
+
+    The direction is the *net* charge's, not the leading phase's: a return phase that
+    over-recovers leaves an offset of the opposite sign to the pulse that produced it.
+    Non-negative whenever the resting potential is inside the window, which
+    :func:`validate_resting_potential_V` guarantees at construction.
+    """
+    if anodic:
+        return window.anodic_V - resting_potential_V
+    return resting_potential_V - window.cathodic_V
+
+
+def window_charge_uC(
+    headroom_V: float, capacitance_uF_cm2: float, area_cm2: float
+) -> float:
+    """Charge that carries the interface from rest to the window edge.
+
+    ``V * uF/cm^2 * cm^2 = uC`` directly. This is the budget a net DC current spends:
+    the same capacitive model the peak excursion uses, integrated over the train instead
+    of over one pulse.
+    """
+    return headroom_V * capacitance_uF_cm2 * area_cm2
+
+
+@dataclass(frozen=True)
+class DcDrift:
+    """How long an unrecovered current takes to reach the window edge.
+
+    The failure mode every per-pulse limit in this package misses. Charge-injection
+    limits, the Shannon criterion and the peak excursion are all measured or derived on a
+    charge-balanced waveform, so each describes what one pulse does and none describes
+    what a thousand of them leave behind. On the audit's case -- a clinical band at
+    3000 uA, 90 us, 130 Hz, monophasic -- the peak excursion is 0.018 V into a 0.6 V
+    window and the package reported PASS with 0.58 V of headroom, while the interface
+    actually leaves the window in about a quarter of a second (ledger 2).
+
+    The model is the interface as a capacitor charged by the mean unrecovered current:
+    ``t = Q_window / I_dc`` with ``Q_window = dV * C * A``. Verified against a
+    pulse-by-pulse accumulation loop, which reproduces it to within one pulse -- the
+    finest time a pulse train can resolve.
+    """
+
+    net_dc_current_uA: float
+    """Signed mean unrecovered current; the sign is the direction of travel."""
+
+    window_headroom_V: float
+    """Volts from rest to the edge this offset is heading for."""
+
+    window_charge_uC: float
+    """``dV * C * A``: the charge budget before the edge is reached."""
+
+    train_duration_s: float
+    """How long the offset is applied for. ``inf`` for continuous stimulation."""
+
+    @property
+    def drifts(self) -> bool:
+        """Whether there is an offset to accumulate at all."""
+        return self.net_dc_current_uA != 0.0
+
+    @property
+    def time_to_exit_s(self) -> float:
+        """Seconds until the interface reaches the window edge; ``inf`` if never."""
+        if not self.drifts:
+            return math.inf
+        return self.window_charge_uC / abs(self.net_dc_current_uA)
+
+    @property
+    def exits_during_train(self) -> bool:
+        """Whether the edge is reached before the train ends.
+
+        Strict, so a train that ends exactly as the edge is reached is not a failure. A
+        continuous train (``train_duration_s = inf``) reaches it for any non-zero offset,
+        which is why the drift ceiling for one is ``0.0``.
+        """
+        return self.time_to_exit_s < self.train_duration_s
+
+    def describe(self) -> str:
+        """One or two lines on the offset and what it costs."""
+        if not self.drifts:
+            return "  DC drift      none: the waveform recovers its charge"
+        exit_note = (
+            "before the train ends"
+            if self.exits_during_train
+            else "after the train ends"
+        )
+        return (
+            f"  DC drift      {self.net_dc_current_uA:+.4g} uA net DC against a "
+            f"{self.window_charge_uC:.4g} uC window budget\n"
+            f"                reaches the window edge in {self.time_to_exit_s:.4g} s, "
+            f"{exit_note} ({self.train_duration_s:g} s)"
+        )
+
+
 @dataclass(frozen=True)
 class WaterWindowResult:
     """Outcome of the water-window check for one phase of a pulse."""
@@ -168,6 +264,16 @@ class WaterWindowResult:
     polarity: str
     capacitance_uF_cm2: float
     interface_model: str = "capacitance derived from the material's own CIC and window"
+    drift: DcDrift | None = None
+    """The DC-drift budget, when a window is on record. ``None`` when none is.
+
+    Carried on this result rather than on Charge balance, and the placement is the whole
+    of fix plan D6. Charge balance bears no ceiling and its verdict must stay
+    amplitude-independent -- that invariant is what licenses
+    ``SafetyAssessment.unsafe_at_any_amplitude`` to read a FAIL there as "no amplitude is
+    safe". Drift is not amplitude-independent: halve the amplitude and the time to the
+    edge doubles. It belongs on the check that can express a ceiling.
+    """
 
     @property
     def evaluated(self) -> bool:
@@ -202,18 +308,19 @@ class WaterWindowResult:
                 f"  no potential limits on record for this material in the cited source"
             )
         verdict = "PASS" if self.passes else "EXCEEDS"
-        return "\n".join(
-            [
-                f"Water window ({self.material_key}, {self.polarity} phase) -> {verdict}",
-                f"  window        {self.window.describe()}",
-                f"  rest -> peak  {self.resting_potential_V:+.3f} V -> "
-                f"{self.peak_potential_V:+.3f} V "
-                f"(excursion {self.excursion_V:.3f} V)",
-                f"  headroom      {self.headroom_V:+.3f} V",
-                f"  interface     {self.interface_model}, "
-                f"C_dl = {self.capacitance_uF_cm2:g} uF/cm^2",
-            ]
-        )
+        lines = [
+            f"Water window ({self.material_key}, {self.polarity} phase) -> {verdict}",
+            f"  window        {self.window.describe()}",
+            f"  rest -> peak  {self.resting_potential_V:+.3f} V -> "
+            f"{self.peak_potential_V:+.3f} V "
+            f"(excursion {self.excursion_V:.3f} V)",
+            f"  headroom      {self.headroom_V:+.3f} V",
+            f"  interface     {self.interface_model}, "
+            f"C_dl = {self.capacitance_uF_cm2:g} uF/cm^2",
+        ]
+        if self.drift is not None and self.drift.drifts:
+            lines.append(self.drift.describe())
+        return "\n".join(lines)
 
 
 def evaluate(
@@ -224,6 +331,9 @@ def evaluate(
     resting_potential_V: float = 0.0,
     capacitance_uF_cm2: float | None = None,
     anodic_first_for_capacitance: bool | None = None,
+    net_dc_current_uA: float | None = None,
+    area_cm2: float | None = None,
+    train_duration_s: float | None = None,
 ) -> WaterWindowResult:
     """Check whether the leading phase drives the electrode out of the water window.
 
@@ -250,6 +360,26 @@ def evaluate(
     sign = 1.0 if anodic_first else -1.0
     peak = resting_potential_V + sign * excursion
 
+    drift = None
+    if (
+        mat.water_window is not None
+        and net_dc_current_uA is not None
+        and area_cm2 is not None
+        and train_duration_s is not None
+    ):
+        # The net offset drives toward the leading phase's edge when the leading phase
+        # dominates, and toward the other one when the return phase over-recovers.
+        drift_anodic = anodic_first if net_dc_current_uA >= 0.0 else not anodic_first
+        headroom = drift_headroom_V(
+            mat.water_window, resting_potential_V, anodic=drift_anodic
+        )
+        drift = DcDrift(
+            net_dc_current_uA=net_dc_current_uA,
+            window_headroom_V=headroom,
+            window_charge_uC=window_charge_uC(headroom, capacitance_uF_cm2, area_cm2),
+            train_duration_s=train_duration_s,
+        )
+
     return WaterWindowResult(
         material_key=mat.key,
         window=mat.water_window,
@@ -258,6 +388,7 @@ def evaluate(
         peak_potential_V=peak,
         polarity=polarity,
         capacitance_uF_cm2=capacitance_uF_cm2,
+        drift=drift,
     )
 
 

@@ -614,14 +614,15 @@ class _WindowSearch(NamedTuple):
     that contract assertable: a test can hand the seed to the predicate that it seeds,
     rather than re-deriving one of them and asserting against its own copy.
 
-    That matters for what comes next. C2.3 adds a DC-drift clause to ``passes`` -- FAIL
-    when the interface leaves the window before the train ends -- and the pulse-peak seed
-    knows nothing about it. On the plan's own case the drift ceiling is
-    ``Q_window / (PW . f . T) = 767.2735903959687`` uA against a seed of
-    ``99745.56675147594`` uA: a factor of ``f . T = 130``, 8.7e17 ulps, against a 4-float
-    budget. ``floor_to_pass`` would raise on every monophasic protocol. The seed must gain
-    the matching term **in the same commit**, and
-    ``TestTheWaterWindowSeedInvertsItsOwnPredicate`` fails if it does not.
+    That coupling is why the DC-drift clause and its inverse landed together. The clause
+    FAILs when the interface leaves the window before the train ends, and the pulse-peak
+    seed knew nothing about it: on the plan's own case the drift ceiling is
+    ``Q_window / (PW . f . T) = 767.2735903959687`` uA against a peak-only seed of
+    ``99745.56675147594`` uA -- a factor of ``f . T = 130``, 8.7e17 ulps, against a
+    4-float budget, so ``floor_to_pass`` would have raised on every monophasic protocol.
+    Landing the seed first was measured to be no better: 160 of 160 monophasic
+    configurations then raise on the way *up*. ``TestTheWaterWindowSeedInvertsItsOwnPredicate``
+    fails, naming ``_water_window_seed_uA``, if a third clause is ever added alone.
     """
 
     seed_uA: float
@@ -639,34 +640,37 @@ def _water_window_seed_uA(
 ) -> float:
     """Closed-form inverse of the water-window check: one term per clause, minimised.
 
-    A minimum over a list with one member today, and the shape rather than the arithmetic
-    is the point: the check has exactly one clause -- the peak excursion of a single pulse
-    -- and a clause added to the predicate must add its inverse here or the two stop being
-    inverses of each other.
+    The check has two clauses and this has two terms. A clause added to the predicate
+    must add its inverse here or the two stop being inverses of each other, and
+    ``floor_to_pass`` raises rather than reporting a limit that fails its own check
+    (ledger 9). ``TestTheWaterWindowSeedInvertsItsOwnPredicate`` fails, naming this
+    function, if they come apart.
 
-    **The term C2.3 adds**, written out so it is one line rather than a derivation. The
-    DC-drift clause FAILs when the interface reaches the window edge before the train
-    ends, so its closed-form inverse is the amplitude at which ``t_exit`` equals
+    **Peak excursion of one pulse.** ``seed_density * area / pulse_width_s``, where
+    ``seed_density`` is the charge density that brings the interface exactly to the edge
+    from rest.
+
+    **DC drift over the train.** The amplitude at which ``t_exit`` equals
     ``train_duration_s``::
 
-        (window_headroom_V * capacitance_uF_cm2 * area_cm2)
-            / (net_charge_fraction * pulse_width_s * frequency_hz * train_duration_s)
+        window_charge_uC / (net_dc_current_per_uA * train_duration_s)
 
-    with ``window_headroom_V`` the distance from ``resting_potential_V`` to the window
-    edge in the drift direction and ``net_charge_fraction`` the per-pulse unrecovered
-    fraction (1.0 monophasic; ``1 - charge_recovery_ratio`` after C2.1, hence ``inf`` --
-    no drift ceiling -- for a balanced biphasic pulse). Verified against the plan's own
+    with ``window_charge_uC = headroom_V * capacitance_uF_cm2 * area_cm2`` and
+    ``net_dc_current_per_uA`` the net DC the waveform carries per microamp of leading
+    amplitude, ``frac * pulse_width_s * frequency_hz``. Verified against the plan's own
     constants: ``0.6 V * 250 uF/cm^2 * 0.05984734 cm^2 = 8.9771 uC``, which at 35.1 uA is
-    ``0.25576 s`` (the plan's 0.2558 s), and ``8.9771 / (90e-6 * 130 * 1) = 767.27`` uA.
+    ``0.25576 s``, and ``8.9771 / (90e-6 * 130 * 1) = 767.2735903959687`` uA against a
+    peak-only 99745.56675147594 -- a factor of ``f * T = 130``, 8.7e17 ulps, against a
+    four-float budget.
 
-    It is **not** added here, and the reason is measured rather than assumed: the clause it
-    inverts does not exist yet, so a seed 130x below the live boundary passes and the climb
-    cannot reach it -- 160 of 160 swept monophasic configurations raise
-    ``LimitDidNotSettle`` on the way *up* instead of on the way down. Seed and clause are
-    one change.
+    A balanced waveform carries no DC, so the drift term is ``inf`` and does not bind. A
+    continuous train drives it to ``0.0``, which ``floor_to_pass`` returns unchanged:
+    under a capacitive interface model no amplitude of an unbalanced waveform survives an
+    unbounded train, and ``0.0`` is the honest answer rather than a failure to find one.
 
-    Both branches are individually monotone-decreasing in current, so their conjunction is
-    too and ``floor_to_pass``'s precondition survives the addition.
+    Both clauses are individually monotone-decreasing in current -- a larger amplitude
+    means a larger excursion and a shorter time to the edge -- so their conjunction is too
+    and ``floor_to_pass``'s precondition holds.
     """
     seed_density = ww_mod.max_charge_density_in_window_uC_cm2(
         result.material_key,
@@ -675,11 +679,15 @@ def _water_window_seed_uA(
         capacitance_uF_cm2=result.capacitance_uF_cm2,
     )
     pulse_width_s = protocol.pulse_width_us * 1e-6
-    return min(
-        [
-            seed_density * area_cm2 / pulse_width_s,  # peak excursion of one pulse
-        ]
-    )
+    terms = [seed_density * area_cm2 / pulse_width_s]  # peak excursion of one pulse
+
+    drift = result.drift
+    if drift is not None and drift.drifts:
+        dc_per_uA = abs(protocol.net_dc_current_at_uA(1.0))
+        terms.append(
+            drift.window_charge_uC / (dc_per_uA * protocol.train_duration_s)
+        )
+    return min(terms)
 
 
 def _water_window_search(
@@ -698,12 +706,24 @@ def _water_window_search(
         raise ValueError(f"{result.material_key} has no water window on record")
     sign = 1.0 if protocol.anodic_first else -1.0
 
+    drift = result.drift
+
     def stays_in_window(current_uA: float) -> bool:
         density = charge_mod.charge_density_uC_cm2(
             charge_uC(current_uA, protocol.pulse_width_us), area_cm2
         )
         excursion = ww_mod.polarisation_V(density, result.capacitance_uF_cm2)
-        return window.contains(result.resting_potential_V + sign * excursion)
+        if not window.contains(result.resting_potential_V + sign * excursion):
+            return False
+        # The second clause: what one pulse does, and then what the train does. An
+        # unrecovered offset ramps the interface toward the edge whatever the peak
+        # excursion is, and every per-pulse limit in this package was measured on a
+        # waveform that leaves none behind (ledger 2).
+        if drift is None or not drift.drifts:
+            return True
+        return not replace(
+            drift, net_dc_current_uA=protocol.net_dc_current_at_uA(current_uA)
+        ).exits_during_train
 
     # The smallest change in current this predicate can resolve. It adds the excursion to
     # a *constant* resting potential and compares the sum against a window edge, so the
@@ -988,6 +1008,20 @@ def _charge_check(result: charge_mod.ChargeResult) -> Check:
 
 
 def _water_window_check(result: ww_mod.WaterWindowResult) -> Check:
+    """Two clauses: what one pulse does, and what the train leaves behind.
+
+    The second is ledger 2. Every per-pulse limit in this package -- the charge-injection
+    capacity, the Shannon criterion, the peak excursion below -- was measured or derived
+    on a charge-balanced waveform, so none of them describes what an unrecovered offset
+    does over a thousand pulses. The monophasic band at 3000 uA / 90 us / 130 Hz reported
+    PASS with 0.58 V of headroom while the interface leaves its 0.6 V window in 0.256 s.
+
+    A waveform that leaves charge behind never returns a bare PASS. Reaching the edge
+    before the train ends is a FAIL; reaching it afterwards is a CAUTION with the time
+    reported, because the model is a capacitor with no leakage and the real interface has
+    some -- so the time is a lower bound on how long the offset is tolerable, not a
+    licence.
+    """
     if not result.evaluated:
         return Check(
             name="Water window",
@@ -1002,6 +1036,35 @@ def _water_window_check(result: ww_mod.WaterWindowResult) -> Check:
             summary=(
                 f"peak {result.peak_potential_V:+.2f} V leaves the window "
                 f"by {abs(result.headroom_V):.2f} V"
+            ),
+            detail=result.describe(),
+        )
+    drift = result.drift
+    if drift is not None and drift.drifts:
+        train = (
+            "a continuous train"
+            if math.isinf(drift.train_duration_s)
+            else f"the {drift.train_duration_s:g} s train"
+        )
+        if drift.exits_during_train:
+            return Check(
+                name="Water window",
+                status=Status.FAIL,
+                summary=(
+                    f"peak {result.peak_potential_V:+.2f} V is inside the window, but "
+                    f"{drift.net_dc_current_uA:+.4g} uA of net DC reaches the edge in "
+                    f"{drift.time_to_exit_s:.4g} s -- within {train}"
+                ),
+                detail=result.describe(),
+            )
+        return Check(
+            name="Water window",
+            status=Status.CAUTION,
+            summary=(
+                f"peak {result.peak_potential_V:+.2f} V, "
+                f"{result.headroom_V:.2f} V headroom, but "
+                f"{drift.net_dc_current_uA:+.4g} uA of net DC reaches the edge in "
+                f"{drift.time_to_exit_s:.4g} s -- after {train}"
             ),
             detail=result.describe(),
         )
@@ -1505,6 +1568,11 @@ class SafetyCalculator:
             resting_potential_V=self.resting_potential_V,
             capacitance_uF_cm2=self.capacitance_uF_cm2,
             anodic_first_for_capacitance=self.p.anodic_first,
+            # The three facts the DC-drift clause needs, and the only three: the offset,
+            # the area it charges and how long it is applied for.
+            net_dc_current_uA=self.p.net_dc_current_uA,
+            area_cm2=self.e.area_cm2,
+            train_duration_s=self.p.train_duration_s,
         )
         compliance_result = compliance_mod.evaluate(
             self.e,

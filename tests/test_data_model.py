@@ -22,6 +22,7 @@ property under test.
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import asdict
 
@@ -859,7 +860,7 @@ class TestDcDriftOutOfTheWaterWindow:
         monophasic = _check(self._calc(waveform="monophasic"), "Water window").ceiling_uA
 
         assert all(
-            later < earlier for earlier, later in zip(ceilings, ceilings[1:])
+            later < earlier for earlier, later in itertools.pairwise(ceilings)
         ), ceilings
         assert ceilings[-1] == pytest.approx(monophasic, rel=1e-12)
         assert ceilings[0] == pytest.approx(2.0 * monophasic, rel=1e-9)

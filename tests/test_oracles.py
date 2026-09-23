@@ -287,6 +287,11 @@ class TestFailCeiling:
         Ledger 84: Charge balance FAILs at every amplitude on a monophasic protocol,
         being a property of the waveform. 0.0 must therefore stay reachable, but it must
         mean "no probe anywhere in the bracket passes", not "the lower bracket failed".
+
+        Water window joins the failing set at this amplitude after C2.3 -- 35.1 uA of net
+        DC reaches the window edge in 0.256 s of a 1 s train -- and that is the distinction
+        this test is about: it FAILs *here* and not at 1e-12 uA, so it is not in the
+        witness, while Charge balance is.
         """
         from neurostim import CylindricalBandElectrode, SafetyCalculator, StimProtocol
 
@@ -295,7 +300,10 @@ class TestFailCeiling:
             StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
             compliance_V=10.0,
         )
-        assert {check.name for check in calc.assess().failed} == {"Charge balance"}
+        assert {check.name for check in calc.assess().failed} == {
+            "Charge balance",
+            "Water window",
+        }
         assert fail_ceiling.fail_ceiling_uA(calc) == 0.0
         # And the answer is distinguishable from a ceiling at the call site.
         assert not fail_ceiling.brackets_the_ceiling(calc, 0.0)
@@ -425,10 +433,19 @@ class TestFailCeiling:
         why it is load-bearing: Charge balance FAILs at every amplitude and bears no
         limit, so the unrestricted ceiling is 0.0 while the limit-bearing one is finite.
 
-        Pinned by hand to Shannon, not to the package's Shannon code. log10(D) = k -
-        log10(Q) with D = Q/A gives Q = sqrt(10^k * A); at k = 1.5 and
-        A = pi * 0.127 cm * 0.15 cm that is 1.375696 uC, and 1.375696 uC / 90 us is
-        15285.51 uA.
+        Pinned by hand, twice, and the pair is the point. **Shannon** is the ceiling this
+        used to be: log10(D) = k - log10(Q) with D = Q/A gives Q = sqrt(10^k * A); at
+        k = 1.5 and A = pi * 0.127 cm * 0.15 cm that is 1.375696 uC, which over 90 us is
+        15285.51 uA. **The water window's DC drift** is the ceiling it is after C2.3, and
+        it is twenty times lower: the interface holds
+        ``0.6 V * 250 uF/cm^2 * A = 8.9771 uC`` before it reaches PtIr's cathodic edge --
+        250 uF/cm^2 being Rose & Robblee's 150 uC/cm^2 over that 0.6 V half-window -- and
+        a monophasic train spends it at ``I * 90 us * 130 Hz``, so a 1 s train is survived
+        only up to ``8.9771 / (90e-6 * 130) = 767.27`` uA.
+
+        Both are written out here, so the assertion is that the package's candidate set
+        takes the smaller of two independently computed numbers rather than that it agrees
+        with one of them.
         """
         from neurostim import CylindricalBandElectrode, SafetyCalculator, StimProtocol
 
@@ -439,20 +456,26 @@ class TestFailCeiling:
         )
         area_cm2 = math.pi * 0.127 * 0.15
         charge_uC = math.sqrt(10.0**1.5 * area_cm2)
-        expected_uA = charge_uC / (90.0 * 1e-6)
+        shannon_uA = charge_uC / (90.0 * 1e-6)
         assert charge_uC == pytest.approx(1.375696, abs=5e-7)
-        assert expected_uA == pytest.approx(15285.51, abs=5e-3)
+        assert shannon_uA == pytest.approx(15285.51, abs=5e-3)
+
+        window_charge_uC = 0.6 * 250.0 * area_cm2
+        expected_uA = window_charge_uC / (90.0e-6 * 130.0 * 1.0)
+        assert window_charge_uC == pytest.approx(8.9771, abs=5e-5)
+        assert expected_uA == pytest.approx(767.2736, abs=5e-5)
+        assert shannon_uA / expected_uA == pytest.approx(130.0 * 0.1532, rel=1e-3)
 
         assert fail_ceiling.fail_ceiling_uA(calc) == 0.0
         ceiling = fail_ceiling.fail_ceiling_uA(calc, names=fail_ceiling.LIMIT_BEARING)
-        # The boundary float sits two ulps above the closed form -- D2's flooring budget,
-        # not a disagreement about the physics.
+        # The boundary float sits a couple of ulps above the closed form -- D2's flooring
+        # budget, not a disagreement about the physics.
         assert 0.0 <= (ceiling - expected_uA) / math.ulp(expected_uA) <= 4.0
         assert fail_ceiling.brackets_the_ceiling(
             calc, ceiling, names=fail_ceiling.LIMIT_BEARING
         )
         assert fail_ceiling.failing_checks(calc, math.nextafter(ceiling, math.inf)) == {
-            "Shannon criterion",
+            "Water window",
             "Charge balance",
         }
 
@@ -931,8 +954,14 @@ class TestDriftTime:
     def test_an_unreachable_window_reports_infinity(self) -> None:
         assert drift.drift_time_s(**{**self._kwargs(), "max_pulses": 3}) == math.inf
 
-    def test_the_package_currently_reports_a_pass_here(self) -> None:
-        """Records the defect: a PASS with headroom, against a quarter-second to failure."""
+    def test_the_package_now_fails_here_within_one_pulse_of_the_oracle(self) -> None:
+        """The defect this oracle was written to record, and its repair (C2.3).
+
+        Until C2.3 the check reported PASS with 0.58 V of headroom while this loop said
+        the interface leaves the window in a quarter of a second. The assertion is now
+        that the package agrees with the loop to within one pulse -- the finest a pulse
+        train resolves -- which is a stronger statement than the FAIL alone.
+        """
         from neurostim import CylindricalBandElectrode, SafetyCalculator, StimProtocol
 
         calc = SafetyCalculator(
@@ -940,9 +969,15 @@ class TestDriftTime:
             StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
             compliance_V=10.0,
         )
-        water_window = next(c for c in calc.assess().checks if c.name == "Water window")
-        assert water_window.status.value == "PASS"
-        assert drift.drift_time_s(**self._kwargs()) < 1.0
+        assessment = calc.assess()
+        water_window = next(c for c in assessment.checks if c.name == "Water window")
+        assert water_window.status.value == "FAIL"
+
+        stepped = drift.drift_time_s(**self._kwargs())
+        assert stepped < 1.0
+        reported = assessment.water_window.drift
+        assert reported is not None
+        assert abs(reported.time_to_exit_s - stepped) < 1.0 / self.FREQUENCY_HZ
 
 
 class TestFdBandReference:

@@ -16,6 +16,8 @@ under test:
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from neurostim import (
@@ -636,7 +638,13 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
     ]
 
     def _search(self, key, diameter_um, current_uA, pulse_width_us, waveform):
-        """The package's own seed, predicate and plateau for one grid row."""
+        """The package's own seed, predicate and plateau for one grid row.
+
+        Built with the drift inputs the calculator supplies, so the monophasic rows
+        exercise both clauses. Without them the result carries no ``drift`` and the seed
+        collapses to its peak term -- which would leave this guard blind to exactly the
+        coupling it exists to hold.
+        """
         from neurostim.safety import water_window as ww
         from neurostim.safety.assessment import _water_window_search
 
@@ -651,6 +659,9 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
             resting_potential_V=-0.25,
             capacitance_uF_cm2=137.0,
             anodic_first_for_capacitance=protocol.anodic_first,
+            net_dc_current_uA=protocol.net_dc_current_uA,
+            area_cm2=electrode.area_cm2,
+            train_duration_s=protocol.train_duration_s,
         )
         return _water_window_search(result, protocol, electrode.area_cm2)
 
@@ -713,16 +724,16 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
             assert not search.passes(math.nextafter(settled, math.inf)), row
 
     def test_the_seed_is_a_minimum_over_the_clauses_the_check_actually_has(self):
-        """One term today, and it is the peak-excursion inverse.
+        """Two terms since C2.3, and the drift one binds on every monophasic row.
 
-        The assertion that will move: when C2.3 adds the drift clause, this is where the
-        second term has to appear, and the value below stops being the seed for a
-        monophasic protocol.
-
-        Not tautological: the expected seed is recomputed here from
-        ``max_charge_density_in_window_uC_cm2`` and the geometry -- the published window
-        and capacitance, not the check -- and compared with what the package seeds.
+        Not tautological: both terms are recomputed here from the published window and
+        the supplied capacitance -- the peak inverse from
+        ``max_charge_density_in_window_uC_cm2`` and the geometry, the drift inverse from
+        ``(rest - cathodic edge) * C * A`` over ``frac * W * f * T`` -- and compared with
+        what the package seeds. A third clause added to the predicate without its inverse
+        makes this false.
         """
+        from neurostim import get_material
         from neurostim.safety import water_window as ww
 
         for key, diameter_um, current_uA, pulse_width_us, waveform in self.GRID:
@@ -730,7 +741,7 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
             protocol = StimProtocol(
                 current_uA, pulse_width_us, 130.0, 1.0, waveform=waveform
             )
-            expected = (
+            peak = (
                 ww.max_charge_density_in_window_uC_cm2(
                     key,
                     anodic_first=protocol.anodic_first,
@@ -740,20 +751,33 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
                 * electrode.area_cm2
                 / (pulse_width_us * 1e-6)
             )
+            if waveform == "monophasic":
+                window = get_material(key).water_window
+                assert window is not None
+                headroom_V = -0.25 - window.cathodic_V
+                drift = (headroom_V * 137.0 * electrode.area_cm2) / (
+                    1.0 * pulse_width_us * 1e-6 * 130.0 * 1.0
+                )
+                # A monophasic train spends the window budget f*T times faster than one
+                # pulse fills it, so the drift term binds by exactly that factor.
+                assert peak / drift == pytest.approx(130.0, rel=1e-9), key
+            else:
+                drift = math.inf
+            expected = min(peak, drift)
             search = self._search(key, diameter_um, current_uA, pulse_width_us, waveform)
 
-            assert search.seed_uA == expected, (key, waveform)
+            assert search.seed_uA == pytest.approx(expected, rel=1e-12), (key, waveform)
 
-    def test_the_monophasic_water_window_ceiling_is_the_pulse_peak_inverse_today(self):
-        """The tripwire on the value itself. C2.3 moves this to 767.2735903959687 uA and
-        must move the seed in the same commit; until then the peak-only answer stands.
+    def test_the_monophasic_water_window_ceiling_is_the_drift_inverse(self):
+        """The tripwire on the value itself. C2.3 moved it, with the seed, in one commit.
 
-        Not tautological: 99745.56675147594 is
-        ``max_charge_density_in_window_uC_cm2 * area / pulse_width_s`` on the plan's own
-        case, recomputed here from the material database and the geometry rather than read
-        from the check, and the drift ceiling it will become is written out beside it --
-        ``0.6 V * 250 uF/cm^2 * 0.05984734 cm^2 = 8.9771 uC``, over
-        ``90e-6 s * 130 Hz * 1 s``.
+        Not tautological: both ends are recomputed here from the material database and the
+        geometry rather than read from the check. The peak-only answer
+        ``max_charge_density_in_window_uC_cm2 * area / pulse_width_s`` is
+        99745.56675147594 uA; the drift answer
+        ``0.6 V * 250 uF/cm^2 * 0.05984734 cm^2 = 8.9771 uC`` over
+        ``90e-6 s * 130 Hz * 1 s`` is 767.2735903959687 uA; the ratio is ``f * T = 130``,
+        which is 8.7e17 ulps -- what made the two a single change.
         """
         from neurostim import CylindricalBandElectrode
         from neurostim.safety import water_window as ww
@@ -780,7 +804,7 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
         assert peak_inverse_uA == pytest.approx(99745.56675147594, rel=1e-12)
         assert drift_uA == pytest.approx(767.2735903959687, rel=1e-12)
         assert peak_inverse_uA / drift_uA == pytest.approx(130.0, rel=1e-12)
-        assert ceiling == pytest.approx(peak_inverse_uA, rel=1e-12)
+        assert ceiling == pytest.approx(drift_uA, rel=1e-9)
 
 
 class TestBothSettleBudgetsAreBinding:
@@ -1991,16 +2015,24 @@ class TestTheHeadlineRefusesInItsOwnType:
         """``limit_bearing_ceiling_uA`` is still the minimum over the seven, for the same
         protocol whose headline refuses.
 
-        Not tautological: 15285.509415880857 is the value ledger 84 records the package
-        reporting for this protocol, written out here, and the assertion is that it is
-        still computable -- under the name that says what it is -- while the headline is
-        ``None``.
+        Not tautological: the expected value is the water window's DC-drift boundary,
+        written out here from the published constants -- PtIr holds
+        ``0.6 V * 250 uF/cm^2 * A = 8.9771 uC`` before reaching its cathodic edge and a
+        monophasic train spends it at ``I * 90 us * 130 Hz`` -- and the assertion is that
+        the minimum over the seven is still computable, under the name that says what it
+        is, while the headline is ``None``.
+
+        The number ledger 84 records for this protocol is 15285.509415880857, the Shannon
+        ceiling. C2.3 put a twentyfold lower candidate into the same set, so the raw
+        quantity moved while the refusal it sits beside did not; both halves are asserted
+        because it is the pairing that is under test.
         """
         assessment = self._monophasic().assess()
+        area_cm2 = math.pi * 0.127 * 0.15
+        expected = (0.6 * 250.0 * area_cm2) / (90.0e-6 * 130.0 * 1.0)
 
-        assert assessment.limit_bearing_ceiling_uA == pytest.approx(
-            15285.509415880857, rel=1e-12
-        )
+        assert expected == pytest.approx(767.2736, abs=5e-5)
+        assert assessment.limit_bearing_ceiling_uA == pytest.approx(expected, rel=1e-9)
         assert assessment.limiting_current_uA is None
 
     def test_the_decomposition_stays_reachable_when_the_headline_refuses(self):
@@ -2236,7 +2268,13 @@ class TestLimitingCurrentIsTheMinimumOverLimitBearingChecks:
 
         assert fail_ceiling_uA(calc) == 0.0
         restricted = fail_ceiling_uA(calc, names=LIMIT_BEARING)
-        assert restricted == pytest.approx(15285.50941588086, rel=1e-12)
+        # The water window's DC-drift boundary since C2.3: PtIr holds
+        # 0.6 V * 250 uF/cm^2 * A = 8.9771 uC before its cathodic edge, and a monophasic
+        # train spends that at I * 90 us * 130 Hz.
+        area_cm2 = math.pi * 0.127 * 0.15
+        expected = (0.6 * 250.0 * area_cm2) / (90.0e-6 * 130.0 * 1.0)
+        assert expected == pytest.approx(767.2736, abs=5e-5)
+        assert restricted == pytest.approx(expected, rel=1e-9)
         assert calc.assess().limit_bearing_ceiling_uA == pytest.approx(
             restricted, rel=1e-9
         )
