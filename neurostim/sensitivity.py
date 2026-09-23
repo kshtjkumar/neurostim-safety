@@ -89,7 +89,17 @@ def _limit(
     medium: str | None = None,
     tissue_conductivity_S_per_m: float | None = None,
 ) -> float:
-    """Binding current limit with one setting replaced, everything else held fixed."""
+    """Binding current limit with one setting replaced, everything else held fixed.
+
+    Raises :class:`UnsafeAtAnyAmplitude` when the variant has no safe amplitude. Under
+    ``limiting_current_uA``'s ``float | None`` this is not a choice: the single place that
+    turns an assessment into a bare amplitude has to say what it does with the refusal,
+    and returning the raw ceiling would be ledger 84 reinstated one function deeper.
+
+    :func:`analyse` refuses earlier and on the baseline, which is where the message a user
+    can act on belongs. This one needs no argument about which settings can change an
+    amplitude-independent verdict.
+    """
     from .materials import Policy
     from .safety.assessment import SafetyCalculator as Calc
 
@@ -111,7 +121,14 @@ def _limit(
         resting_potential_V=calc.resting_potential_V,
         capacitance_uF_cm2=calc.capacitance_uF_cm2,
     )
-    return varied.assess().limiting_current_uA
+    assessment = varied.assess()
+    limit_uA = assessment.limiting_current_uA
+    if limit_uA is None:
+        raise UnsafeAtAnyAmplitude(
+            f"no binding current limit for this setting -- "
+            f"{assessment.unsafe_at_any_amplitude_note()}."
+        )
+    return limit_uA
 
 
 def _refusal(calc: SafetyCalculator) -> str:
@@ -232,10 +249,12 @@ def describe(calc: SafetyCalculator) -> str:
         )
 
     assessment = calc.assess()
+    # Not None: `_refusal` is empty, and the two are the same condition read once each.
+    baseline_uA = assessment.limit_bearing_ceiling_uA
     rows = analyse(calc)
     lines = [
         "Sensitivity of the binding current limit to each defensible choice",
-        f"  baseline: {format_limit(assessment.limiting_current_uA)} uA "
+        f"  baseline: {format_limit(baseline_uA)} uA "
         f"({assessment.limiting_mechanism})",
         "",
     ]

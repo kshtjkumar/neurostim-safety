@@ -304,8 +304,38 @@ class SafetyAssessment:
         return tuple(c for c in self.checks if c.name in LIMIT_BEARING)
 
     @property
-    def limiting_current_uA(self) -> float:
-        """Highest amplitude at which no limit-bearing check FAILs.
+    def limiting_current_uA(self) -> float | None:
+        """Highest amplitude that is safe to programme, or ``None`` when none is.
+
+        ``None`` **exactly when** :attr:`unsafe_at_any_amplitude` is non-empty. That is the
+        whole of this property: the number itself is :attr:`limit_bearing_ceiling_uA`.
+
+        The split is a repair, not a convenience. "Limiting current" in a safety package is
+        read as *the highest amplitude you may use*, and for a protocol that FAILs a check
+        at every amplitude there is no such amplitude -- yet the attribute returned
+        15285.509415880857 uA for the monophasic band, with a mechanism name beside it
+        (ledger 84). Nine consumers read it; six consulted the flag and three did not
+        (ledger 89). Qualifying information one row away from where it is needed, carried
+        across by nothing but a convention, is the shape of ledger 19, 59 and 60.
+
+        ``float | None`` carries it structurally instead: ``mypy neurostim`` is a CI gate,
+        so a consumer that does not handle the refusal stops typechecking rather than
+        printing a number. C2.1 widens the refusal to unbalanced *biphasic* protocols, so
+        the population of consumers that would have to remember grows before anyone
+        re-audits them.
+
+        ``None`` rather than a raise, because :attr:`limiting_current_by_kind`,
+        :attr:`limiting_current_interval_uA` and :attr:`limiting_mechanism` are exactly
+        what a user needs in order to diagnose a protocol that is unsafe as a *waveform*,
+        and a raise would take all three with it.
+        """
+        if self.unsafe_at_any_amplitude:
+            return None
+        return self.limit_bearing_ceiling_uA
+
+    @property
+    def limit_bearing_ceiling_uA(self) -> float:
+        """Minimum over the ceilings of the seven :data:`LIMIT_BEARING` checks.
 
         The minimum over all seven of :data:`LIMIT_BEARING`, not over the three it used to
         be. Shannon, charge injection and compliance were the whole candidate set while
@@ -327,6 +357,11 @@ class SafetyAssessment:
 
         A check that did not run contributes ``inf``, so it cannot bind; that is what
         makes :attr:`limiting_mechanism` always name a check that ran.
+
+        Always a float, and defined for every protocol including one no amplitude is safe
+        for -- it is the quantity :attr:`limiting_current_by_kind` decomposes, the one
+        :attr:`limiting_current_interval_uA` must contain, and the one the fail-ceiling
+        oracle brackets. :attr:`limiting_current_uA` is this value with the refusal applied.
         """
         return min(c.ceiling_uA for c in self._limit_bearing)
 
@@ -494,12 +529,14 @@ class SafetyAssessment:
         # In place of a number, not beside one: a reader who sees an amplitude will
         # programme it, however the sentence next to it is worded. The interval goes with
         # it, for the same reason -- it is two more amplitudes.
-        refusal = self.unsafe_at_any_amplitude_note()
-        if refusal:
-            lines.append(f"Limiting current: none -- {refusal}")
+        limit_uA = self.limiting_current_uA
+        if limit_uA is None:
+            lines.append(
+                f"Limiting current: none -- {self.unsafe_at_any_amplitude_note()}"
+            )
         else:
             lines += [
-                f"Limiting current: {format_limit(self.limiting_current_uA)} uA "
+                f"Limiting current: {format_limit(limit_uA)} uA "
                 f"({self.limiting_mechanism})",
                 f"  across published ranges: "
                 f"{self.limiting_current_interval_uA.describe('uA', floor=True)} "
@@ -1531,10 +1568,9 @@ class SafetyCalculator:
             "net_dc_current_uA": self.p.net_dc_current_uA,
             # None, not a number, when no amplitude is safe. A machine consumer is the
             # one that cannot read the caveat in the prose beside it, and this dict is
-            # what becomes the columns of a batch CSV (ledger 84).
-            "limiting_current_uA": (
-                None if unsafe else assessment.limiting_current_uA
-            ),
+            # what becomes the columns of a batch CSV (ledger 84). The conditional used to
+            # live here; it now lives in the attribute, so this cannot disagree with it.
+            "limiting_current_uA": assessment.limiting_current_uA,
             "limiting_mechanism": unsafe or assessment.limiting_mechanism,
             "status": assessment.status.value,
         }

@@ -1641,6 +1641,128 @@ class TestUnsafeAtAnyAmplitude:
         assert "no amplitude is safe" not in line.lower()
 
 
+class TestTheHeadlineRefusesInItsOwnType:
+    """M2. ``limiting_current_uA`` meant two things under one name (review F7).
+
+    Nine consumers read it. Six consult ``unsafe_at_any_amplitude`` beside it; three did
+    not, and those three were F1 -- ``sensitivity.py`` twice and the worked example. That
+    is the ledger 19/59/60 shape exactly: the qualifying information exists one row away
+    from where it is needed and nothing structural carries it across, so each new consumer
+    restarts the same race. C2.1 widens the refusal to unbalanced *biphasic* protocols,
+    which multiplies the disagreeing population before anyone re-audits it.
+
+    So the raw quantity keeps its definition under a name that states it --
+    ``limit_bearing_ceiling_uA``, the minimum over :data:`LIMIT_BEARING` -- and
+    ``limiting_current_uA`` becomes ``float | None``, ``None`` exactly when no amplitude is
+    safe. ``float -> float | None`` is a type change and ``mypy neurostim`` is a CI gate, so
+    a consumer that forgets stops typechecking rather than printing 15.3 mA.
+
+    ``None`` and not a raise: ``limiting_current_by_kind``,
+    ``limiting_current_interval_uA`` and ``limiting_mechanism`` are what a user needs in
+    order to *diagnose* a protocol that is unsafe as a waveform, and a raise would take
+    them with it.
+    """
+
+    @staticmethod
+    def _monophasic() -> SafetyCalculator:
+        from neurostim import CylindricalBandElectrode
+
+        return SafetyCalculator(
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+        )
+
+    @staticmethod
+    def _safe() -> SafetyCalculator:
+        from neurostim import RingElectrode
+
+        return SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+        )
+
+    def test_the_headline_is_none_exactly_when_no_amplitude_is_safe(self):
+        """Not tautological: the two expected outcomes are opposite -- ``None`` for the
+        protocol ledger 84 is written about, and a number for the worked example -- and the
+        condition they are read against is ``unsafe_at_any_amplitude``, a different
+        attribute computed from the checks' statuses rather than from any ceiling."""
+        unsafe = self._monophasic().assess()
+        safe = self._safe().assess()
+
+        assert unsafe.unsafe_at_any_amplitude
+        assert unsafe.limiting_current_uA is None
+        assert not safe.unsafe_at_any_amplitude
+        assert safe.limiting_current_uA == pytest.approx(20.0)
+
+    def test_the_raw_quantity_survives_under_a_name_that_states_it(self):
+        """``limit_bearing_ceiling_uA`` is still the minimum over the seven, for the same
+        protocol whose headline refuses.
+
+        Not tautological: 15285.509415880857 is the value ledger 84 records the package
+        reporting for this protocol, written out here, and the assertion is that it is
+        still computable -- under the name that says what it is -- while the headline is
+        ``None``.
+        """
+        assessment = self._monophasic().assess()
+
+        assert assessment.limit_bearing_ceiling_uA == pytest.approx(
+            15285.509415880857, rel=1e-12
+        )
+        assert assessment.limiting_current_uA is None
+
+    def test_the_decomposition_stays_reachable_when_the_headline_refuses(self):
+        """Why ``None`` and not a raise: these three are how a user diagnoses the protocol.
+
+        Not tautological: each is read for the refusing protocol and checked against the
+        raw ceiling, which is a different attribute from the one under test.
+        """
+        assessment = self._monophasic().assess()
+
+        assert assessment.limiting_current_uA is None
+        assert assessment.limiting_mechanism
+        assert min(assessment.limiting_current_by_kind.values()) == pytest.approx(
+            assessment.limit_bearing_ceiling_uA, rel=1e-12
+        )
+        assert assessment.limiting_current_interval_uA.contains(
+            assessment.limit_bearing_ceiling_uA
+        )
+
+    def test_report_reads_the_attribute_with_no_conditional_of_its_own(self):
+        """One rule, one place: ``report()`` used to carry its own copy of the branch.
+
+        Not tautological: the assertion is that two independently reached values agree --
+        the dict entry and the attribute -- for both a refusing and a non-refusing
+        protocol, and ``None`` is asserted where a number used to be.
+        """
+        unsafe = self._monophasic()
+        safe = self._safe()
+
+        assert unsafe.report()["limiting_current_uA"] is None
+        assert unsafe.report()["limiting_current_uA"] is (
+            unsafe.assess().limiting_current_uA
+        )
+        assert safe.report()["limiting_current_uA"] == pytest.approx(
+            safe.assess().limiting_current_uA
+        )
+
+    def test_the_sensitivity_helper_refuses_a_variant_with_no_safe_amplitude(self):
+        """``sensitivity._limit`` is the single choke point that turns an assessment into a
+        bare amplitude, and under the new type it has to handle the ``None``.
+
+        Called directly rather than through ``analyse``, which refuses earlier: that guard
+        argues the varied settings cannot change an amplitude-independent verdict, and this
+        one does not need the argument.
+
+        Not tautological: the expected outcome is a raise naming the check, so no number
+        the helper could return would satisfy it.
+        """
+        from neurostim import sensitivity
+
+        with pytest.raises(sensitivity.UnsafeAtAnyAmplitude, match="Charge balance"):
+            sensitivity._limit(self._monophasic())
+
+
 class TestLimitingCurrentIsTheMinimumOverLimitBearingChecks:
     """T1 and T2b. Ledger 1 and 66: the headline was a minimum over three candidates while
     nine checks ran, so four computed limits could not reach it.
@@ -1799,10 +1921,15 @@ class TestLimitingCurrentIsTheMinimumOverLimitBearingChecks:
 
         Not tautological: the two expected values are the oracle's own two answers, and
         they differ by fifteen orders of magnitude -- the restricted one is what the
-        package's attribute must equal, the unrestricted one is what
+        package's raw ceiling must equal, the unrestricted one is what
         ``unsafe_at_any_amplitude`` is about. A test written against the unrestricted form
         would demand 0.0 here and would still pass on the worked-example ring, where both
         forms answer 20.0.
+
+        Pinned against ``limit_bearing_ceiling_uA`` and not ``limiting_current_uA``: the
+        oracle brackets the raw minimum over :data:`LIMIT_BEARING`, which is defined for
+        every protocol, while the headline is ``None`` for this one by construction (M2).
+        Both are asserted, because the pair is the point.
         """
         from oracles.fail_ceiling import fail_ceiling_uA
 
@@ -1818,9 +1945,12 @@ class TestLimitingCurrentIsTheMinimumOverLimitBearingChecks:
         assert fail_ceiling_uA(calc) == 0.0
         restricted = fail_ceiling_uA(calc, names=LIMIT_BEARING)
         assert restricted == pytest.approx(15285.50941588086, rel=1e-12)
-        assert calc.assess().limiting_current_uA == pytest.approx(restricted, rel=1e-9)
+        assert calc.assess().limit_bearing_ceiling_uA == pytest.approx(
+            restricted, rel=1e-9
+        )
 
-        # ...and it is still not presented as a number anywhere (C1.5).
+        # ...and it is still not presented as a number anywhere (C1.5, M2).
+        assert calc.assess().limiting_current_uA is None
         assert calc.report()["limiting_current_uA"] is None
 
 

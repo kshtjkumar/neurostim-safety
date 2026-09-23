@@ -60,7 +60,15 @@ def main(output_dir: Path) -> int:
     # (ledger 49). `format_limit` is the same renderer the report, the PDF, the GUI and
     # the figure use.
     print(f"Requested:        {protocol.current_uA:g} uA")
-    print(f"Binding limit:    {format_limit(assessment.limiting_current_uA)} uA")
+    # `limiting_current_uA` is None exactly when no amplitude is safe, so the refusal is
+    # printed in place of a number rather than beside one (ledger 84, 89).
+    limit_uA = assessment.limiting_current_uA
+    binding = (
+        f"none -- {assessment.unsafe_at_any_amplitude_note()}"
+        if limit_uA is None
+        else f"{format_limit(limit_uA)} uA"
+    )
+    print(f"Binding limit:    {binding}")
     print(f"Set by:           {assessment.limiting_mechanism}")
     print(f"Shannon allows:   {format_limit(assessment.shannon.max_current_uA)} uA")
     print(f"Electrode allows: {format_limit(assessment.charge.max_current_uA)} uA")
@@ -90,11 +98,15 @@ def main(output_dir: Path) -> int:
         ).assess()
         failing = result.failed
         reason = failing[0].name if failing else result.limiting_mechanism
+        material_limit_uA = result.limiting_current_uA
+        rendered = (
+            "none" if material_limit_uA is None else format_limit(material_limit_uA)
+        )
         print(
             f"  {key:10s} "
             f"{format_limit(material.cic_uC_cm2('conservative')):>8s} uC/cm^2  "
             f"{result.status.value:<8s} "
-            f"{format_limit(result.limiting_current_uA):>8s}  {reason}"
+            f"{rendered:>8s}  {reason}"
         )
     print(
         "\nA higher charge-injection limit does not rescue this protocol. At "

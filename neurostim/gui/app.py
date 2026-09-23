@@ -128,13 +128,13 @@ def headline_text(assessment: SafetyAssessment) -> str:
     amplitude-independent failure replaces the number rather than sitting beside it).
     """
     not_evaluated = assessment.not_evaluated_note()
-    refusal = assessment.unsafe_at_any_amplitude_note()
+    limit_uA = assessment.limiting_current_uA
     limit = (
-        refusal
-        if refusal
+        assessment.unsafe_at_any_amplitude_note()
+        if limit_uA is None
         else (
             f"limiting current "
-            f"{format_limit(assessment.limiting_current_uA)} uA "
+            f"{format_limit(limit_uA)} uA "
             f"({assessment.limiting_mechanism})"
         )
     )
@@ -143,7 +143,7 @@ def headline_text(assessment: SafetyAssessment) -> str:
         f"{assessment.status.value}"
         + (f" {not_evaluated}" if not_evaluated else "")
         + f" - {limit}"
-        + (f" - {incomplete}" if incomplete and not refusal else "")
+        + (f" - {incomplete}" if incomplete and limit_uA is not None else "")
     )
 
 

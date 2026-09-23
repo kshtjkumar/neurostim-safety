@@ -229,13 +229,13 @@ def build_report(
     not_evaluated = assessment.not_evaluated_note()
     # In place of the amplitude, never beside it: a reader who sees a number will
     # programme it whatever the sentence next to it says (ledger 84).
-    refusal = assessment.unsafe_at_any_amplitude_note()
+    limit_uA = assessment.limiting_current_uA
     headline = (
-        f"<b>{refusal}</b>"
-        if refusal
+        f"<b>{assessment.unsafe_at_any_amplitude_note()}</b>"
+        if limit_uA is None
         else (
             f"limiting current "
-            f"<b>{format_limit(assessment.limiting_current_uA)} &micro;A</b> "
+            f"<b>{format_limit(limit_uA)} &micro;A</b> "
             f"({assessment.limiting_mechanism})"
         )
     )
@@ -245,7 +245,11 @@ def build_report(
             f"Overall assessment: {verdict}"
             + (f" {not_evaluated}" if not_evaluated else "")
             + f" &middot; {headline}"
-            + (f" &middot; {incomplete}" if incomplete and not refusal else ""),
+            + (
+                f" &middot; {incomplete}"
+                if incomplete and limit_uA is not None
+                else ""
+            ),
             styles["body"],
         )
     )

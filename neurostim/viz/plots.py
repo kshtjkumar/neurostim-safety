@@ -249,8 +249,9 @@ def current_limit_sweep(
             label=name,
         )
 
-    refusal = assessment.unsafe_at_any_amplitude_note()
-    if refusal:
+    binding_uA = assessment.limiting_current_uA
+    if binding_uA is None:
+        refusal = assessment.unsafe_at_any_amplitude_note()
         # In place of the amplitude, not beside it: a reader who sees a number will
         # programme it, however the sentence next to it is worded. The shaded region goes
         # with it, for the same reason -- it is a claim that everything below is safe.
@@ -266,7 +267,6 @@ def current_limit_sweep(
             va="bottom",
         )
     else:
-        binding_uA = assessment.limiting_current_uA
         ax.fill_between(currents, binding_uA, currents.min(), color=PALETTE["pass"],
                         alpha=0.07, linewidth=0, zorder=0)
         ax.axhline(binding_uA, color=PALETTE["fail"], linewidth=0.7, linestyle="-",
