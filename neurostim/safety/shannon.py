@@ -199,6 +199,10 @@ def shannon_k(charge_per_phase_uC: float, area_cm2: float) -> float:
     Compare the result against a chosen threshold: a protocol at ``k = 1.9`` sits above
     the conservative 1.5 line and below the permissive 2.0 line.
 
+    Computed as ``log10(Q) + log10(Q/A)``, Merrill's form, and not as one log of the
+    quotient. The two are equal in exact arithmetic but not in floats: the sum rounds at
+    the resolution of its larger addend, which is what :func:`_metric_plateau_uC` declares.
+
     Raises
     ------
     ValueError
@@ -219,20 +223,41 @@ def shannon_k(charge_per_phase_uC: float, area_cm2: float) -> float:
     return math.log10(charge_per_phase_uC) + math.log10(charge_density)
 
 
+def _metric_plateau_uC(charge_per_phase_uC: float, area_cm2: float) -> float:
+    """The smallest change in charge :func:`shannon_k` can resolve near ``charge``.
+
+    ``shannon_k`` is a *sum* of two logs, ``log10(Q) + log10(Q/A)``, so its rounding is set
+    by the larger addend and not by the result ``k``: above 1e4 uC/cm^2 ``log10(Q/A)``
+    sits in the ``[4, 8)`` binade, whose ulp is four times that of ``k`` in ``[1, 2)``. One
+    ulp of that addend, carried back through ``dk/dQ = 2 / (Q ln 10)``, is a run of
+    charges the metric cannot tell apart -- and the seed can land on the far side of it
+    from the boundary (ledger 98). Declared to :func:`floor_to_pass` as its ``plateau``.
+    """
+    larger = max(
+        abs(math.log10(charge_per_phase_uC)),
+        abs(math.log10(charge_per_phase_uC / area_cm2)),
+    )
+    return math.ulp(larger) * charge_per_phase_uC * math.log(10.0) / 2.0
+
+
 def shannon_max_charge_uC(area_cm2: float, k: float = K_DEFAULT) -> float:
     """Maximum charge per phase at a given ``k``: ``Q_max = sqrt(A * 10^k)``.
 
     Settled onto the boundary of the forward metric: ``sqrt`` is not the bit-exact inverse
     of ``log10(Q^2/A)``, so the closed form can land one ulp on either side of the largest
-    charge that still satisfies ``shannon_k(Q, A) <= k`` (ledger 9).
+    charge that still satisfies ``shannon_k(Q, A) <= k`` (ledger 9) -- or several, where
+    the metric's own resolution is coarser than a float of ``Q`` (ledger 98, see
+    :func:`_metric_plateau_uC`).
     """
     validate_k(k)
     if not math.isfinite(area_cm2) or area_cm2 <= 0:
         raise ValueError(f"area_cm2 must be finite and > 0, got {area_cm2!r}")
+    seed = math.sqrt(area_cm2 * 10.0**k)
     return floor_to_pass(
-        math.sqrt(area_cm2 * 10.0**k),
+        seed,
         lambda charge_uC_: shannon_k(charge_uC_, area_cm2) <= k,
         name="Shannon criterion",
+        plateau=_metric_plateau_uC(seed, area_cm2),
     )
 
 
@@ -261,11 +286,14 @@ def shannon_max_current_uA(
         raise ValueError(
             f"pulse_width_us must be finite and > 0, got {pulse_width_us!r}"
         )
+    max_charge = shannon_max_charge_uC(area_cm2, k)
     return floor_to_pass(
-        shannon_max_charge_uC(area_cm2, k) / (pulse_width_us * 1e-6),
+        max_charge / (pulse_width_us * 1e-6),
         lambda current_uA: shannon_k(charge_uC(current_uA, pulse_width_us), area_cm2)
         <= k,
         name="Shannon criterion",
+        # The metric's resolution in charge, carried to current by the same division.
+        plateau=_metric_plateau_uC(max_charge, area_cm2) / (pulse_width_us * 1e-6),
     )
 
 

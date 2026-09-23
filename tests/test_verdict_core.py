@@ -935,7 +935,154 @@ class TestBothSettleBudgetsAreBinding:
             )
 
 
-class TestFormatLimit:
+class TestTheDeclaredPlateauAlsoBoundsTheWalkDown:
+    """Ledger 98. A plateau can sit above the boundary as well as below it.
+
+    Phase 1b's ``plateau`` widened only the climb. Shannon's metric is a sum of two logs,
+    and its resolution is set by the larger addend, so the seed ``sqrt(A * 10**k)`` can
+    land five floats *above* the boundary inside a run the predicate cannot tell apart.
+    The walk down was a hard four floats and raised on input the package accepts. With no
+    plateau declared the walk down must be unchanged. That is what the ledger 93 pair in
+    :class:`TestBothSettleBudgetsAreBinding` pins, and it still passes unmodified.
+    """
+
+    def test_a_declared_plateau_lets_the_walk_down_cross_it(self):
+        """Not tautological: the boundary is a literal 1e-9 below the seed -- millions of
+        floats, far past the four-step budget -- and the plateau a literal 1e-9, so the
+        outcome follows from ``PLATEAU_ALLOWANCE`` being 4 (``4 x 1e-9 > 1e-9``)."""
+        from neurostim.safety import _limits
+
+        boundary = 1.0 - 1e-9
+        settled = _limits.floor_to_pass(
+            1.0, lambda v: v <= boundary, name="synthetic", plateau=1e-9
+        )
+
+        assert settled == boundary
+
+    def test_a_seed_further_above_than_the_allowance_still_raises(self):
+        """The other side: ``4 x 1e-10 < 1e-9``, so the same gap is a wrong back-solve,
+        not a plateau, and must raise rather than settle."""
+        from neurostim.safety import _limits
+
+        boundary = 1.0 - 1e-9
+        with pytest.raises(_limits.LimitDidNotSettle):
+            _limits.floor_to_pass(
+                1.0, lambda v: v <= boundary, name="synthetic", plateau=1e-10
+            )
+
+    def test_with_no_plateau_the_walk_down_and_its_message_are_unchanged(self):
+        """Byte-identical at ``plateau=0``: five floats down raises, with the message
+        exactly as before the change, written out here."""
+        import math
+
+        from neurostim.safety import _limits
+
+        target = 50.0
+        for _ in range(5):
+            target = math.nextafter(target, -math.inf)
+        with pytest.raises(_limits.LimitDidNotSettle) as raised:
+            _limits.floor_to_pass(50.0, lambda v: v <= target, name="synthetic")
+
+        four_down = 50.0
+        for _ in range(4):
+            four_down = math.nextafter(four_down, -math.inf)
+        assert str(raised.value) == (
+            f"synthetic: the back-solved limit 50.0 still fails its own check after 4 "
+            f"steps down to {four_down!r}. A one-ulp disagreement between the back-solve "
+            f"and the forward comparison is what this walk is for; this is a larger "
+            f"disagreement, so the two are not inverses of each other and no value in "
+            f"between can be reported as the limit."
+        )
+
+
+class TestShannonDeclaresItsPlateau:
+    """Ledger 98 through the public API: ``assess()`` must not raise on accepted ``k``."""
+
+    def test_the_reviews_reproduction_assesses(self):
+        """Not tautological: the inputs are the Phase 1b review's, which raised
+        ``LimitDidNotSettle`` out of ``assess()``; the boundary property is IEEE's."""
+        import math
+
+        from neurostim.safety import shannon
+
+        assessment = SafetyCalculator(
+            DiscElectrode(5.586476331363039, "Pt"),
+            StimProtocol(10.0, 200.0, 130.0, 1.0),
+            k=1.642880206146527,
+        ).assess()
+        area = assessment.electrode.area_cm2
+        q = assessment.shannon.max_charge_uC
+
+        assert shannon.shannon_k(q, area) <= 1.642880206146527
+        assert not shannon.shannon_k(math.nextafter(q, math.inf), area) <= 1.642880206146527
+
+    def test_the_package_s_own_moderate_k_on_a_small_disc(self):
+        """``K_MODERATE = 1.7`` is a package constant and is not exactly representable;
+        on a 2.845538350306074e-07 cm^2 electrode (a ~6 um disc) at 1 us it raised."""
+        from neurostim.safety import shannon
+
+        assert shannon.K_MODERATE == 1.7
+        assert shannon.shannon_max_current_uA(2.845538350306074e-07, 1.0, 1.7) > 0.0
+
+    def test_edge_clustered_sweep_raises_nowhere(self):
+        """Every Shannon back-solve settles on its own boundary, over 165 300 configurations.
+
+        k is clustered at both ends of 1.5-2.0 and around the binade edges 1.0, 1.25,
+        1.75 and 2.0 (a float at a time and by decades), plus 300 uniform draws. Areas are
+        clustered where ``log10(Q/A)`` crosses 1, 2, 4, 8 and 16 -- the binade edges that
+        set the sum's resolution -- and where ``log10(Q)`` crosses -1 to -16, plus a
+        log grid over 1e-16 to 1e4 cm^2. Five pulse widths from 1 us to 100 ms. Seeded,
+        so the population is fixed. Before the fix, 2535 of these raised.
+
+        Not tautological: each result is checked against the forward metric at the value
+        and at its successor, which is IEEE's definition of the boundary.
+        """
+        import math
+        import random
+
+        from neurostim.safety import shannon
+
+        rng = random.Random(98)
+        ks = [1.5, 2.0, 1.7, 1.85]
+        for b in (1.5, 2.0, 1.0, 1.25, 1.75):
+            x = b
+            for _ in range(6):
+                x = math.nextafter(x, 0)
+                ks.append(x)
+            x = b
+            for _ in range(6):
+                x = math.nextafter(x, 3)
+                ks.append(x)
+            for e in range(3, 16):
+                ks += [b - 10**-e, b + 10**-e]
+        ks += [rng.uniform(1.5, 2.0) for _ in range(300)]
+        ks = [k for k in ks if 1.5 <= k <= 2.0]
+
+        def areas(k):
+            out = []
+            for edge in (1, 2, 4, 8, 16):
+                a0 = 10 ** (k - 2 * edge)
+                for r in (1 - 1e-9, 1 - 1e-6, 1 - 1e-3, 1, 1 + 1e-3, 1 + 1e-6, 1 + 1e-9):
+                    out.append(a0 * r)
+                out += [a0 * 10 ** rng.uniform(-0.3, 0.3) for _ in range(6)]
+            for edge in (-1, -2, -4, -8, -16):
+                a0 = 10 ** (2 * edge - k)
+                out += [a0 * 10 ** rng.uniform(-0.3, 0.3) for _ in range(4)] + [a0]
+            out += [10 ** rng.uniform(-14, 2) for _ in range(20)]
+            return [a for a in out if 1e-16 <= a <= 1e4]
+
+        configurations = 0
+        for k in ks:
+            for area in areas(k):
+                for pulse_width_us in (1.0, 60.0, 200.0, 1000.0, 1e5):
+                    q = shannon.shannon_max_charge_uC(area, k)
+                    i = shannon.shannon_max_current_uA(area, pulse_width_us, k)
+                    assert shannon.shannon_k(q, area) <= k, (area, k)
+                    assert not shannon.shannon_k(math.nextafter(q, math.inf), area) <= k
+                    assert i > 0.0
+                    configurations += 1
+
+        assert configurations == 165_300
     """A limit must never be printed larger than it is (ledger 49)."""
 
     def test_the_worked_example_headline_floors(self):

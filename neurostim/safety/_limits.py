@@ -119,7 +119,9 @@ def floor_to_pass(
     yielding a plausible number from the middle of a non-monotone band.
 
     The two directions are bounded differently and deliberately: ``max_steps`` floats
-    down, a distance up. See :func:`_climb_to_boundary` for why.
+    down, a distance up. See :func:`_climb_to_boundary` for why. A declared ``plateau``
+    widens both, by the same distance, because a run the predicate cannot resolve can
+    straddle the boundary from either side (see :func:`_descend_across_plateau`).
 
     ``plateau`` is the smallest change in ``value`` the predicate can resolve, in
     ``value``'s own units, and is 0.0 for a predicate that resolves every float. Only the
@@ -141,12 +143,8 @@ def floor_to_pass(
     steps = 0
     while not passes(settled):
         if steps >= max_steps:
-            raise LimitDidNotSettle(
-                f"{name}: the back-solved limit {value!r} still fails its own check "
-                f"after {max_steps} steps down to {settled!r}. A one-ulp disagreement "
-                f"between the back-solve and the forward comparison is what this walk is "
-                f"for; this is a larger disagreement, so the two are not inverses of each "
-                f"other and no value in between can be reported as the limit."
+            return _descend_across_plateau(
+                value, settled, passes, name=name, max_steps=max_steps, plateau=plateau
             )
         settled = math.nextafter(settled, -math.inf)
         steps += 1
@@ -156,6 +154,57 @@ def floor_to_pass(
             settled, passes, name=name, rel_tolerance=rel_tolerance, plateau=plateau
         )
     return settled
+
+
+def _descend_across_plateau(
+    value: float,
+    failing: float,
+    passes: Callable[[float], bool],
+    *,
+    name: str,
+    max_steps: int,
+    plateau: float,
+) -> float:
+    """The boundary below a seed that the step budget could not reach, or a raise.
+
+    A declared plateau can sit *above* the boundary as well as below it. Shannon's metric
+    is ``log10(Q) + log10(Q/A)``, whose resolution is set by the larger addend, so above
+    1e4 uC/cm^2 the seed ``sqrt(A * 10**k)`` lands five floats over the boundary inside a
+    run of charges the predicate cannot tell apart -- and the four-step walk raised on
+    input the package accepts (ledger 98). So the walk down may also go as far as
+    ``PLATEAU_ALLOWANCE x plateau``, the distance the climb is already allowed, and then
+    bisects onto the exact boundary.
+
+    With no plateau declared nothing changes: the raise, and its message, are exactly the
+    four-step budget's. A seed further above than both is still a back-solve that does not
+    invert its comparison.
+    """
+    reach = PLATEAU_ALLOWANCE * plateau
+    low = value - reach
+    if reach <= 0.0 or low <= 0.0 or not passes(low):
+        message = (
+            f"{name}: the back-solved limit {value!r} still fails its own check "
+            f"after {max_steps} steps down to {failing!r}. A one-ulp disagreement "
+            f"between the back-solve and the forward comparison is what this walk is "
+            f"for; this is a larger disagreement, so the two are not inverses of each "
+            f"other and no value in between can be reported as the limit."
+        )
+        if reach > 0.0:
+            message += (
+                f" Nor does it pass within {reach!r} below, {PLATEAU_ALLOWANCE} times the "
+                f"{plateau!r} the caller declared the check can resolve."
+            )
+        raise LimitDidNotSettle(message)
+
+    high = failing
+    while True:
+        middle = low + (high - low) / 2.0
+        if middle <= low or middle >= high:
+            return low
+        if passes(middle):
+            low = middle
+        else:
+            high = middle
 
 
 def _climb_to_boundary(
