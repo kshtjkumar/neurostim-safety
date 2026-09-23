@@ -387,22 +387,21 @@ class TestFloorToPass:
         assert settled <= 1.0
         assert not (math.nextafter(settled, math.inf) <= 1.0)
 
-    def test_exhausting_the_step_budget_raises_and_names_the_check(self):
+    def test_exhausting_the_step_budget_raises_rather_than_returning(self):
         """Returning the failing value would be a silent failure; leaving the budget
         unstated is how a future non-linear check degrades quietly (D2 point 2).
 
         Not tautological: the predicate written here never passes, so no value the helper
         could return would be correct, and the expected outcome is the raise.
+
+        The budget's *size* is pinned by ``TestBothSettleBudgetsAreBinding``, not here.
+        This test used to assert ``"4" in message``, which "40 steps" also satisfies -- a
+        substring test on a number, and the survivor the review demonstrated.
         """
         from neurostim.safety import _limits
 
-        with pytest.raises(_limits.LimitDidNotSettle) as raised:
+        with pytest.raises(_limits.LimitDidNotSettle):
             _limits.floor_to_pass(50.0, lambda v: False, name="Chronic degradation")
-        message = str(raised.value)
-
-        assert "Chronic degradation" in message
-        assert "50" in message
-        assert "4" in message  # the step budget
 
     def test_a_non_finite_or_non_positive_value_is_returned_unchanged(self):
         """``inf`` means "no ceiling" and ``0.0`` means "nothing is permitted"; neither is
@@ -782,6 +781,134 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
         assert drift_uA == pytest.approx(767.2735903959687, rel=1e-12)
         assert peak_inverse_uA / drift_uA == pytest.approx(130.0, rel=1e-12)
         assert ceiling == pytest.approx(peak_inverse_uA, rel=1e-12)
+
+
+class TestBothSettleBudgetsAreBinding:
+    """M4. ``STEP_BUDGET`` and ``CLIMB_TOLERANCE`` were unpinned by 770 tests.
+
+    The Phase 1 review's mutation battery: ``STEP_BUDGET = 4 -> 40`` **survived** 284
+    tests, and so did ``CLIMB_TOLERANCE = 1e-9 -> 1e-3``. The second is the more serious,
+    because loosening it is not behaviour-neutral -- under ``1e-3`` the B1 case stops
+    raising and returns a number, and nothing noticed. A constant that no test constrains
+    is not a convention, it is a comment.
+
+    Both are pinned here by **straddling** them: one case just inside the budget that must
+    settle, one just outside that must raise. The straddling values are written as
+    literals rather than derived from the constants, which is the whole point -- a test
+    that computes its fixture from ``STEP_BUDGET`` moves with the mutant and survives it.
+    Together they pin the step budget to exactly 4 and the climb tolerance to
+    ``[1e-9, 2e-9)``.
+    """
+
+    def test_a_walk_down_of_exactly_four_floats_settles(self):
+        """Not tautological: the predicate's boundary is placed by ``math.nextafter`` a
+        literal four times below the seed, so the expected outcome follows from IEEE
+        arithmetic and the literal 4, neither of which moves when ``STEP_BUDGET`` does."""
+        import math
+
+        from neurostim.safety import _limits
+
+        target = 50.0
+        for _ in range(4):
+            target = math.nextafter(target, -math.inf)
+
+        assert _limits.floor_to_pass(
+            50.0, lambda v: v <= target, name="synthetic"
+        ) == target
+
+    def test_a_walk_down_of_five_floats_raises(self):
+        """The other side of the same literal. Under ``STEP_BUDGET = 40`` -- the mutant
+        that survived 284 tests -- this settles instead, so this assertion is what kills it.
+
+        Not tautological: the boundary is five ulps below the seed by construction here and
+        the expected outcome is the raise, which no returned value satisfies.
+        """
+        import math
+
+        from neurostim.safety import _limits
+
+        target = 50.0
+        for _ in range(5):
+            target = math.nextafter(target, -math.inf)
+
+        with pytest.raises(_limits.LimitDidNotSettle):
+            _limits.floor_to_pass(50.0, lambda v: v <= target, name="synthetic")
+
+    def test_the_raise_names_the_budget_it_exhausted(self):
+        """``assert "4" in message`` was the demonstrated survivor: "40 steps" contains
+        "4", so it could not tell 4 from 40, 14, 42 or 400. The count has to be read as a
+        count.
+
+        Not tautological about the *number* -- the behavioural pair above does that -- but
+        about the *shape*: a message that drops the step count, or reports it in another
+        unit, fails here while still raising.
+        """
+        from neurostim.safety import _limits
+
+        with pytest.raises(_limits.LimitDidNotSettle) as raised:
+            _limits.floor_to_pass(50.0, lambda v: False, name="Chronic degradation")
+        message = str(raised.value)
+
+        assert "Chronic degradation" in message
+        assert "50.0" in message
+        assert f"after {_limits.STEP_BUDGET} steps" in message
+
+    def test_a_climb_of_one_part_in_a_billion_settles(self):
+        """The inside of the climb budget, with no plateau declared so only the relative
+        bound applies.
+
+        Not tautological: 1e-9 is a literal here and is the largest relative gap the
+        shipped tolerance admits; under a tightened ``CLIMB_TOLERANCE`` this raises.
+        """
+        from neurostim.safety import _limits
+
+        boundary = 1.0 + 1e-9
+
+        settled = _limits.floor_to_pass(
+            1.0, lambda v: v <= boundary, name="synthetic"
+        )
+
+        assert settled <= boundary
+        assert settled == pytest.approx(boundary, rel=1e-15)
+
+    def test_a_climb_of_two_parts_in_a_billion_raises(self):
+        """The outside. Under ``CLIMB_TOLERANCE = 1e-3`` -- the mutant that survived 284
+        tests, and the "just loosen the constant" answer to B1 -- this settles instead, so
+        this assertion is what kills both.
+
+        Not tautological: 2e-9 is a literal, the predicate is a comparison against it, and
+        the expected outcome is the raise.
+        """
+        from neurostim.safety import _limits
+
+        boundary = 1.0 + 2e-9
+
+        with pytest.raises(_limits.LimitDidNotSettle):
+            _limits.floor_to_pass(1.0, lambda v: v <= boundary, name="synthetic")
+
+    def test_the_declared_plateau_widens_the_climb_and_nothing_else_does(self):
+        """B1's fix must not be reachable by loosening the relative bound instead.
+
+        The same 2e-9 gap that raises above settles when the caller declares a plateau
+        wide enough to explain it -- and only then. That is the mechanism: the budget comes
+        from the predicate's own resolution, supplied by the caller who knows the units.
+
+        Not tautological: the plateau is a literal chosen against the literal gap
+        (``4 x 1e-9 > 2e-9`` and ``4 x 1e-10 < 2e-9``), so both outcomes follow from
+        ``PLATEAU_ALLOWANCE`` being 4 and from nothing the helper computes.
+        """
+        from neurostim.safety import _limits
+
+        boundary = 1.0 + 2e-9
+
+        assert _limits.floor_to_pass(
+            1.0, lambda v: v <= boundary, name="synthetic", plateau=1e-9
+        ) == pytest.approx(boundary, rel=1e-15)
+
+        with pytest.raises(_limits.LimitDidNotSettle):
+            _limits.floor_to_pass(
+                1.0, lambda v: v <= boundary, name="synthetic", plateau=1e-10
+            )
 
 
 class TestFormatLimit:
