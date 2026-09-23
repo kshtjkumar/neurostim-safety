@@ -796,7 +796,8 @@ class _WindowSearch(NamedTuple):
     That coupling is why the DC-drift clause and its inverse landed together. The clause
     FAILs when the interface leaves the window before the train ends, and the pulse-peak
     seed knew nothing about it: on the plan's own case the drift ceiling is
-    ``Q_window / (PW . f . T) = 767.2735903959687`` uA against a peak-only seed of
+    ``Q_window / (PW . f . T) = 767.2735903959687`` uA (floored onto the check's own
+    boundary: 767.2735903959689) against a peak-only seed of
     ``99745.56675147594`` uA -- a factor of ``f . T = 130``, 8.7e17 ulps, against a
     4-float budget, so ``floor_to_pass`` would have raised on every monophasic protocol.
     Landing the seed first was measured to be no better: 160 of 160 monophasic
@@ -843,7 +844,8 @@ def _water_window_seed_uA(
     ``net_dc_current_per_uA`` the net DC the waveform carries per microamp of leading
     amplitude, ``frac * pulse_width_s * frequency_hz``. Verified against the plan's own
     constants: ``0.6 V * 250 uF/cm^2 * 0.05984734 cm^2 = 8.9771 uC``, which at 35.1 uA is
-    ``0.25576 s``, and ``8.9771 / (90e-6 * 130 * 1) = 767.2735903959687`` uA against a
+    ``0.25576 s``, and ``8.9771 / (90e-6 * 130 * 1) = 767.2735903959687`` uA -- the seed,
+    which ``floor_to_pass`` settles two ulps up at 767.2735903959689 -- against a
     peak-only 99745.56675147594 -- a factor of ``f * T = 130``, 8.7e17 ulps, against a
     four-float budget.
 

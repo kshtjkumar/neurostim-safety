@@ -625,6 +625,9 @@ class TestDcDriftOutOfTheWaterWindow:
     BAND = ("PtIr", 1270.0, 1500.0)
     PLAN_CASE_DRIFT_TIME_S = 0.2557578634653229
     PLAN_CASE_DRIFT_CEILING_uA = 767.2735903959687
+    """The closed-form drift inverse -- the seed. Two ulps below the reported ceiling."""
+    PLAN_CASE_FLOORED_CEILING_uA = 767.2735903959689
+    """The ceiling the package reports: the seed walked onto its predicate's boundary."""
     PLAN_CASE_PEAK_CEILING_uA = 99745.56675147594
 
     def _band(self):
@@ -727,7 +730,11 @@ class TestDcDriftOutOfTheWaterWindow:
         assert search.seed_uA == pytest.approx(min(peak_inverse, drift_inverse), rel=1e-12)
 
     def test_the_monophasic_water_window_ceiling_is_the_drift_boundary(self) -> None:
-        """Section 6's C2.3 row: 99745.56675147594 -> 767.2735903959687 uA.
+        """Section 6's C2.3 row: 99745.56675147594 -> 767.2735903959689 uA.
+
+        767.2735903959687 is the closed form, which floors two ulps up onto the boundary of
+        the check's own comparison. Section 6 booked the closed form (ledger 106(e)); the
+        ceiling is asserted here to the bit.
 
         Not tautological: the expected ceiling is the closed form written above, and it is
         then re-fed to the check's own forward comparison and to that value's IEEE
@@ -742,6 +749,7 @@ class TestDcDriftOutOfTheWaterWindow:
         ceiling = _check(calc, "Water window").ceiling_uA
 
         assert ceiling == pytest.approx(self.PLAN_CASE_DRIFT_CEILING_uA, rel=1e-9)
+        assert ceiling == self.PLAN_CASE_FLOORED_CEILING_uA
         search = _water_window_search(
             calc.assess().water_window, calc.p, electrode.area_cm2
         )
