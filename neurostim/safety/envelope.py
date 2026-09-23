@@ -36,6 +36,27 @@ It does not invent a derating factor; no source in this package's bibliography s
 one. It quantifies the excursion, labels its direction, and lets the assessment refuse
 to report an unqualified PASS outside the envelope. Turning "we are 2.6x outside the
 data" into a number is the honest available action.
+
+Why there is no pulse-duty excursion
+------------------------------------
+There used to be one, comparing the protocol's *intra-pulse* current-flowing fraction --
+a few per cent for anything pulsed -- against McCreery et al. (2010)'s **train** on/off
+schedule. Those are different quantities, and the comparison made the inside-PASS branch
+below unreachable for every pulsed protocol: McCreery's own fit conditions, 400 us at
+50 Hz for 7 h, reported a duty fold of 25 and ``inside = False`` (ledger 6, 67(a)).
+
+It is deleted rather than rescaled, and the reason is arithmetic rather than taste. For a
+symmetric biphasic pulse ``duty = 2 * PW * f * 1e-6``, so ``duty_fold`` is *identically*
+``pw_fold * freq_fold`` -- the product of two excursions already reported above, each with
+its own sourced direction. Verified: 100 us at 200 Hz is fourfold outside on both real axes
+and gives a duty fold of exactly 1.000, while 600 us at 75 Hz is inside on both and gives
+2.250, which would have manufactured a Shannon CAUTION from two parameters no source here
+objects to. No source in this bibliography gives the pulse duty an independent basis.
+
+What replaces it is ``StimProtocol.train_duty_cycle`` and the excursion below, which is the
+comparison McCreery's experiment actually supports. At its default of 1.0 -- a continuous
+train, which is what McCreery's 100 % duty arm ran -- the fold is exactly 1.0, so
+``inside`` stays reachable.
 """
 
 from __future__ import annotations
@@ -248,14 +269,19 @@ def evaluate(protocol: StimProtocol, area_cm2: float | None = None) -> EnvelopeR
             )
         )
 
+    # The TRAIN schedule, not the intra-pulse current-flowing fraction. See the module
+    # docstring: the two are different quantities and only this one is what McCreery
+    # et al. (2010) varied.
     excursions.append(
         Excursion(
-            parameter="duty cycle",
-            value=protocol.duty_cycle * 100.0,
+            parameter="train duty cycle",
+            value=protocol.train_duty_cycle * 100.0,
             reference=100.0,
             units="%",
-            direction="conservative" if protocol.duty_cycle < 0.95 else "inside",
-            rationale=mccreery2010.duty_cycle_note(protocol.duty_cycle),
+            direction=(
+                "conservative" if protocol.train_duty_cycle < 0.95 else "inside"
+            ),
+            rationale=mccreery2010.duty_cycle_note(protocol.train_duty_cycle),
         )
     )
 

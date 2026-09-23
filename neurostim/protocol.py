@@ -37,6 +37,15 @@ two answers depending on how they were entered -- which is what happened to the 
 ``k`` box (``tests/test_gui.py::TestDefaultsMatchTheLibrary``).
 """
 
+DEFAULT_TRAIN_DUTY_CYCLE = 1.0
+"""A continuous train: the schedule McCreery et al. (2010) ran their 100 % duty arm at.
+
+Named for the same reason as :data:`DEFAULT_CHARGE_RECOVERY_RATIO`, and load bearing for a
+second: at this value the train-duty excursion's fold is exactly 1.0 and the validated
+envelope's inside-PASS branch stays reachable. A default that produced any other fold would
+leave that branch dead in a new way (ledger 6, 67(a)).
+"""
+
 CHARGE_BALANCE_REL_TOLERANCE = 1e-12
 """Fraction of the phase charge that may go unrecovered and still count as balanced.
 
@@ -100,6 +109,22 @@ class StimProtocol:
         ``return_phase_ratio=0.25, charge_recovery_ratio=0.9`` gets a quarter-width
         return phase at 3.6x the leading amplitude -- which is 90 % of the *charge*, and
         would have been a surprise under an "amplitude ratio" spelling (fix plan D6).
+    train_duty_cycle:
+        Fraction of wall-clock time the train is running, as an on/off schedule. ``1.0``
+        (default) is continuous.
+
+        **Not** :attr:`duty_cycle`, and the distinction is the whole of ledger 6. That one
+        is the fraction of each *period* during which current flows -- a few per cent for
+        any pulsed protocol -- and it is a property of the pulse. This one is the schedule
+        McCreery et al. (2010) actually varied: one second on, one second off shrank the
+        damage radius from at least 150 um to about 60 um at identical charge per phase and
+        identical charge density. Comparing the first against the second is a category
+        error, and it made the validated-envelope check's inside-PASS branch unreachable
+        for every pulsed protocol -- McCreery's own fit protocol reported a duty fold of 25.
+
+        Governs what a duty cycle is supposed to govern: the pulse count, the mean current
+        and, through its square root, the RMS current the thermal model integrates. At the
+        ``1.0`` default every one of those is unchanged.
     """
 
     current_uA: float
@@ -111,6 +136,7 @@ class StimProtocol:
     anodic_first: bool = False
     return_phase_ratio: float = 1.0
     charge_recovery_ratio: float = DEFAULT_CHARGE_RECOVERY_RATIO
+    train_duty_cycle: float = DEFAULT_TRAIN_DUTY_CYCLE
 
     def __post_init__(self) -> None:
         for name in ("current_uA", "pulse_width_us", "frequency_hz"):
@@ -145,6 +171,14 @@ class StimProtocol:
             raise ValueError(
                 f"charge_recovery_ratio must be finite and >= 0, "
                 f"got {self.charge_recovery_ratio!r}"
+            )
+        if (
+            not math.isfinite(self.train_duty_cycle)
+            or not 0.0 < self.train_duty_cycle <= 1.0
+        ):
+            raise ValueError(
+                f"train_duty_cycle must be finite and in (0, 1], "
+                f"got {self.train_duty_cycle!r}"
             )
         if self.active_duration_us > self.period_us:
             raise ValueError(
@@ -210,10 +244,15 @@ class StimProtocol:
 
     @property
     def n_pulses(self) -> float:
-        """Number of pulses in one train; ``inf`` for continuous stimulation."""
+        """Number of pulses delivered in one train; ``inf`` for continuous stimulation.
+
+        Scaled by :attr:`train_duty_cycle`: a train that runs half the wall-clock time
+        delivers half the pulses over the same span, and total pulse count is a reported
+        damage factor.
+        """
         if math.isinf(self.train_duration_s):
             return math.inf
-        return self.train_duration_s * self.frequency_hz
+        return self.train_duration_s * self.frequency_hz * self.train_duty_cycle
 
     # --- charge ---------------------------------------------------------------
 
@@ -301,7 +340,7 @@ class StimProtocol:
         than to peak pulse amplitude.
         """
         charge_moved = self.charge_per_phase_uC + self.return_charge_uC
-        return charge_moved * self.frequency_hz
+        return charge_moved * self.frequency_hz * self.train_duty_cycle
 
     @property
     def rms_current_uA(self) -> float:
@@ -312,7 +351,9 @@ class StimProtocol:
         """
         lead = self.current_uA**2 * self.pulse_width_us
         ret = self.return_phase_current_uA**2 * self.return_phase_width_us
-        return math.sqrt((lead + ret) / self.period_us)
+        # The off part of the train contributes no current and therefore no heating, so
+        # the mean square is scaled by the duty and the RMS by its square root.
+        return math.sqrt((lead + ret) * self.train_duty_cycle / self.period_us)
 
     @property
     def leading_polarity(self) -> str:
@@ -331,7 +372,7 @@ class StimProtocol:
             f"{self.current_uA:g} uA x {self.pulse_width_us:g} us @ "
             f"{self.frequency_hz:g} Hz, train {train}",
             f"  charge/phase:   {self.charge_per_phase_uC:.4g} uC",
-            f"  duty cycle:     {self.duty_cycle * 100:.2f} %",
+            f"  duty cycle:     {self.duty_cycle * 100:.2f} % (within each period)",
             f"  RMS current:    {self.rms_current_uA:.4g} uA",
         ]
         if self.interphase_gap_us:
@@ -341,6 +382,11 @@ class StimProtocol:
                 f"  return phase:   {self.return_phase_current_uA:.4g} uA x "
                 f"{self.return_phase_width_us:g} us "
                 f"(ratio {self.return_phase_ratio:g})"
+            )
+        if self.train_duty_cycle != DEFAULT_TRAIN_DUTY_CYCLE:
+            lines.append(
+                f"  train duty:     {self.train_duty_cycle * 100:.1f} % of wall-clock "
+                f"time (on/off schedule)"
             )
         if self.charge_recovery_ratio != 1.0 and self.waveform == "biphasic":
             lines.append(

@@ -434,25 +434,38 @@ class TestValidatedEnvelope:
     """Refusing an unqualified PASS outside the conditions the fit was derived at."""
 
     def test_matched_protocol_supports_an_unqualified_pass(self):
-        """Pulse width, frequency, duration and area all match the fit conditions.
+        """Pulse width, frequency, duration, train schedule and area all match the fit.
 
-        Duty cycle is necessarily far below McCreery's continuous stimulation for any
-        realistic pulse train, but in the safer direction, so it does not block a pass.
+        This used to assert that the *intra-pulse* duty sat far below McCreery's
+        continuous stimulation "in the safer direction, so it does not block a pass" --
+        which blessed the category error in ledger 6 and kept ``inside`` dead. The train
+        schedule is the quantity McCreery varied, a continuous train is what his 100 %
+        duty arm ran, and the fit protocol is therefore wholly *inside* its own envelope
+        rather than merely unblocked by it.
         """
         from neurostim.safety import envelope
 
         result = envelope.evaluate(StimProtocol(50, 400, 50, 7 * 3600), area_cm2=0.1)
         assert result.supports_unqualified_pass
         assert not result.concerning
-        duty = next(e for e in result.excursions if e.parameter == "duty cycle")
-        assert duty.direction == "conservative"
+        assert result.inside
+        duty = next(e for e in result.excursions if e.parameter == "train duty cycle")
+        assert duty.direction == "inside"
+        assert duty.fold == pytest.approx(1.0)
 
-    def test_duty_cycle_cites_the_measured_contrast(self):
-        """McCreery 2010: 50 % duty shrank the damage radius from >=150 um to ~60 um."""
+    def test_train_duty_cycle_cites_the_measured_contrast(self):
+        """McCreery 2010: 50 % duty shrank the damage radius from >=150 um to ~60 um.
+
+        Against ``train_duty_cycle``, which is the schedule that experiment varied -- one
+        second on, one second off -- not the fraction of each period during which current
+        flows.
+        """
         from neurostim.safety import envelope
 
-        result = envelope.evaluate(StimProtocol(50, 400, 50, 3600))
-        duty = next(e for e in result.excursions if e.parameter == "duty cycle")
+        result = envelope.evaluate(
+            StimProtocol(50, 400, 50, 3600, train_duty_cycle=0.5)
+        )
+        duty = next(e for e in result.excursions if e.parameter == "train duty cycle")
         assert "60" in duty.rationale and "150" in duty.rationale
 
     def test_higher_frequency_reduces_margin(self):

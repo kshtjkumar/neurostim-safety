@@ -1331,3 +1331,258 @@ def _limit_bearing_names() -> frozenset[str]:
             "Compliance voltage",
         }
     )
+
+
+class TestTheTrainDutyCycleReplacesThePulseDuty:
+    """T14. Ledger 6 and 67(a): a category error, and the dead branch it produced.
+
+    McCreery et al. (2010) varied a **train** schedule -- one second on, one second off --
+    and measured the damage radius shrinking from at least 150 um to about 60 um at
+    identical charge per phase. The package compared that against the *intra-pulse*
+    current-flowing fraction, which for any pulsed protocol is a few per cent. McCreery's
+    own fit protocol, 400 us at 50 Hz for 7 h, therefore reported a duty fold of 25 and
+    ``inside = False``: the envelope's inside-PASS branch was unreachable for every pulsed
+    protocol in a 300 000-protocol sweep, while a passing test certified it.
+
+    **The pulse-duty excursion is deleted rather than rescaled**, and the reason is
+    arithmetic. For a symmetric biphasic pulse ``duty = 2 * PW * f * 1e-6``, so
+    ``duty_fold`` is identically ``pw_fold * freq_fold`` -- the product of two excursions
+    already reported with their own sourced directions. Verified: 100 us at 200 Hz is 4x
+    outside on both real axes and gives a duty fold of exactly 1.000, while 600 us at 75 Hz
+    is inside on both and gives 2.250, which would have fabricated a Shannon CAUTION out of
+    two parameters the sources do not object to.
+
+    ``train_duty_cycle`` is the quantity McCreery actually varied, and it is wired into the
+    three models that claim to consume it rather than read only by the citation string.
+
+    Fixture rule: every duty used here differs from the 1.0 default, and the default's own
+    behaviour is pinned separately as an absence.
+    """
+
+    FIT_PROTOCOL = (50.0, 400.0, 50.0, 7 * 3600.0)
+    """McCreery's own conditions: the protocol the Shannon fit was derived at."""
+
+    def _excursions(self, protocol: StimProtocol, area_cm2: float | None = None):
+        from neurostim.safety import envelope
+
+        return envelope.evaluate(protocol, area_cm2)
+
+    def test_the_fit_protocol_is_inside_its_own_envelope(self) -> None:
+        """The dead branch, brought back to life (ledger 67(a)).
+
+        Not tautological: the protocol is McCreery's published conditions, written out --
+        400 us, 50 Hz, 7 h, on a 0.1 cm^2 electrode inside the 0.01-0.5 cm^2 range of the
+        platinum discs the fit was derived from -- so ``inside`` is being asserted for the
+        one protocol for which it is true by construction of the source, not by
+        construction of the code.
+        """
+        result = self._excursions(StimProtocol(*self.FIT_PROTOCOL), area_cm2=0.1)
+
+        assert result.inside is True
+        assert result.outside == ()
+        assert result.supports_unqualified_pass
+
+    def test_no_excursion_compares_the_intra_pulse_duty_against_a_train_schedule(
+        self,
+    ) -> None:
+        """The deletion, pinned as an absence -- a re-referenced excursion fails here.
+
+        Not tautological: the first clause could be satisfied by any repair; only the
+        absence assertion distinguishes deleting the excursion from rescaling it, and the
+        identity below shows why rescaling is not available. ``duty_fold`` for a symmetric
+        biphasic pulse is exactly ``pw_fold * freq_fold``, recomputed here from the
+        protocol's own inputs.
+        """
+        protocol = StimProtocol(100.0, 100.0, 200.0, 1.0)
+        result = self._excursions(protocol)
+
+        names = [e.parameter for e in result.excursions]
+        assert "duty cycle" not in names
+        assert "train duty cycle" in names
+
+        # Two separate faults, and both are why the excursion is deleted rather than
+        # repaired. The reference it compared against was 100 % -- a continuous train --
+        # where the fit protocol's own intra-pulse duty is 2 * 400 us * 50 Hz = 4 %, which
+        # is what made McCreery's own conditions read 25x outside their own envelope.
+        fit_duty = 2 * 400e-6 * 50.0
+        assert fit_duty == pytest.approx(0.04)
+        assert max(1.0 / fit_duty, fit_duty) == pytest.approx(25.0)
+
+        # And against the *right* reference the quantity is redundant: for a symmetric
+        # biphasic pulse duty = 2 * PW * f, so the fold is identically pw_fold * f_fold,
+        # both of which are already reported above with their own sourced directions.
+        pw_fold = 400.0 / 100.0
+        freq_fold = 200.0 / 50.0
+        duty_fold = protocol.duty_cycle / fit_duty
+        assert pw_fold == pytest.approx(4.0)
+        assert freq_fold == pytest.approx(4.0)
+        assert duty_fold == pytest.approx(1.0, rel=1e-12)
+        assert duty_fold == pytest.approx(
+            (100.0 / 400.0) * (200.0 / 50.0), rel=1e-12
+        )
+
+    def test_the_fabrication_case_produces_no_concerning_excursion(self) -> None:
+        """600 us at 75 Hz: inside on both real axes, 2.25x on the deleted one.
+
+        The case v1's repair would have manufactured a Shannon CAUTION from. Both
+        parameters are within the 2x tolerance the module applies to every axis, so nothing
+        here reduces margin.
+
+        Not tautological: the two folds are computed here from the protocol's inputs
+        against the module's published reference conditions, and the assertion is that
+        neither crosses the tolerance -- so a reintroduced duty excursion fails on a number
+        this test derives rather than on a name.
+        """
+        protocol = StimProtocol(50.0, 600.0, 75.0, 3600.0)
+        result = self._excursions(protocol)
+
+        pulse_width_fold = protocol.pulse_width_us / 400.0
+        frequency_fold = protocol.frequency_hz / 50.0
+        assert pulse_width_fold == pytest.approx(1.5, rel=1e-12)
+        assert frequency_fold == pytest.approx(1.5, rel=1e-12)
+        # The fold a reintroduced pulse-duty excursion would report: 1.5 * 1.5 = 2.25,
+        # over the 2x tolerance, so it alone would have produced the CAUTION.
+        assert pulse_width_fold * frequency_fold == pytest.approx(2.25, rel=1e-12)
+        assert protocol.duty_cycle / (2 * 400e-6 * 50.0) == pytest.approx(
+            2.25, rel=1e-12
+        )
+        assert result.concerning == ()
+        assert result.supports_unqualified_pass
+
+    def test_the_train_duty_excursion_cites_the_measurement_it_comes_from(self) -> None:
+        """McCreery's contrast is 150 um against 60 um; the note must carry both.
+
+        Not tautological: the two radii are the source's own numbers and are asserted to
+        appear in the rationale, which is the only thing that distinguishes a sourced
+        excursion from an invented one. The direction is asserted separately, because a
+        lower train duty is the *safer* direction and must not read as a concern.
+        """
+        result = self._excursions(
+            StimProtocol(50.0, 400.0, 50.0, 3600.0, train_duty_cycle=0.5)
+        )
+        excursion = next(
+            e for e in result.excursions if e.parameter == "train duty cycle"
+        )
+
+        assert excursion.value == pytest.approx(50.0)
+        assert excursion.reference == pytest.approx(100.0)
+        assert excursion.direction == "conservative"
+        assert "60" in excursion.rationale and "150" in excursion.rationale
+        assert not excursion.concerning
+
+    def test_the_default_train_duty_keeps_the_envelope_reachable(self) -> None:
+        """A continuous train is McCreery's own condition, so the fold is exactly 1.
+
+        Not tautological: the assertion is that a *default* protocol produces an excursion
+        whose fold is 1.0 and whose direction is ``inside``, which is what keeps
+        ``EnvelopeResult.inside`` reachable at all. A default that produced any other fold
+        would leave the branch dead in a new way.
+        """
+        result = self._excursions(StimProtocol(*self.FIT_PROTOCOL))
+        excursion = next(
+            e for e in result.excursions if e.parameter == "train duty cycle"
+        )
+
+        assert excursion.value == pytest.approx(100.0)
+        assert excursion.fold == pytest.approx(1.0)
+        assert excursion.direction == "inside"
+        assert not excursion.outside
+
+    def test_the_train_duty_is_wired_into_the_models_that_claim_to_consume_it(
+        self,
+    ) -> None:
+        """Physics M7: a field only the citation string reads is a new silent failure.
+
+        ``StimProtocol``'s own docstring says duty cycle "governs average power
+        dissipation, which is what the thermal model integrates". Three quantities feed
+        that, and each scales differently: the pulse count linearly, the mean current
+        linearly, and the RMS current as the square root, because heating goes as the
+        square of the current and the off time contributes none.
+
+        Not tautological: every expected value is the same quantity read from the
+        ``train_duty_cycle = 1.0`` protocol and scaled by the factor written here, so the
+        assertion is about the *scaling law* rather than about any absolute number the
+        package computes.
+        """
+        full = StimProtocol(80.0, 200.0, 130.0, 10.0)
+        half = StimProtocol(80.0, 200.0, 130.0, 10.0, train_duty_cycle=0.5)
+
+        assert half.n_pulses == pytest.approx(0.5 * full.n_pulses, rel=1e-12)
+        assert half.average_current_uA == pytest.approx(
+            0.5 * full.average_current_uA, rel=1e-12
+        )
+        assert half.rms_current_uA == pytest.approx(
+            full.rms_current_uA / math.sqrt(2.0), rel=1e-12
+        )
+        assert half.total_charge_per_train_uC == pytest.approx(
+            0.5 * full.total_charge_per_train_uC, rel=1e-12
+        )
+
+    def test_a_train_duty_outside_its_domain_is_rejected(self) -> None:
+        """A fraction of time is in (0, 1]; zero would be no stimulation at all.
+
+        Not tautological: the assertion is on the exception type and on the parameter name
+        in the message, which no arithmetic supplies.
+        """
+        for bad in (0.0, -0.1, 1.5, float("nan"), float("inf")):
+            with pytest.raises(ValueError, match="train_duty_cycle"):
+                StimProtocol(80.0, 200.0, 130.0, 1.0, train_duty_cycle=bad)
+
+    def test_the_intra_pulse_duty_is_still_reported_and_unchanged(self) -> None:
+        """Section 6: ``report()["duty_cycle"]`` does not move (0.052).
+
+        The intra-pulse duty is a real quantity -- the fraction of time current flows --
+        and it is still what the protocol summary and the PDF print. What changed is only
+        that no source is asked a question it cannot answer about it.
+
+        Not tautological: 0.052 is ``2 * 200 us * 130 Hz`` written out, and it is asserted
+        against both the protocol property and the batch dict, which are different code
+        paths.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0, train_duty_cycle=0.5),
+        )
+        expected_duty = 2 * calc.p.pulse_width_us * 1e-6 * calc.p.frequency_hz
+        assert expected_duty == pytest.approx(0.052, rel=1e-12)
+        assert calc.p.duty_cycle == pytest.approx(0.052, rel=1e-12)
+        assert calc.report()["duty_cycle"] == pytest.approx(0.052, rel=1e-12)
+
+    def test_the_new_field_reaches_the_serialised_protocol(self) -> None:
+        """Section 6 books the protocol block growing; this is the second of its two keys.
+
+        Not tautological: the assertion is against a JSON document and a dataclass dict,
+        and the expected value is the constructor argument, which neither derives.
+        """
+        import json
+
+        from neurostim.io.tabular import protocol_from_dict, report_to_json
+
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0, train_duty_cycle=0.25),
+        )
+        assert asdict(calc.p)["train_duty_cycle"] == 0.25
+        payload = json.loads(report_to_json(calc))
+        assert payload["protocol"]["train_duty_cycle"] == 0.25
+        assert set(payload["protocol"]) == {
+            "current_uA",
+            "pulse_width_us",
+            "frequency_hz",
+            "train_duration_s",
+            "waveform",
+            "interphase_gap_us",
+            "anodic_first",
+            "return_phase_ratio",
+            "charge_recovery_ratio",
+            "train_duty_cycle",
+        }
+        assert protocol_from_dict(
+            {
+                "current_uA": 80.0,
+                "pulse_width_us": 200.0,
+                "frequency_hz": 130.0,
+                "train_duration_s": 1.0,
+                "train_duty_cycle": 0.25,
+            }
+        ).train_duty_cycle == 0.25
