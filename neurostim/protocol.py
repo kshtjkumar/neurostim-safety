@@ -49,9 +49,11 @@ leave that branch dead in a new way (ledger 6, 67(a)).
 CHARGE_BALANCE_REL_TOLERANCE = 1e-12
 """Fraction of the phase charge that may go unrecovered and still count as balanced.
 
-A float-rounding window, deliberately, and not a safety threshold: it exists so that a
-protocol whose two phases are the same product in a different association reads as
-balanced. The safety question -- whether a given imbalance matters -- is answered by the
+A float-rounding window, deliberately, and not a safety threshold. It was written so that
+a protocol whose two phases are the same product in a different association reads as
+balanced. Since ledger 103 the residue is one product, exactly zero at full recovery, so
+the window now only decides how close to 1 a recovery ratio must be to count as full;
+Charge balance and the drift clause read the same test. The safety question -- whether a given imbalance matters -- is answered by the
 DC-drift model on the water-window check, which has the electrode area, the interfacial
 capacitance and the train duration that question needs. Twelve orders of magnitude is far
 below any imbalance a driver produces and far above the handful of ulps an exact
@@ -283,6 +285,17 @@ class StimProtocol:
         """
         return self.net_charge_at_uA(self.current_uA)
 
+    @property
+    def recovered_fraction(self) -> float:
+        """Fraction of the leading phase's charge the return phase recovers.
+
+        :attr:`charge_recovery_ratio` for a biphasic pulse, ``0.0`` for a monophasic one,
+        which has no return phase whatever that field says.
+        """
+        if self.waveform == "monophasic":
+            return 0.0
+        return self.charge_recovery_ratio
+
     def net_charge_at_uA(self, current_uA: float) -> float:
         """Unrecovered charge per pulse at a given leading amplitude.
 
@@ -291,10 +304,19 @@ class StimProtocol:
         predicate has to ask what this waveform leaves behind at an amplitude the
         protocol was never configured at. One expression, so the reported DC and the
         one the ceiling inverts cannot drift apart.
+
+        **One product, never a difference** (ledger 103, 104). The return phase moves
+        ``(I * r_a / r) * (W * r)``, which is ``I * W * r_a`` in exact arithmetic, so the
+        residue is ``charge_uC(I, W) * (1 - r_a)``. It used to be computed as the two
+        charges subtracted, two products in different associations. A balanced pulse with
+        ``r != 1`` then left a few ulps behind, which the drift clause read as DC: it crashed
+        ``assess()``, FAILed Water window beside a Charge balance PASS, and reported a limit
+        above amplitudes that FAIL. A partial recovery's residue carried noise of relative
+        size ``eps / (1 - r_a)``, so the drift clause flickered across consecutive floats and
+        ``floor_to_pass`` raised. This form is exactly zero at ``r_a = 1`` and a fixed
+        multiple of a monotone product otherwise, so it is exactly monotone in ``I``.
         """
-        return charge_uC(current_uA, self.pulse_width_us) - charge_uC(
-            self.return_phase_current_at_uA(current_uA), self.return_phase_width_us
-        )
+        return charge_uC(current_uA, self.pulse_width_us) * (1.0 - self.recovered_fraction)
 
     def net_dc_current_at_uA(self, current_uA: float) -> float:
         """Time-averaged unrecovered current at a given leading amplitude."""
@@ -312,10 +334,13 @@ class StimProtocol:
         unbalanced; at nanoampere amplitudes the same window hides an imbalance of order
         one. The quantity that matters is the fraction of the injected charge left
         behind, so that is what the tolerance is expressed in.
+
+        Compared on the fraction itself, ``1 - r_a``, not on a charge rounded at this
+        amplitude. The two are equal in exact arithmetic. The rounded form let the verdict
+        move with amplitude for ``r_a`` within ~1e-12 of 1 (ledger 112), and Charge balance's
+        verdict must not move with amplitude at all.
         """
-        return abs(self.net_charge_per_pulse_uC) <= (
-            CHARGE_BALANCE_REL_TOLERANCE * self.charge_per_phase_uC
-        )
+        return abs(1.0 - self.recovered_fraction) <= CHARGE_BALANCE_REL_TOLERANCE
 
     @property
     def net_dc_current_uA(self) -> float:

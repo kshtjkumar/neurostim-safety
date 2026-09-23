@@ -1785,3 +1785,196 @@ class TestTheRefusalContractHoldsInBothDirections:
             continuous, names=oracles.LIMIT_BEARING
         ) == ("Water window",)
         assert continuous.assess().limiting_current_uA is None
+
+
+class TestTheUnrecoveredChargeIsExactlyLinear:
+    """Ledger 103, 104 and 112 (Phase 2 review F1, F2, F10): one expression for the residue.
+
+    The unrecovered charge was ``charge_uC(I, W) - charge_uC(I * r_a / r, W * r)``: two
+    products in different associations, subtracted. For a *balanced* asymmetric pulse that
+    left a few ulps of residue, which the drift clause read as DC. It crashed ``assess()``
+    with a ``ZeroDivisionError``, FAILed Water window beside a Charge balance PASS, and
+    reported a limit above amplitudes that FAIL. For a partial recovery the residue's noise
+    made the drift clause flicker across consecutive floats, so ``floor_to_pass`` raised.
+    It is now ``charge_uC(I, W) * (1 - r_a)``: exactly zero at ``r_a = 1``, and exactly
+    monotone in ``I``.
+    """
+
+    @staticmethod
+    def _balanced_asymmetric():
+        """The reviewer's residual-net population. Every protocol here is balanced."""
+        amplitudes = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 10.0, 20.0, 33.0, 100.0, 393.0,
+                      1000.0, 2222.0)
+        for ratio, width, current, train in itertools.product(
+            (0.3, 0.7, 3.0), (50.0, 90.0, 200.0), amplitudes, (1.0, 3600.0, math.inf)
+        ):
+            if width * (1.0 + ratio) >= 1e6 / 50.0:
+                continue
+            yield SafetyCalculator(
+                DiscElectrode(500.0, "Pt"),
+                StimProtocol(current, width, 50.0, train, return_phase_ratio=ratio),
+            )
+
+    def test_a_balanced_pulse_leaves_exactly_nothing_behind(self) -> None:
+        """Not tautological: the expected residue is the literal 0.0, and the premise --
+        these are the ratios whose subtraction left a residue -- is the reviewer's measured
+        population, not a property of the new expression."""
+        count = 0
+        for calc in self._balanced_asymmetric():
+            p = calc.p
+            assert p.net_charge_per_pulse_uC == 0.0, (p.current_uA, p.return_phase_ratio)
+            assert p.net_dc_current_uA == 0.0
+            assert p.is_charge_balanced
+            count += 1
+        assert count == 3 * 3 * 14 * 3
+
+    def test_a_balanced_pulse_never_drifts_or_crashes(self) -> None:
+        """No ZeroDivisionError, and no Water window FAIL that Charge balance contradicts.
+
+        Not tautological: before the fix 140 finite-train cases of this shape raised and
+        74 infinite-train cases FAILed on drift beside a Charge balance PASS.
+        """
+        for calc in self._balanced_asymmetric():
+            assessment = calc.assess()
+            window = next(c for c in assessment.checks if c.name == "Water window")
+            balance = next(c for c in assessment.checks if c.name == "Charge balance")
+            drift = assessment.water_window.drift
+            assert drift is None or not drift.drifts, (calc.p, drift)
+            assert "net DC" not in window.summary, window.summary
+            assert balance.status is Status.PASS
+
+    def test_the_reported_limit_is_the_independent_bisection_of_the_failing_set(self) -> None:
+        """The D3 contract on the reviewer's own cases: no reported limit sits above an
+        amplitude that FAILs.
+
+        Not tautological: the expected value is ``oracles.fail_ceiling_uA``, a bisection over
+        ``assess().failed`` that reads one bit per probe and raises
+        ``NonMonotonePredicate`` on the flicker this fix removes.
+        """
+        import oracles
+
+        for current, train in ((5.0, math.inf), (7.0, math.inf), (7.0, 3600.0), (7.0, 1.0)):
+            calc = SafetyCalculator(
+                DiscElectrode(500.0, "Pt"),
+                StimProtocol(current, 90.0, 50.0, train, return_phase_ratio=0.3),
+            )
+            assessment = calc.assess()
+            expected = oracles.fail_ceiling_uA(calc, names=oracles.LIMIT_BEARING)
+            assert assessment.limit_bearing_ceiling_uA == pytest.approx(expected, rel=1e-9)
+            assert not assessment.failed, [c.name for c in assessment.failed]
+
+    @staticmethod
+    def _partial_recovery():
+        """The r_a population the review asked for, over ordinary geometries."""
+        from neurostim.materials import MATERIALS
+
+        for material, diameter, width, recovery, train, current in itertools.product(
+            sorted(MATERIALS),
+            (40.0, 100.0, 500.0, 2000.0),
+            (50.0, 200.0),
+            (0.9, 0.95, 0.99, 0.999, 1.0 - 1e-6),
+            (1.0, 60.0, 3600.0),
+            (10.0, 500.0),
+        ):
+            yield SafetyCalculator(
+                DiscElectrode(diameter, material),
+                StimProtocol(current, width, 130.0, train, charge_recovery_ratio=recovery),
+            )
+
+    def test_partial_recovery_assesses_everywhere(self) -> None:
+        """Zero raises over 2160 partial-recovery protocols, each water-window ceiling on
+        its own boundary.
+
+        Not tautological: before the fix ``DiscElectrode(500, "Pt")`` at 10 uA, 50 us,
+        130 Hz, 1 s, r_a = 0.99 raised ``LimitDidNotSettle``, and so did 576 of the
+        reviewer's 16 200. The boundary is checked by rebuilding the protocol at the ceiling
+        and at the next float up, which is IEEE's definition and not the package's.
+        """
+        from oracles.fail_ceiling import rebuild_at
+
+        count = 0
+        for calc in self._partial_recovery():
+            assessment = calc.assess()
+            window = next(c for c in assessment.checks if c.name == "Water window")
+            ceiling = window.ceiling_uA
+            if 0.0 < ceiling < math.inf and window.status is not Status.NOT_EVALUATED:
+                at = rebuild_at(calc, ceiling).assess()
+                above = rebuild_at(calc, math.nextafter(ceiling, math.inf)).assess()
+                assert "Water window" not in {c.name for c in at.failed}, calc.p
+                assert "Water window" in {c.name for c in above.failed}, calc.p
+            count += 1
+        assert count == 9 * 4 * 2 * 5 * 3 * 2
+
+    def test_partial_recovery_agrees_with_the_independent_bisection(self) -> None:
+        """A sample of the population above against ``fail_ceiling_uA``.
+
+        Not tautological: see the balanced-pulse bisection test; the sample is every
+        fiftieth protocol, so each recovery ratio, train and size is represented.
+        """
+        import oracles
+
+        for calc in list(self._partial_recovery())[::50]:
+            expected = oracles.fail_ceiling_uA(calc, names=oracles.LIMIT_BEARING)
+            assert calc.assess().limit_bearing_ceiling_uA == pytest.approx(
+                expected, rel=1e-9
+            ), calc.p
+
+    def test_the_balance_verdict_does_not_move_with_amplitude_at_its_tolerance(self) -> None:
+        """Ledger 112 (F10): within ~1e-12 of full recovery the verdict used to flip with
+        amplitude, because a rounded difference was compared against a tolerance scaled by
+        the charge.
+
+        Not tautological: the premise, a recovery ratio at the tolerance edge, is written
+        out, and the assertion is that one verdict holds across eighteen decades.
+        """
+        for recovery in (1.0 - 2e-12, 1.0 - 1e-12, 1.0 - 5e-13, 1.0 + 5e-13, 1.0 + 1e-12):
+            for ratio in (0.3, 1.0, 3.0):
+                verdicts = {
+                    StimProtocol(
+                        10.0**e, 50.0, 50.0, 1.0,
+                        return_phase_ratio=ratio, charge_recovery_ratio=recovery,
+                    ).is_charge_balanced
+                    for e in range(-12, 7)
+                }
+                assert len(verdicts) == 1, (recovery, ratio, verdicts)
+
+    def test_drift_and_charge_balance_read_the_same_test(self) -> None:
+        """A recovery inside the balance tolerance is balanced for both checks.
+
+        Not tautological: at ``r_a = 1 - 5e-13`` the residue is a real non-zero product, so
+        only the shared gate keeps the drift clause from reading it as DC while Charge
+        balance prints PASS -- the disagreement ledger 103 records.
+        """
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=1.0 - 5e-13),
+        )
+        assert calc.p.net_charge_per_pulse_uC != 0.0  # the premise
+        assessment = calc.assess()
+        balance = next(c for c in assessment.checks if c.name == "Charge balance")
+        assert balance.status is Status.PASS
+        assert not assessment.water_window.drift.drifts
+        assert assessment.limiting_current_uA is not None
+
+    def test_the_seed_refuses_a_drift_it_cannot_invert(self) -> None:
+        """The nan route: a drifting result whose protocol carries no DC per microamp.
+
+        ``min([peak, nan])`` returned the peak term silently. A drift the seed cannot
+        invert is now an error naming the check, not a number.
+
+        Not tautological: the drift and the protocol are made to disagree on purpose here,
+        which no assessment produces after this fix; the assertion is that the seed does not
+        answer.
+        """
+        from dataclasses import replace
+
+        from neurostim.safety import assessment as assessment_mod
+
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9),
+        )
+        result = calc.assess().water_window
+        balanced = replace(calc.p, charge_recovery_ratio=1.0)
+        with pytest.raises(ArithmeticError, match="Water window"):
+            assessment_mod._water_window_seed_uA(result, balanced, calc.e.area_cm2)

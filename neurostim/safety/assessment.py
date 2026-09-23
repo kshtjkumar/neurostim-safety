@@ -41,7 +41,7 @@ from . import current_density as jd_mod
 from . import envelope as envelope_mod
 from . import shannon as shannon_mod
 from . import water_window as ww_mod
-from ._limits import floor_to_pass, format_limit
+from ._limits import LimitDidNotSettle, floor_to_pass, format_limit
 from .shannon import K_BOUNDS
 
 CAUTION_MARGIN = 2.0
@@ -849,7 +849,15 @@ def _water_window_seed_uA(
 
     Both clauses are individually monotone-decreasing in current -- a larger amplitude
     means a larger excursion and a shorter time to the edge -- so their conjunction is too
-    and ``floor_to_pass``'s precondition holds.
+    and ``floor_to_pass``'s precondition holds. That is true in floats as well as in exact
+    arithmetic only because the unrecovered charge is one product, ``charge_uC(I, W) *
+    (1 - r_a)`` (``StimProtocol.net_charge_at_uA``). As a difference of two products it
+    was not: its rounding noise flickered the drift clause across consecutive floats and
+    this docstring's claim was false (ledger 104).
+
+    A drift this function cannot invert -- a result that says the waveform drifts while
+    the protocol carries no DC per microamp -- raises. It used to become ``nan``, and
+    ``min()`` silently discarded it (ledger 103).
     """
     seed_density = ww_mod.max_charge_density_in_window_uC_cm2(
         result.material_key,
@@ -863,6 +871,12 @@ def _water_window_seed_uA(
     drift = result.drift
     if drift is not None and drift.drifts:
         dc_per_uA = abs(protocol.net_dc_current_at_uA(1.0))
+        if not dc_per_uA > 0.0:
+            raise LimitDidNotSettle(
+                f"Water window: the result drifts at {drift.net_dc_current_uA!r} uA of net "
+                f"DC, but the protocol carries {dc_per_uA!r} uA of DC per microamp of "
+                f"leading amplitude, so the drift clause has no inverse to seed from."
+            )
         terms.append(
             drift.window_charge_uC / (dc_per_uA * protocol.train_duration_s)
         )
@@ -1782,8 +1796,12 @@ class SafetyCalculator:
             capacitance_uF_cm2=self.capacitance_uF_cm2,
             anodic_first_for_capacitance=self.p.anodic_first,
             # The three facts the DC-drift clause needs, and the only three: the offset,
-            # the area it charges and how long it is applied for.
-            net_dc_current_uA=self.p.net_dc_current_uA,
+            # the area it charges and how long it is applied for. Zero whenever Charge
+            # balance calls the waveform balanced, so the two checks read one test and
+            # cannot disagree about the same pulse (ledger 103).
+            net_dc_current_uA=(
+                0.0 if self.p.is_charge_balanced else self.p.net_dc_current_uA
+            ),
             area_cm2=self.e.area_cm2,
             train_duration_s=self.p.train_duration_s,
         )
