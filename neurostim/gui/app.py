@@ -55,7 +55,7 @@ from ..geometry import (
     SphericalElectrode,
 )
 from ..materials import Policy, list_materials
-from ..protocol import StimProtocol, Waveform
+from ..protocol import DEFAULT_CHARGE_RECOVERY_RATIO, StimProtocol, Waveform
 from ..safety import SafetyCalculator, shannon
 from ..safety._limits import format_limit
 from ..safety.assessment import SafetyAssessment, Status
@@ -205,12 +205,20 @@ class SafetyWindow(QMainWindow):
         self.waveform.addItems(["biphasic", "monophasic"])
         self.anodic_first = QCheckBox("Anodic first")
         self.interphase = _spin(0.0, 1e5, 0.0)
+        # Taken from the dataclass field, never typed as a literal beside it: the GUI is a
+        # second declaration of the protocol, and a default that drifts from the library's
+        # gives the same inputs two answers depending on how they were entered. The
+        # Shannon k box did exactly that once.
+        self.charge_recovery = _spin(
+            0.0, 2.0, DEFAULT_CHARGE_RECOVERY_RATIO, decimals=4
+        )
         p_form.addRow("Amplitude (uA)", self.current)
         p_form.addRow("Pulse width (us)", self.pulse_width)
         p_form.addRow("Frequency (Hz)", self.frequency)
         p_form.addRow("Train duration (s)", self.train)
         p_form.addRow("Waveform", self.waveform)
         p_form.addRow("Interphase gap (us)", self.interphase)
+        p_form.addRow("Charge recovery (fraction)", self.charge_recovery)
         p_form.addRow("", self.anodic_first)
         layout.addWidget(p_box)
 
@@ -237,7 +245,8 @@ class SafetyWindow(QMainWindow):
 
         for spin in (
             self.current, self.pulse_width, self.frequency, self.train,
-            self.interphase, self.k_value, self.sigma, self.compliance,
+            self.interphase, self.charge_recovery, self.k_value, self.sigma,
+            self.compliance,
         ):
             spin.valueChanged.connect(self.recompute)
         for combo in (self.waveform, self.policy):
@@ -334,6 +343,7 @@ class SafetyWindow(QMainWindow):
             waveform=cast(Waveform, self.waveform.currentText()),
             interphase_gap_us=self.interphase.value(),
             anodic_first=self.anodic_first.isChecked(),
+            charge_recovery_ratio=self.charge_recovery.value(),
         )
         return SafetyCalculator(
             electrode,

@@ -1190,34 +1190,71 @@ def _chronic_check(material: Material, charge_density_uC_cm2: float) -> Check:
     )
 
 
-def _charge_balance_check(protocol: StimProtocol) -> Check:
-    if protocol.waveform == "monophasic":
+def _charge_balance_check(protocol: StimProtocol, area_cm2: float) -> Check:
+    """State the imbalance categorically. No ceiling, and never an amplitude.
+
+    This check bears no limit (:data:`LIMIT_BEARING`), and that is load bearing rather
+    than tidy: ``unsafe_at_any_amplitude`` is defined as a FAIL from a check whose verdict
+    cannot move with amplitude, so a verdict here that *did* move with amplitude would
+    make ledger 84's repair report the wrong thing one phase after it landed. Everything
+    said here is therefore a property of the waveform: the fraction of charge recovered,
+    the resulting DC, and its density.
+
+    **Where the consequence goes instead.** Whether a given imbalance is damaging depends
+    on the electrode area, the interfacial capacitance and how long the train runs -- and
+    at a small enough amplitude any partial recovery is harmless, which is precisely an
+    amplitude dependence. That is the DC-drift model on the water-window check, which is
+    limit-bearing and can express it as a ceiling (fix plan D6, C2.3).
+
+    So the FAIL here is reserved for a waveform that recovers *nothing*. That is not a
+    statement about the size of the DC: it is that no charge-density limit in this package
+    was measured on such a waveform (Merrill et al. 2005), so none of the other checks
+    means what it says. A biphasic pulse with ``charge_recovery_ratio = 0`` is that
+    waveform whatever the field is called, so it is judged the same way as a monophasic
+    one rather than by its spelling.
+    """
+    dc_density_A_per_cm2 = protocol.net_dc_current_uA * 1e-6 / area_cm2
+    if protocol.return_charge_uC == 0.0:
+        recovers_nothing = (
+            "monophasic waveform"
+            if protocol.waveform == "monophasic"
+            else "return phase recovers no charge"
+        )
         return Check(
             name="Charge balance",
             status=Status.FAIL,
             summary=(
-                f"monophasic waveform injects "
-                f"{protocol.net_dc_current_uA:.4g} uA net DC"
+                f"{recovers_nothing}: {protocol.net_dc_current_uA:.4g} uA net DC "
+                f"({dc_density_A_per_cm2:.4g} A/cm^2)"
             ),
             detail=(
-                "Monophasic stimulation accumulates unrecovered charge at the "
+                "A waveform that recovers no charge accumulates all of it at the "
                 "interface. Merrill et al. (2005) report significantly greater tissue "
                 "damage from monophasic than from charge-balanced biphasic pulsing at "
                 "matched charge density. No charge-density limit in this package is "
-                "validated for monophasic delivery."
+                "validated for delivery that recovers nothing, so no amplitude of this "
+                "waveform is covered by the limits reported beside it."
             ),
         )
     if not protocol.is_charge_balanced:
+        recovered = protocol.return_charge_uC / protocol.charge_per_phase_uC
         return Check(
             name="Charge balance",
-            status=Status.FAIL,
+            status=Status.CAUTION,
             summary=(
-                f"{protocol.net_charge_per_pulse_uC:.4g} uC/pulse unrecovered "
-                f"-> {protocol.net_dc_current_uA:.4g} uA DC"
+                f"{recovered * 100:.2f} % of the injected charge is recovered; "
+                f"{protocol.net_charge_per_pulse_uC:.4g} uC/pulse left "
+                f"-> {protocol.net_dc_current_uA:.4g} uA DC "
+                f"({dc_density_A_per_cm2:.4g} A/cm^2)"
             ),
             detail=(
                 "Sustained DC drives irreversible faradaic reactions and electrode "
-                "dissolution regardless of the per-phase charge density."
+                "dissolution regardless of the per-phase charge density.\n"
+                "Stated here, not judged here: how long this offset takes to drive the "
+                "interface out of its water window depends on the electrode area, the "
+                "interfacial capacitance and the train duration, and falls with "
+                "amplitude. That is an amplitude-dependent limit, so it is reported by "
+                "the water-window check, which carries one."
             ),
         )
     if protocol.interphase_gap_us > 0:
@@ -1451,7 +1488,7 @@ class SafetyCalculator:
             _current_density_check(jd_result),
             _regime_check(self.e, self.p),
             _chronic_check(self.material, charge_result.charge_density_uC_cm2),
-            _charge_balance_check(self.p),
+            _charge_balance_check(self.p, self.e.area_cm2),
             _compliance_check(compliance_result),
         )
 

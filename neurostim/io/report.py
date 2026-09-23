@@ -297,6 +297,10 @@ def build_report(
                 ("Charge per phase", f"{p.charge_per_phase_uC:.4g} &micro;C"),
                 ("Duty cycle", f"{p.duty_cycle * 100:.2f} %"),
                 ("RMS current", f"{p.rms_current_uA:.4g} &micro;A"),
+                # The recovered fraction sits next to the DC it produces: a reader
+                # looking at a non-zero "Net DC" needs the setting that caused it on the
+                # same page, not inferred from the difference of two charges.
+                ("Charge recovery", f"{p.charge_recovery_ratio * 100:.1f} %"),
                 ("Net DC", f"{p.net_dc_current_uA:.4g} &micro;A"),
             ],
             styles,

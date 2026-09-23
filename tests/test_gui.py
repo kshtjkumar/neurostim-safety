@@ -519,3 +519,59 @@ class TestReportShowsSourceCaveats:
     def test_pulse_width_is_visible_next_to_the_limit(self, text):
         """The limit is only valid at the width it was measured at; show it."""
         assert "100 us" in text
+
+
+class TestTheProtocolFormCanExpressPhase2Faults:
+    """A protocol the library can express and the window cannot is a second default.
+
+    :class:`TestDefaultsMatchTheLibrary` above exists because the Shannon ``k`` box drifted
+    away from the library constant. The same failure mode applies to a whole *field*: a
+    charge imbalance the library now models and the form cannot enter is a fault a GUI user
+    can neither reproduce nor diagnose, and the GUI is the surface most users reach first.
+
+    Fixture rule: every value set here differs from the field's own default, so a widget
+    wired to the wrong constructor argument -- or not wired at all -- changes an asserted
+    number rather than nothing.
+    """
+
+    def test_the_charge_recovery_box_opens_at_the_library_default(self, window):
+        """1.0, taken from the dataclass rather than typed as a literal beside it."""
+        from neurostim.protocol import StimProtocol
+
+        default = StimProtocol.__dataclass_fields__["charge_recovery_ratio"].default
+        assert window.charge_recovery.value() == pytest.approx(default)
+
+    def test_charge_recovery_reaches_the_protocol(self, window):
+        """Not tautological: the expected net charge is ``(1 - r_a) * I * W * 1e-6``,
+        computed here from the three boxes' own values, against a protocol the window
+        builds."""
+        window.current.setValue(80.0)
+        window.pulse_width.setValue(200.0)
+        window.charge_recovery.setValue(0.8)
+
+        protocol = window._build_calculator().p
+
+        assert protocol.charge_recovery_ratio == pytest.approx(0.8)
+        assert protocol.net_charge_per_pulse_uC == pytest.approx(
+            0.2 * 80.0 * 200.0 * 1e-6, rel=1e-12
+        )
+
+    def test_an_imbalance_is_visible_in_the_window(self, window):
+        """The headline or the detail pane must say so; a silent CAUTION is no better
+        than the dead branch it replaces.
+
+        Not tautological: the assertion is on the rendered detail text, and the status it
+        must agree with is read from the assessment the window itself computed.
+        """
+        window.charge_recovery.setValue(0.8)
+        window.recompute()
+
+        detail = window.detail.toPlainText()
+        assert "Charge balance" in detail
+        balance = next(
+            c
+            for c in window._calc.assess().checks  # type: ignore[union-attr]
+            if c.name == "Charge balance"
+        )
+        assert balance.status is Status.CAUTION
+        assert balance.summary in detail
