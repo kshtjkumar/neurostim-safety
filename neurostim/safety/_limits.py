@@ -59,10 +59,24 @@ silently returning a value from the middle of that walk would hide it.
 CLIMB_TOLERANCE = 1e-9
 """How far above a back-solved limit the true boundary may be, relative to the value.
 
-Bounds the *upward* search, where a step count does not: see
-:func:`_climb_to_boundary`. Generous against a plateau -- a few floats is ~1e-15 of the
-value -- and tight against a back-solve that does not invert its forward comparison, which
-would be wrong by a relative amount set by the physics rather than by the float grid.
+One of the two bounds on the *upward* search, where a step count does not work: see
+:func:`_climb_to_boundary`. Generous against a plateau that scales with the value -- a few
+floats is ~1e-15 of it -- and tight against a back-solve that does not invert its forward
+comparison, which would be wrong by a relative amount set by the physics rather than by
+the float grid.
+
+It is *not* sufficient on its own, because not every plateau scales with the value: see
+``plateau`` in :func:`floor_to_pass` and ``PLATEAU_ALLOWANCE``.
+"""
+
+
+PLATEAU_ALLOWANCE = 4
+"""Declared plateaus the climb may cross before the seed is treated as simply wrong.
+
+Four, for the reason ``STEP_BUDGET`` is four. The seed is built from the same quantities
+the predicate compares -- for the water window, ``edge - resting`` and a multiply and a
+divide by the same capacitance -- so each of them can displace it by its own rounding, and
+a handful of plateaus is that rounding while a thousand is a different number.
 """
 
 
@@ -84,6 +98,7 @@ def floor_to_pass(
     name: str,
     max_steps: int = STEP_BUDGET,
     rel_tolerance: float = CLIMB_TOLERANCE,
+    plateau: float = 0.0,
 ) -> float:
     """The largest float near ``value`` at which ``passes`` is still true.
 
@@ -93,7 +108,16 @@ def floor_to_pass(
     yielding a plausible number from the middle of a non-monotone band.
 
     The two directions are bounded differently and deliberately: ``max_steps`` floats
-    down, ``rel_tolerance`` of the value up. See :func:`_climb_to_boundary` for why.
+    down, a distance up. See :func:`_climb_to_boundary` for why.
+
+    ``plateau`` is the smallest change in ``value`` the predicate can resolve, in
+    ``value``'s own units, and is 0.0 for a predicate that resolves every float. Only the
+    caller knows it: it is a property of the check's arithmetic, not of the number handed
+    over. Where the predicate adds the amplitude's effect to a *constant* -- the water
+    window adds an excursion to a resting potential -- one ulp of that sum is a run of
+    consecutive amplitudes the check cannot tell apart, its width is fixed by the constant
+    rather than by the limit, and ``rel_tolerance`` alone is therefore guaranteed to be
+    exceeded once the limit is small enough. See :func:`_climb_to_boundary`.
 
     ``name`` is the check the limit belongs to, and appears in the error. Non-finite and
     non-positive values are returned unchanged: ``inf`` means "no ceiling", ``0.0`` means
@@ -118,7 +142,7 @@ def floor_to_pass(
 
     if passes(math.nextafter(settled, math.inf)):
         settled = _climb_to_boundary(
-            settled, passes, name=name, rel_tolerance=rel_tolerance
+            settled, passes, name=name, rel_tolerance=rel_tolerance, plateau=plateau
         )
     return settled
 
@@ -129,6 +153,7 @@ def _climb_to_boundary(
     *,
     name: str,
     rel_tolerance: float,
+    plateau: float = 0.0,
 ) -> float:
     """The largest float at or above ``value`` that still passes.
 
@@ -143,17 +168,28 @@ def _climb_to_boundary(
     the excursion at the boundary is 0.05 V, so the sum is two numbers of very different
     size and its ulp is an order of magnitude larger than the excursion's. A run of
     consecutive amplitudes then maps to the same peak float, all passing, and the seed
-    sits more than four floats below the top of the run. Measured: 7 of 216 valid
-    (material, resting potential, polarity, diameter) configurations, all near a window
-    edge.
+    sits more than four floats below the top of the run.
 
-    So the bound is *relative*, not a step count: an exponential bracket in ulps, then a
-    bisection. A seed further than ``rel_tolerance`` below the boundary is a wrong
-    back-solve rather than a plateau, and still raises.
+    **Why a relative bound alone cannot work.** That run's width in *current* is one ulp
+    of the sum converted back through ``C x A / PW`` -- an absolute quantity, fixed by the
+    resting potential rather than by the limit. Its width *relative to the limit* is
+    therefore proportional to ``1 / limit``, and grows without bound as the resting
+    potential approaches the window edge and the limit approaches zero. Any relative
+    tolerance is exceeded somewhere inside the accepted inputs; raising it moves the
+    headroom at which that happens and removes nothing. Measured at
+    ``rel_tolerance = 1e-9``: 4487 of 70831 edge-clustered configurations raised on inputs
+    the package accepts, and ``resting_potential_V = -0.59999999`` on a 100 um platinum
+    disc -- 1e-8 V of headroom, well inside the window -- was one of them.
+
+    So the budget is the larger of the two, and the caller supplies the second: an
+    exponential bracket in ulps out to ``max(rel_tolerance x value,
+    PLATEAU_ALLOWANCE x plateau)``, then a bisection onto the exact boundary. A seed
+    further above than *both* is a wrong back-solve rather than a plateau, and still
+    raises.
     """
     low = value
     offset = math.ulp(value)
-    budget = abs(value) * rel_tolerance
+    budget = max(abs(value) * rel_tolerance, PLATEAU_ALLOWANCE * plateau)
     while True:
         # `max` guarantees progress: `low + offset` can round back to `low`.
         high = max(low + offset, math.nextafter(low, math.inf))
@@ -163,11 +199,13 @@ def _climb_to_boundary(
         offset *= 2.0
         if offset > budget:
             raise LimitDidNotSettle(
-                f"{name}: the back-solved limit {value!r} still passes its own check "
-                f"more than {rel_tolerance:g} of its own size above it, at {low!r}. A "
-                f"plateau in the check's own arithmetic is a few floats wide; this is a "
-                f"back-solve that does not invert its forward comparison, and the "
-                f"reported limit would be materially lower than the limit."
+                f"{name}: the back-solved limit {value!r} still passes its own check at "
+                f"{low!r}, which is further above it than {budget!r} -- the larger of "
+                f"{rel_tolerance:g} of the value and {PLATEAU_ALLOWANCE} times the "
+                f"{plateau!r} the caller declared the check can resolve. Neither float "
+                f"granularity nor that plateau explains the gap, so the back-solve does "
+                f"not invert its forward comparison and the reported limit would be "
+                f"materially lower than the limit."
             )
 
     while True:

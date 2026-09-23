@@ -166,17 +166,35 @@ today's `NOT_EVALUATED` (execution M9). Closes 11, unblocks 67(c).
 **D2 — a reported limit always floors; the forward inequality stays exact. Unchanged in
 principle; the contract is completed.**
 `neurostim/safety/_limits.py` gains `floor_to_pass(value, passes)` and
-`format_limit(value, sig=4)`. The 4-ulp budget survives — I did not attempt to re-break
-what the physics review already failed to break over ~43 000 cases. **v2 additions
-(physics M2):**
+`format_limit(value, sig=4)`. **v2 additions (physics M2):**
 
 1. Every predicate handed to `floor_to_pass` must be **declared monotone-decreasing in
    current**, asserted at the returned point (`passes(v)` and not
    `passes(nextafter(v, +inf))`).
-2. Exhausting the 4-step budget **raises** a named error carrying the check, the value and
-   the step count. Returning the failing value would be a silent failure; leaving it
-   unstated is how a future non-linear check degrades quietly.
-3. `resting_potential_V` is validated against the material's window **at construction**, in
+2. **The settle budget is directional, and both halves raise a named error rather than
+   returning an unsettled value.** *Downward*, `STEP_BUDGET = 4` floats of the seed,
+   carrying the check, the value and the step count: the walk down corrects a one-ulp
+   disagreement between a back-solve and its forward comparison, and a fifth step means
+   they are not inverses (ledger 9). *Upward*, a **distance**
+   `max(CLIMB_TOLERANCE × value, PLATEAU_ALLOWANCE × plateau)` bracketed exponentially
+   in ulps and then bisected, carrying the check, the value, the point reached and the
+   budget: the walk up crosses a plateau of the check's own making, whose length says
+   nothing about the back-solve, so a step count is the wrong unit there (C1.10). v1's
+   single 4-step budget described only the first half.
+3. **`plateau` is declared by the caller, in the value's own units, and defaults to 0.0**
+   — the smallest change in the limit the predicate can resolve. A relative bound alone
+   is not sufficient and no constant makes it sufficient: where a predicate adds the
+   amplitude's effect to a *constant* (the water window adds an excursion to
+   `resting_potential_V` and compares the sum against a window edge), one ulp of that sum
+   is a run of amplitudes the check cannot tell apart, its width in current is fixed by
+   the constant rather than by the limit, and so its width *relative to the limit* grows
+   as `1/limit` without bound. Measured at `CLIMB_TOLERANCE = 1e-9` with no plateau
+   declared: **4487 of 70 831 edge-clustered configurations raised `LimitDidNotSettle` on
+   inputs C1.2 accepts**, every one of them Water window —
+   `resting_potential_V = -0.59999999` on a 100 µm Pt disc, 1e-8 V inside the window,
+   among them (ledger 88). `_water_window_ceiling_uA` converts `ulp` of the largest
+   potential in its own arithmetic back through `C·A/PW` and declares that.
+4. `resting_potential_V` is validated against the material's window **at construction**, in
    **C1.2 — the commit immediately before the floor helper**, not six commits later.
    Without it the water-window predicate is two-sided and non-monotone (False–True–False),
    and "largest float ≤ value that passes" is not the safe answer. Phase 0b measured the
@@ -184,14 +202,14 @@ what the physics review already failed to break over ~43 000 cases. **v2 additio
    resting potential and the check that un-fails is always Water window; across 630
    in-window configurations there were none. Rejecting the input is therefore sufficient to
    make the monotonicity precondition true rather than merely asserted.
-4. `charge.cic_max_current_uA` — a *second*, separate back-solve behind
+5. `charge.cic_max_current_uA` — a *second*, separate back-solve behind
    `SafetyCalculator.max_current_cic_uA`, hence behind every CSV row and the figure — is
    floored explicitly and asserted equal to `a.charge.max_current_uA` (execution M4).
-5. Render sites: `io/report.py`, `assessment.py`, `charge.py` **plus** `gui/app.py:332`
+6. Render sites: `io/report.py`, `assessment.py`, `charge.py` **plus** `gui/app.py:332`
    (`:.4g`), `viz/plots.py:211` (`:.3g`, verified output `binding limit 141 µA`) and
    `uncertainty.Interval.describe` (execution M5).
 
-Closes 9, 49.
+Closes 9, 49, 88.
 
 **D3 — the limiting current is the minimum over every check that produces a limit.**
 Core claim unchanged and independently confirmed: the worked example reports
@@ -722,6 +740,7 @@ are marked **[!]**; the three added after Phase 0 are marked **[84]**.
 |---|---|---|---|
 | C1.2 | `SafetyCalculator(..., resting_potential_V=...)` outside the material's window | silently accepted → `ValueError`. Previously-constructible calculators stop constructing, and `max_charge_density_in_window_uC_cm2('Pt', resting_potential_V=5.0)` stops returning 1400 µC/cm² "allowed" | `water_window.py` docstrings, README settings table, GUI field validation; two oracle guard tests re-pointed at a stub |
 | C1.3 | any back-solved limit at its own boundary | `100.00000000000001` → `100.0`; 12/54 combinations stop failing their own check | — |
+| C1.10 **[88]** | `limiting_current_uA` for a resting potential within ~1e-7 V of a window edge | `LimitDidNotSettle` raised out of `assess()` → a number again (`DiscElectrode(100,"Pt")`, 200 µs, `resting_potential_V = -0.59999999`, `C = 103 µF/cm²`: raise → 4.0448e-07 µA). Measured 4487 of 70 831 edge-clustered configurations raising before, 0 of 40 000 after. No committed number moves — these configurations produced no output at all | `_limits.py` and `_water_window_ceiling_uA` docstrings, D2 point 3 |
 | C1.3 | rendered limits, text and PDF | `141.4 µA` → `141.3 µA`; `472.8` → `472.7` | README transcript, PDF/JSON goldens |
 | C1.3 **[+]** | GUI headline string (`gui/app.py:332`, `:.4g`) | `141.4 uA` → `141.3 uA`, then `20.00` after C1.6 | GUI snapshot test |
 | C1.3 **[+]** | figure annotation (`viz/plots.py:211`, `:.3g`) | verified `binding limit 141 µA` → `141.3`, then `20.00` after C5.1 | `figure_summary.{svg,pdf}` |
@@ -1004,6 +1023,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 85 | MED | — (found in Phase 0) | C0.3 | **FIXED** — `datetime.now` removed from the PDF byline |
 | 86 | HIGH | — (found in Phase 0) | C0.4 | **FIXED** — transcript generated between markers from one script, gated in CI |
 | 87 | LOW | — (found in Phase 0) | C5.9 | deferred out of Phase 0 because it changes package output bytes |
+| 88 | HIGH | — (found in the Phase 1 review) | C1.10 | **FIXED** — `_climb_to_boundary`'s relative bound is joined by a caller-declared absolute `plateau` (D2 point 3); `assess()` stopped raising on the 6.3 % of edge-clustered valid inputs that used to crash |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING

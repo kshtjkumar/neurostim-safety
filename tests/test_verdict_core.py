@@ -420,6 +420,185 @@ class TestFloorToPass:
         assert math.isnan(_limits.floor_to_pass(math.nan, never, name="x"))
 
 
+class TestTheClimbIsBoundedByThePredicatesOwnResolution:
+    """A limit whose check cannot resolve single floats must still settle (fix plan D2).
+
+    ``_climb_to_boundary`` bounded the upward walk by ``CLIMB_TOLERANCE`` *of the seed*.
+    The water-window predicate compares ``resting_potential_V + excursion`` against a
+    window edge, and that sum is where its resolution is lost: with the resting potential
+    1e-8 V inside the edge, the excursion at the boundary is 1e-8 V while the sum's ulp is
+    ``ulp(0.6 V) = 1.1e-16``, so about 1e8 consecutive amplitudes map to one peak float.
+    That plateau's width is set by the sum and not by the seed, so *relative* to the seed
+    it grows as the headroom shrinks, and a relative bound is certain to be exceeded
+    somewhere inside the inputs C1.2 accepts. Measured on the Phase 1 review's
+    edge-clustered sampling: 4487 of 70831 constructed configurations raised
+    ``LimitDidNotSettle``, every one of them Water window, on inputs the package itself
+    declares valid -- ``resting_potential_V = -0.59999999`` is inside platinum's
+    ``[-0.6, +0.8]`` window, and that call returned 39.2699 uA before Phase 1.
+
+    The bound therefore has to come from the predicate's own arithmetic. Raising
+    ``CLIMB_TOLERANCE`` only moves the headroom at which the raise starts; it cannot
+    remove it, because the ratio the bound is compared against diverges as the seed
+    shrinks.
+    """
+
+    def test_a_resting_potential_just_inside_the_window_still_assesses(self):
+        """The review's reproduction, on the anodic side.
+
+        Not tautological: +0.79999999 V and platinum's stored +0.8 V anodic limit are both
+        literals, C1.2's rule accepts the first, and the expected outcome is that a number
+        exists at all -- the defect is an exception, so no arithmetic here can produce a
+        false pass.
+        """
+        import math
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0, anodic_first=True),
+            resting_potential_V=0.79999999,
+            capacitance_uF_cm2=103.0,
+        )
+
+        limit = calc.assess().limiting_current_uA
+
+        assert math.isfinite(limit)
+        assert limit > 0.0
+
+    def test_the_settled_limit_is_the_water_window_boundary(self):
+        """Settling across a plateau must still land on the boundary, not inside it.
+
+        Not tautological: the assertion is made against ``water_window.evaluate`` -- the
+        forward check, called here with its own arguments -- at the returned amplitude and
+        at its successor, so a helper that stopped anywhere inside the plateau fails it.
+        """
+        import math
+
+        from neurostim.safety import charge as charge_mod
+        from neurostim.safety import water_window as ww
+        from neurostim.units import charge_uC
+
+        electrode = DiscElectrode(100.0, "Pt")
+        calc = SafetyCalculator(
+            electrode,
+            StimProtocol(80.0, 200.0, 130.0, 1.0, anodic_first=True),
+            resting_potential_V=0.79999999,
+            capacitance_uF_cm2=103.0,
+        )
+        ceiling = next(
+            c for c in calc.assess().checks if c.name == "Water window"
+        ).ceiling_uA
+
+        def inside(current_uA: float) -> bool:
+            return ww.evaluate(
+                "Pt",
+                charge_mod.charge_density_uC_cm2(
+                    charge_uC(current_uA, 200.0), electrode.area_cm2
+                ),
+                anodic_first=True,
+                resting_potential_V=0.79999999,
+                capacitance_uF_cm2=103.0,
+            ).passes
+
+        assert inside(ceiling)
+        assert not inside(math.nextafter(ceiling, math.inf))
+
+    def test_no_configuration_clustered_against_a_window_edge_raises(self):
+        """The review's randomised sweep, seeded so a failure is reproducible.
+
+        Not tautological: every input is drawn from the material database's own stored
+        windows and from literal geometry, the calculator is asked only for its headline,
+        and the assertion is that no exception escapes -- there is no expected number here
+        for the code to agree with itself about.
+        """
+        import random
+
+        from neurostim.materials import MATERIALS, get_material
+        from neurostim.safety._limits import LimitDidNotSettle
+
+        windowed = sorted(
+            key for key in MATERIALS if get_material(key).water_window is not None
+        )
+        rng = random.Random(20260923)
+        raised: list[str] = []
+        constructed = 0
+        for _ in range(1500):
+            key = rng.choice(windowed)
+            window = get_material(key).water_window
+            assert window is not None
+            at_cathodic = rng.random() < 0.5
+            headroom_V = 10.0 ** rng.uniform(-9.0, -1.0)
+            resting_V = (
+                window.cathodic_V + headroom_V
+                if at_cathodic
+                else window.anodic_V - headroom_V
+            )
+            if not window.contains(resting_V):  # pragma: no cover - a draw that overshot
+                continue
+            calc = SafetyCalculator(
+                DiscElectrode(rng.choice([20.0, 100.0, 500.0, 2000.0]), key),
+                StimProtocol(
+                    10.0 ** rng.uniform(0.0, 3.0),
+                    rng.choice([50.0, 90.0, 200.0]),
+                    130.0,
+                    1.0,
+                    anodic_first=not at_cathodic,
+                ),
+                resting_potential_V=resting_V,
+                capacitance_uF_cm2=rng.choice([37.0, 103.0, 811.0]),
+            )
+            constructed += 1
+            try:
+                assert calc.assess().limiting_current_uA >= 0.0
+            except LimitDidNotSettle as exc:
+                raised.append(f"{key} at {resting_V!r}: {exc}"[:200])
+
+        assert constructed == 1500
+        assert raised == [], f"{len(raised)} of {constructed} raised; first: {raised[0]}"
+
+    def test_the_helper_crosses_a_plateau_of_the_width_its_caller_declares(self):
+        """The contract in isolation: a predicate that can only resolve ``plateau``.
+
+        Not tautological: the predicate is written here as a comparison on a *quantised*
+        argument, so the expected answer is a property of the quantisation written in the
+        test, and the seed sits 1.5 plateaus -- 1.5e6 times ``CLIMB_TOLERANCE`` of itself
+        -- below the boundary.
+        """
+        import math
+
+        from neurostim.safety import _limits
+
+        plateau = 1e-3
+
+        def passes(value: float) -> bool:
+            return math.floor(value / plateau) * plateau <= 1.0
+
+        settled = _limits.floor_to_pass(
+            0.9995, passes, name="synthetic", plateau=plateau
+        )
+
+        assert passes(settled)
+        assert not passes(math.nextafter(settled, math.inf))
+
+    def test_a_seed_further_below_the_boundary_than_the_plateau_still_raises(self):
+        """The bound must still catch a back-solve that is simply wrong.
+
+        Not tautological: the predicate's resolution is 1e-12 and the seed sits 0.5 below
+        its boundary -- 5e11 plateaus -- so the expected outcome is the raise, which no
+        value the helper could return would satisfy.
+        """
+        import math
+
+        from neurostim.safety import _limits
+
+        plateau = 1e-12
+
+        def passes(value: float) -> bool:
+            return math.floor(value / plateau) * plateau <= 1.0
+
+        with pytest.raises(_limits.LimitDidNotSettle):
+            _limits.floor_to_pass(0.5, passes, name="synthetic", plateau=plateau)
+
+
 class TestFormatLimit:
     """A limit must never be printed larger than it is (ledger 49)."""
 

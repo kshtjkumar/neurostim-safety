@@ -596,10 +596,34 @@ def _water_window_ceiling_uA(
         excursion = ww_mod.polarisation_V(density, result.capacitance_uF_cm2)
         return window.contains(result.resting_potential_V + sign * excursion)
 
+    # The smallest change in current this predicate can resolve. It adds the excursion to
+    # a *constant* resting potential and compares the sum against a window edge, so the
+    # sum's ulp -- set by the largest potential in that arithmetic, not by the excursion
+    # -- is a run of consecutive amplitudes the check cannot tell apart. With the resting
+    # potential 1e-8 V inside platinum's edge the excursion at the boundary is 1e-8 V
+    # while ulp(0.6 V) is 1.1e-16, so the run is ~4e7 floats wide and the seed lands
+    # inside it. `floor_to_pass` bounds its climb relative to the seed, which shrinks with
+    # the headroom while the run does not, so it raised `LimitDidNotSettle` on inputs C1.2
+    # accepts: 4487 of 70831 edge-clustered configurations, every one of them here.
+    # Converting one ulp of the sum back through the predicate's own chain gives the
+    # climb the resolution the check actually has.
+    plateau_uA = (
+        math.ulp(
+            max(
+                abs(result.resting_potential_V),
+                abs(window.cathodic_V),
+                abs(window.anodic_V),
+            )
+        )
+        * result.capacitance_uF_cm2
+        * area_cm2
+        / (protocol.pulse_width_us * 1e-6)
+    )
     return floor_to_pass(
         seed_density * area_cm2 / (protocol.pulse_width_us * 1e-6),
         stays_in_window,
         name="Water window",
+        plateau=plateau_uA,
     )
 
 
