@@ -954,7 +954,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 4 | HIGH | OK | C2.2 | §6 now books the limiting-current move |
 | 5 | HIGH | OK | C3.5 | **FIXED** `978c1da`; default CAUTION; mutual term modelled |
 | 6 | HIGH | TEST-WEAK | C2.5 | excursion deleted, so the percent/fraction trap is gone |
-| 7 | MED | LISTED-ONLY | C4.2 | split out, with a polarity test |
+| 7 | MED | LISTED-ONLY | C4.2 | split out, with a polarity test. **Owns the counter-2× re-check (moved here from row 8 by ledger 134):** C3.5's counter uses the opposite boolean polarity's C_eff (Pt/PtIr 250 against 125 µF/cm², from CIC 150/100 × half-window 0.6/0.8 V). If C4.2 changes these branches, re-check D7's 2× for Pt/PtIr and update `TestTheCounterElectrodeEntersTheVoltageBudget` |
 | 8 | MED | LISTED-ONLY | C4.2 | split out, with the half-window test; ledger row repaired at C0.5. C3.5's counter-electrode 2× relation for Pt/PtIr (pinned on TiN only) comes from the polarity-specific CIC (1.5×) *and* half-window (1.33×). Ledger 8's own fix, the `anodic_first=None` `min()` branch, does not reach the counter path. **Re-check it only if C4.2 also changes `effective_capacitance_uF_cm2`'s boolean branches (ledger 7)**, and update `TestTheCounterElectrodeEntersTheVoltageBudget` if so (corrected by ledger 134) |
 | 9 | HIGH | OK | C1.3 | T2 split into T2a (here) and T2b (C1.6) |
 | 10 | MED | OK | C3.3 | **FIXED** `c327cee`; elliptic-disc pin |
