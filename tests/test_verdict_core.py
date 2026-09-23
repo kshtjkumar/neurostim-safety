@@ -2125,36 +2125,57 @@ class TestLimitsIncompleteAndByKind:
         assert assessment.not_evaluated == ()
         assert assessment.limits_incomplete is False
 
+    PER_KIND_uA = {
+        "tissue": 20.0,
+        "electrode-acute": 141.37166941154072,
+        "electrode-chronic": 70.68583470577036,
+        "instrument": 965.3764143567779,
+    }
+    """The worked example's four per-kind ceilings, written out rather than recomputed.
+
+    Each is pinned independently in ``tests/test_oracles.py`` by the binary search over
+    ``assess().failed``, which reads one bit per probe and no package-computed number: 20.0
+    is Cogan's 4 nC/phase over a 200 us pulse, 141.37 is platinum's charge-injection limit
+    over this area, 70.69 its 20 uC/cm^2 dissolution threshold, 965.38 the compliance
+    ceiling at 10 V.
+    """
+
     def test_the_headline_is_the_minimum_of_the_per_kind_limits(self):
-        """Not tautological: the four per-kind values are compared against a minimum
-        recomputed here from the checks' own ceilings grouped by kind, and the headline
-        against the minimum of those four."""
-        from neurostim.safety import LIMIT_BEARING
+        """The decomposition and the headline, against hand-written values.
 
+        This test used to build ``expected`` by looping over ``check.ceiling_uA`` -- the
+        same values ``limiting_current_by_kind`` and the headline are computed from -- and
+        assert equality, which is the implementation restated. Measured: with every
+        ceiling multiplied by two it still passed. That is the form C1.6's own plan row
+        dropped as "the implementation restated", reappearing in the by-kind commit.
+
+        Not tautological: every expected number is a literal from :attr:`PER_KIND_uA`,
+        each independently pinned by the fail-ceiling oracle, and the headline is asserted
+        against the minimum of those literals rather than of anything the package returned.
+        """
         assessment = self._worked_example().assess()
-        expected: dict[str, float] = {}
-        for check in assessment.checks:
-            if check.name in LIMIT_BEARING:
-                expected[check.kind] = min(
-                    expected.get(check.kind, float("inf")), check.ceiling_uA
-                )
+        by_kind = assessment.limiting_current_by_kind
 
-        assert assessment.limiting_current_by_kind == expected
-        assert assessment.limiting_current_uA == min(expected.values())
+        assert by_kind.keys() == self.PER_KIND_uA.keys()
+        for kind, expected_uA in self.PER_KIND_uA.items():
+            assert by_kind[kind] == pytest.approx(expected_uA, rel=1e-12), kind
+        assert assessment.limiting_current_uA == pytest.approx(
+            min(self.PER_KIND_uA.values()), rel=1e-12
+        )
 
     def test_the_per_kind_limits_disagree_where_it_matters(self):
         """The decomposition earns its place only if the four numbers differ.
 
-        Not tautological: the expected values are the per-check ceilings pinned in
-        ``tests/test_oracles.py`` -- 20.0 tissue, 141.37 electrode-acute, 70.69
-        electrode-chronic -- written out here.
+        Not tautological: the spread is asserted between literals in :attr:`PER_KIND_uA`,
+        so a decomposition that collapsed every kind onto the headline would fail here
+        while still satisfying a minimum.
         """
         by_kind = self._worked_example().assess().limiting_current_by_kind
 
-        assert by_kind["tissue"] == pytest.approx(20.0)
-        assert by_kind["electrode-acute"] == pytest.approx(141.37166941154072)
-        assert by_kind["electrode-chronic"] == pytest.approx(70.68583470577036)
-        assert by_kind["instrument"] == pytest.approx(965.3764143567779)
+        assert len(set(self.PER_KIND_uA.values())) == 4
+        assert max(by_kind.values()) / min(by_kind.values()) == pytest.approx(
+            self.PER_KIND_uA["instrument"] / self.PER_KIND_uA["tissue"], rel=1e-12
+        )
 
     def test_describe_states_both(self):
         """Not tautological: two literal substrings, one naming the check that did not
@@ -2223,14 +2244,30 @@ class TestTheIntervalContainsThePointEstimate:
                     )
 
     def test_the_interval_contains_the_point_estimate(self):
-        """Not tautological: the two quantities are computed by different code from
-        different inputs -- the point estimate from each check's own ceiling at the
-        configured k and policy, the interval from published ranges -- and containment is
-        a relation between them, not a restatement of either."""
+        """A regression guard for the *candidate-set* defect, and nothing stronger.
+
+        What it can catch, and did: before C1.8 the interval propagated Shannon and the
+        charge-injection range while the point estimate was a minimum over all seven
+        limit-bearing checks, so the two answered different questions and the worked
+        example printed a limit of 20.0 uA beside an interval of 141.37-212.06. Any future
+        divergence of the two candidate sets fails here.
+
+        What it cannot catch, stated because the docstring used to claim otherwise
+        ("computed by different code from different inputs"): over one candidate set the
+        containment is a theorem about the two constructions, not a measurement.
+        ``most_restrictive`` is ``(min lows, min highs)`` and ``_ceiling_interval_uA``
+        brackets each check's own ceiling, so for ``j = argmin(highs)``,
+        ``min(highs) = high_j >= low_j >= min(lows)`` and
+        ``point = min(ceilings) <= min(highs)`` since ``ceiling_i <= high_i``. It cannot
+        fail while both are built that way, whatever the ceilings are.
+
+        Pinned against ``limit_bearing_ceiling_uA``: the interval is of the raw quantity
+        and is defined for protocols whose headline is ``None`` (M2).
+        """
         for calc in self._cases():
             assessment = calc.assess()
             interval = assessment.limiting_current_interval_uA
-            limit = assessment.limiting_current_uA
+            limit = assessment.limit_bearing_ceiling_uA
 
             assert interval.contains(limit), (
                 calc.material.key,

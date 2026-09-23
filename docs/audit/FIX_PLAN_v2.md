@@ -1034,6 +1034,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 91 | HIGH | — (found in the Phase 1 review) | C2.3 | seed refactored into `_water_window_seed_uA` with the required drift term written out and a tripwire test in Phase 1b; **the term itself must land inside C2.3**, beside the clause it inverts |
 | 92 | MAJOR | — (found in the Phase 1 review) | C1.5 | **FIXED** — the headline refuses in its own type; `limit_bearing_ceiling_uA` carries the raw quantity. Landed in Phase 1b, before C2.1 widens the disagreeing population |
 | 93 | MED | — (found in the Phase 1 review) | C1.3, C1.10 | **FIXED** — `STEP_BUDGET` and `CLIMB_TOLERANCE` are straddled by behavioural pairs written as literals, so a test cannot move with the constant it pins |
+| 94 | MED | — (found in the Phase 1 review) | C1.6, C1.8 | **FIXED** — the by-kind test asserts hand-written per-kind ceilings instead of rebuilding them from the ceilings under test; the interval-containment docstring states what a structural guarantee can and cannot catch |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
