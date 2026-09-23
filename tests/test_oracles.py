@@ -866,8 +866,13 @@ class TestDiscSurfacePotential:
         assert full_space / exact == pytest.approx(0.499992, abs=5e-7)
         assert half_space / exact == pytest.approx(0.999983, abs=5e-7)
 
-    def test_todays_field_model_is_the_full_space_one(self) -> None:
-        """Records the defect the oracle exists to pin: ratio exactly 0.5000."""
+    def test_the_package_field_model_is_now_the_half_space_one(self) -> None:
+        """The defect this oracle was written to pin read 0.5000 until C3.1 (ledger 17).
+
+        Now 0.999983, the far-field agreement the half-space point source has with the
+        exact disc at 100a -- the same number the oracle's own half-space factor gives
+        above.
+        """
         from neurostim import DiscElectrode
         from neurostim.models import field
 
@@ -880,7 +885,7 @@ class TestDiscSurfacePotential:
         today_V = field.potential_V(
             self.CURRENT_A * 1e6, distance_um, self.SIGMA, electrode=electrode
         )
-        assert today_V / exact == pytest.approx(0.5, abs=1e-4)
+        assert today_V / exact == pytest.approx(0.999983, abs=5e-7)
 
     def test_inside_the_disc_is_a_domain_error(self) -> None:
         with pytest.raises(ValueError, match="must be >= radius_m"):

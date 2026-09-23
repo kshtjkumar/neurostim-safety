@@ -85,7 +85,9 @@ change. Exports the PDF report and the four-panel summary figure.
 
 Plus models, each documenting its own validity range:
 
-- **Field** — point-source potential and gradient, exact for a sphere
+- **Field** — point-source potential and gradient: half-space (`2π`) for electrodes flush in
+  an insulating plane, full-space (`4π`) for immersed ones, read from the electrode's
+  `environment`. Exact for a sphere; the far-field limit for a disc
 - **Thermal** — Pennes bioheat, analytic steady state plus an implicit transient solver
 - **Strength–duration** — Lapicque and Weiss forms, with fitting routines
 - **VTA** — current–distance activation radius (the weakest model here; read its docstring)
@@ -253,6 +255,11 @@ the electrode's own access resistance.
   measured on such a waveform. Charge balance FAILs, so the headline refuses a number. The
   limit-bearing ceiling is still computed, and is capped at what the same electrode and
   protocol would report biphasic.
+- **Access resistance of immersed geometries** — there is no exact form for a band on an
+  insulating shaft or a microwire. The equal-area sphere is used. Against a converged
+  finite-difference solve it is within 2 % from aspect 0.39 to 2.0 (the clinical 3389
+  contact reads 329.5 Ω against 335.1 Ω) and 17 % high by aspect 10. Ring and rectangle
+  take Newman's equal-area disc.
 - **Thermal** — spreading-resistance heating only. Tissue properties are now IT'IS v4.2
   with uncertainty, but the model still omits electrode and lead self-heating and any
   encapsulation layer. Gives millikelvin rises for clinical DBS parameters, well below the

@@ -20,8 +20,22 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
+from typing import Literal
 
 from ..units import um2_to_cm2, um_to_m
+
+Environment = Literal["half_space", "full_space"]
+"""Which space the electrode injects into (fix plan D4).
+
+``half_space``: flush in an insulating plane, so current fills a half-space -- disc,
+ring, rectangle, hemisphere. ``full_space``: surrounded by tissue on every side -- sphere,
+cylindrical band, microwire. It sets both the point-source field factor (``2 pi`` or
+``4 pi``) and which equal-area substitute stands in for a geometry with no exact access
+resistance (Newman's disc or the sphere). One property read by both, so the compliance
+budget and the field cannot disagree about the same electrode again (ledger 17).
+"""
+
+ENVIRONMENTS: tuple[Environment, ...] = ("half_space", "full_space")
 
 
 class Electrode(ABC):
@@ -36,6 +50,10 @@ class Electrode(ABC):
     """
 
     material: str
+    environment: Environment
+    """See :data:`Environment`. An instance field with a class-appropriate default, not a
+    class property, because presets model immersed electrodes as equal-area discs
+    (physics M5)."""
 
     # --- geometry ------------------------------------------------------------
 
@@ -53,24 +71,43 @@ class Electrode(ABC):
     def equivalent_radius_um(self) -> float:
         """Radius of a disc having the same geometric area.
 
-        Used as the characteristic length scale by the field and access-resistance
-        models when a geometry has no exact closed form.
+        The characteristic length scale of a half-space geometry with no exact closed
+        form, and the one the Butterwick size correction and the field-panel start use.
         """
         return math.sqrt(self.area_um2 / math.pi)
+
+    @property
+    def equivalent_sphere_radius_um(self) -> float:
+        """Radius of a sphere having the same geometric area, ``4 pi a^2 = A``."""
+        return math.sqrt(self.area_um2 / (4.0 * math.pi))
 
     # --- electrical ----------------------------------------------------------
 
     def access_resistance_ohm(self, sigma_S_per_m: float = 0.35) -> float:
         """Ohmic access (spreading) resistance into bulk tissue, in ohms.
 
-        The default implementation substitutes an equal-area disc and applies Newman's
-        primary-current-distribution result ``R = 1/(4*sigma*a)`` (Newman 1966).
-        Subclasses with an exact solution override this.
+        The default is an equal-area substitute chosen by :attr:`environment`. A
+        half-space geometry takes Newman's flush disc, ``R = 1/(4 sigma a)`` (Newman 1966).
+        A full-space geometry takes the sphere, ``R = 1/(4 pi sigma a)`` with
+        ``4 pi a^2 = A``. Subclasses with an exact solution override this.
+
+        **Why the sphere, not the disc, for an immersed body** (ledger 20). The disc is a
+        half-space result; tissue on every side roughly halves the resistance again. A
+        converged finite-difference solve of a band on an insulating shaft
+        (``tests/oracles/fd_band``) puts the clinical DBS contact at 335.1 ohm. The
+        equal-area sphere gives 329.5 (-1.7 %) and the half-space disc 517.5 (+54 %). The
+        sphere stays within 2 % from aspect 0.39 to 2.0 and degrades to +17 % at aspect 10.
+        The immersed-cylinder ``ln(2L/r)`` form proposed instead is negative below aspect
+        0.25 and worse than the sphere everywhere measured (ledger 80), so it is not used.
+        No exact band formula exists here, which is ledger 16, documented rather than fixed.
 
         The default tissue conductivity of 0.35 S/m is the homogeneous grey-matter value
         used by Elwassif et al. (2006).
         """
         _check_conductivity(sigma_S_per_m)
+        if self.environment == "full_space":
+            a_m = um_to_m(self.equivalent_sphere_radius_um)
+            return 1.0 / (4.0 * math.pi * sigma_S_per_m * a_m)
         a_m = um_to_m(self.equivalent_radius_um)
         return 1.0 / (4.0 * sigma_S_per_m * a_m)
 
@@ -78,6 +115,11 @@ class Electrode(ABC):
     def access_resistance_is_exact(self) -> bool:
         """Whether :meth:`access_resistance_ohm` is exact or an equal-area substitution."""
         return False
+
+    @property
+    def substitute_name(self) -> str:
+        """The equal-area body :meth:`access_resistance_ohm` substitutes, when inexact."""
+        return "equal-area sphere" if self.environment == "full_space" else "equal-area disc"
 
     # --- reporting -----------------------------------------------------------
 
@@ -93,7 +135,9 @@ class Electrode(ABC):
     def describe(self) -> str:
         """One-line human-readable summary."""
         dims = ", ".join(f"{k}={v:g} um" for k, v in self.dimensions().items())
-        exact = "exact" if self.access_resistance_is_exact else "equal-area disc approx."
+        exact = (
+            "exact" if self.access_resistance_is_exact else f"{self.substitute_name} approx."
+        )
         return (
             f"{self.shape_name} [{self.material}] {dims} -> "
             f"area {self.area_cm2:.4g} cm^2, "
@@ -113,4 +157,11 @@ def _check_conductivity(sigma_S_per_m: float) -> None:
         raise ValueError(
             f"Tissue conductivity must be a positive finite S/m value, "
             f"got {sigma_S_per_m!r}"
+        )
+
+
+def _check_environment(value: str) -> None:
+    if value not in ENVIRONMENTS:
+        raise ValueError(
+            f"environment must be one of {ENVIRONMENTS}, got {value!r}"
         )

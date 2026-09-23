@@ -56,6 +56,33 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### One half-space/full-space convention per geometry
+
+The field model and the access resistance disagreed about which space an electrode injects
+into, and the band and microwire used a formula for the wrong one.
+
+- **Planar potentials double.** Disc, ring and rectangle sit flush in an insulating plane.
+  Their access resistance was already Newman's half-space disc, but the field model gave
+  them a full-space point source. So their far field was exactly half the true value:
+  22.74 mV where the exact disc solution gives 45.47 mV (500 µm radius, 100 µA,
+  0.35 S/m, 1 mm). Every `potential_V`, `field_V_per_m` and field panel for these
+  geometries is now twice what it was. `io.fem.compare_with_point_source` takes the
+  `electrode`, so an imported planar field is compared against the right source.
+- **Immersed access resistance falls by 36 %.** The clinical band and the microwire took
+  Newman's half-space disc, although they have tissue on every side. They now take the
+  equal-area sphere, which a converged finite-difference solve puts within 2 % over
+  clinical aspect ratios. The 3389 contact goes from 517.5 Ω to **329.5 Ω** (FD 335.1 Ω).
+  The required compliance voltage falls with it. On the worked example's DBS contact the
+  binding limit moves from compliance to Shannon, and the thermal estimate falls from
+  5.396 to **3.435 mK** (72.66 → 46.26 µW).
+- **`Electrode.environment`** (`"half_space"` / `"full_space"`) is a per-instance field
+  with a class default, and it sets both the field factor and the equal-area substitute.
+  `DiscElectrode` gains `stands_in_for`, for presets that use a disc of the right area to
+  represent another shape. Four presets are re-tagged from their papers and no longer
+  print "(exact)": the two penetrating McCreery microelectrodes (full-space; resistance
+  15 699 → 9 994 Ω and 28 289 → 18 009 Ω), the Beebe iridium wire stub, and the Weiland
+  TiN electrode, whose paper is not in the library to check.
+
 ### Charge imbalance, return phases and DC drift
 
 A return phase that does not recover what the leading phase injected could not be entered

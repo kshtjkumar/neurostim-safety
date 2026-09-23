@@ -11,8 +11,12 @@ point source:
     V(r) = \\frac{I}{4\\pi\\sigma r}, \\qquad
     E(r) = -\\frac{dV}{dr} = \\frac{I}{4\\pi\\sigma r^{2}}
 
-A hemisphere flush with an insulating plane sees the same current confined to a
-half-space, doubling both quantities.
+Any electrode flush with an insulating plane -- disc, ring, rectangle, hemisphere --
+sees the same current confined to a half-space, doubling both quantities. Which one
+applies is :attr:`~neurostim.geometry.base.Electrode.environment`. For the disc the
+half-space point source is the far-field limit of the exact solution
+``V(r) = (2/pi) I R arcsin(a/r)``. It is not the surface potential: at ``r = a`` the
+disc sits at ``I R``, which is pi/2 times the point source there.
 
 Validity
 --------
@@ -37,7 +41,6 @@ import numpy as np
 
 from ..geometry.arrays import ElectrodeArray
 from ..geometry.base import Electrode
-from ..geometry.volumetric import HemisphericalElectrode
 
 BRAIN_CONDUCTIVITY_S_PER_M = 0.35
 """Package default: the homogeneous brain conductivity used by Elwassif et al. (2006).
@@ -69,8 +72,18 @@ BLOOD_CONDUCTIVITY_S_PER_M = 0.662
 
 
 def _geometry_factor(electrode: Electrode | None) -> float:
-    """4*pi for a full space, 2*pi for a source confined to a half-space."""
-    return 2.0 * math.pi if isinstance(electrode, HemisphericalElectrode) else 4.0 * math.pi
+    """``4 pi`` for a full space, ``2 pi`` for a source confined to a half-space.
+
+    Read from :attr:`Electrode.environment`, the same property that picks the access
+    resistance, so the field and the compliance budget agree about which space an
+    electrode injects into. It used to be ``2 pi`` for the hemisphere alone. Disc, ring and
+    rectangle, flush in an insulating plane and given Newman's half-space resistance,
+    got a full-space field, so the far field of a disc was exactly half the true value
+    (ledger 17). ``None`` is a bare point source in a full space.
+    """
+    if electrode is not None and electrode.environment == "half_space":
+        return 2.0 * math.pi
+    return 4.0 * math.pi
 
 
 def potential_V(

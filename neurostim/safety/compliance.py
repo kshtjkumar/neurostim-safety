@@ -14,7 +14,9 @@ The voltage budget modelled here is
     V_{required} = I\\,(R_{access} + R_{lead}) + \\Delta V_{polarisation}
 
 - ``R_access`` is the ohmic spreading resistance into tissue, from the electrode
-  geometry (Newman 1966 for a disc; exact forms for sphere and hemisphere).
+  geometry (Newman 1966 for a disc; exact forms for sphere and hemisphere; the equal-area
+  sphere for immersed bodies such as the DBS band, within 2 % of an FD solve at clinical
+  aspect -- see ``Electrode.access_resistance_ohm``).
 - ``R_lead`` is the series resistance of the lead wire and connectors, which is
   measurable and often non-negligible for long thin microwires.
 - ``Delta V_polarisation`` is the interfacial excursion from the water-window module,

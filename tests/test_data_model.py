@@ -386,11 +386,14 @@ class TestTheReturnPhaseIsEvaluated:
     above pins that the default population does not move.
     """
 
-    BAND_SYMMETRIC_REQUIRED_V = 0.5235321306516268
-    """``required_V`` for the band at 1000 uA / 90 us, measured at ``9e87b85``.
+    BAND_SYMMETRIC_REQUIRED_V = 0.3354767487193873
+    """``required_V`` for the band at 1000 uA / 90 us.
 
-    A pre-change literal. The commit under test must leave it exactly where it is for the
-    symmetric protocol and must move the asymmetric one away from it.
+    A pre-change literal for C2.2, measured at ``9e87b85`` as 0.5235321306516268: that
+    commit had to leave it exactly where it was for the symmetric protocol. C3.1 then moved
+    it by moving the band's access resistance from the half-space equal-area disc
+    (517.5 ohm) to the equal-area sphere (329.5 ohm), booked in section 6. Re-measured
+    there.
     """
 
     def test_the_peak_current_density_is_the_return_phase_when_it_is_narrower(
@@ -523,9 +526,11 @@ class TestTheReturnPhaseIsEvaluated:
         resistance = asymmetric.total_resistance_ohm
         expected = 5000e-6 * resistance + (5000.0 * 18.0 * 1e-6 / area) / 250.0
         assert asymmetric.required_V == pytest.approx(expected, rel=1e-12)
-        assert asymmetric.required_V == pytest.approx(2.59, rel=1e-2)
+        # 2.59 V and a ratio of 4.954 at the half-space disc's 517.5 ohm (C2.2); the
+        # equal-area sphere's 329.5 ohm (C3.1) gives 1.653 V and 4.928.
+        assert asymmetric.required_V == pytest.approx(1.653, rel=1e-3)
         assert asymmetric.required_V / symmetric.required_V == pytest.approx(
-            4.954, rel=1e-3
+            4.928, rel=1e-3
         )
 
     def test_the_compliance_limit_falls_and_still_passes_its_own_check(self) -> None:

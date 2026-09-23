@@ -71,7 +71,11 @@ class TestField:
         points = np.array([[0.0, 0.0, 2000.0]])
         total = field_mod.array_potential_V(array, [10.0, 20.0, 30.0], points)
         manual = sum(
-            field_mod.potential_V(current, math.dist((0, 0, 2000), site.position_um()))
+            field_mod.potential_V(
+                current,
+                math.dist((0, 0, 2000), site.position_um()),
+                electrode=site.electrode,
+            )
             for current, site in zip([10.0, 20.0, 30.0], array.sites, strict=True)
         )
         assert total[0] == pytest.approx(manual)

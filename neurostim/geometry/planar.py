@@ -11,7 +11,13 @@ import math
 from dataclasses import dataclass
 
 from ..units import um_to_m
-from .base import Electrode, _check_conductivity, _check_positive
+from .base import (
+    Electrode,
+    Environment,
+    _check_conductivity,
+    _check_environment,
+    _check_positive,
+)
 
 
 @dataclass(frozen=True)
@@ -20,13 +26,24 @@ class DiscElectrode(Electrode):
 
     Only the exposed face contributes area. Access resistance is Newman's exact
     primary-current-distribution result for a disc, ``R = 1/(4*sigma*a)``.
+
+    ``environment="full_space"`` and ``stands_in_for`` exist for the presets that use a
+    disc of the right *area* to represent a different physical electrode (physics M5,
+    ledger 21). A full-space disc takes the equal-area sphere for its access resistance
+    and the ``4 pi`` field. Either setting makes the resistance an approximation, and
+    :meth:`describe` says so rather than printing "(exact)" beside a note that says
+    "modelled as an equal-area disc".
     """
 
     diameter_um: float
     material: str = "Pt"
+    environment: Environment = "half_space"
+    stands_in_for: str = ""
+    """The physical electrode this disc stands in for by area, or empty for a real disc."""
 
     def __post_init__(self) -> None:
         _check_positive("diameter_um", self.diameter_um)
+        _check_environment(self.environment)
 
     @property
     def radius_um(self) -> float:
@@ -38,12 +55,22 @@ class DiscElectrode(Electrode):
         return math.pi * self.radius_um**2
 
     def access_resistance_ohm(self, sigma_S_per_m: float = 0.35) -> float:
+        if self.environment == "full_space":
+            return super().access_resistance_ohm(sigma_S_per_m)
         _check_conductivity(sigma_S_per_m)
         return 1.0 / (4.0 * sigma_S_per_m * um_to_m(self.radius_um))
 
     @property
     def access_resistance_is_exact(self) -> bool:
-        return True
+        return self.environment == "half_space" and not self.stands_in_for
+
+    @property
+    def substitute_name(self) -> str:
+        if self.stands_in_for and self.environment == "half_space":
+            return f"equal-area disc for {self.stands_in_for}"
+        if self.stands_in_for:
+            return f"equal-area sphere for {self.stands_in_for}"
+        return super().substitute_name
 
     def dimensions(self) -> dict[str, float]:
         return {"diameter": self.diameter_um}
@@ -64,8 +91,10 @@ class RingElectrode(Electrode):
     outer_diameter_um: float
     inner_diameter_um: float
     material: str = "Pt"
+    environment: Environment = "half_space"
 
     def __post_init__(self) -> None:
+        _check_environment(self.environment)
         _check_positive("outer_diameter_um", self.outer_diameter_um)
         if not math.isfinite(self.inner_diameter_um) or self.inner_diameter_um < 0:
             raise ValueError(
@@ -109,8 +138,10 @@ class RectangularElectrode(Electrode):
     width_um: float
     length_um: float
     material: str = "Pt"
+    environment: Environment = "half_space"
 
     def __post_init__(self) -> None:
+        _check_environment(self.environment)
         _check_positive("width_um", self.width_um)
         _check_positive("length_um", self.length_um)
 

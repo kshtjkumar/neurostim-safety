@@ -272,7 +272,7 @@ def build_report(
                     # identical, but they do not compare equal -- normalise before
                     # searching extracted report text for it.
                     f"{assessment.compliance.access_resistance_ohm:.0f} &ohm; "
-                    f"({'exact' if calc.e.access_resistance_is_exact else 'equal-area disc approximation'}"
+                    f"({'exact' if calc.e.access_resistance_is_exact else calc.e.substitute_name + ' approximation'}"
                     f", &sigma; = {calc.tissue_conductivity_S_per_m:g} S/m)",
                 ),
             ],

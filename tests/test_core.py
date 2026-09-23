@@ -747,12 +747,18 @@ class TestSensitivity:
         assert folds == sorted(folds, reverse=True)
 
     def test_irrelevant_inputs_report_no_influence(self):
-        """When compliance voltage binds, the damage criteria cannot move the answer."""
+        """When compliance voltage binds, the damage criteria cannot move the answer.
+
+        3 V, not the 10 V this test used before C3.1. The band's access resistance fell
+        from 517.5 to 329.5 ohm (the equal-area sphere, ledger 20), so at 10 V compliance
+        stopped binding and Shannon took over. The premise is now asserted, not assumed.
+        """
         from neurostim import electrode, sensitivity
 
         calc = SafetyCalculator(
-            electrode("dbs_3389"), StimProtocol(3000, 60, 130, 1), compliance_V=10.0
+            electrode("dbs_3389"), StimProtocol(3000, 60, 130, 1), compliance_V=3.0
         )
+        assert calc.assess().limiting_mechanism == "Compliance voltage"  # the premise
         by_name = {r.parameter: r for r in sensitivity.analyse(calc)}
         assert by_name["Shannon k"].fold == pytest.approx(1.0)
         assert not by_name["Shannon k"].dominates

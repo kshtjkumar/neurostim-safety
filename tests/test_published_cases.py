@@ -33,20 +33,45 @@ from neurostim.safety.water_window import polarisation_V
 class TestKuncelGrill2004:
     """Clin Neurophysiol 115:2431-41."""
 
-    def test_current_density_predicted_from_geometry_and_voltage(self):
-        """They state a 1.26 x 1.5 mm contact at 3 V gives 0.0993 A/cm^2.
+    def test_their_average_current_density_is_an_assumed_impedance_not_a_resistance(self):
+        """Rewritten at C3.1 (physics B3). This test used to reproduce 0.0993 A/cm^2 to 2 %
+        from the equal-area *disc* access resistance at 0.35 S/m and call that agreement
+        with "their finite element model". It was two errors cancelling, and the test never
+        called the field model, so it could not detect the convention it was named as a
+        guard for.
 
-        They publish neither the current nor the resistance, so reproducing their
-        current density exercises three independent steps -- lateral-surface area,
-        Newman's equal-area access resistance, Ohm's law -- against a number from their
-        finite element model. Achieved agreement: 2 %.
+        What the paper says: grey matter is "around 0.2 S/m", the impedance "is estimated
+        conservatively to be 500" ohm, and a 1.26 x 1.5 mm contact "set to 3 V" gives an
+        average of 0.0993 A/cm^2. That average back-solves to about 509 ohm through the
+        lateral area -- the assumed clinical impedance, not a spreading resistance.
+
+        What is asserted, each from inputs written here:
+
+        * 0.0993 A/cm^2 at 3 V over the lateral area implies 508.8 ohm, within 2 % of their
+          stated 500;
+        * at their own 0.2 S/m the package's equal-area sphere gives 578.8 ohm, within
+          1.5 % of the FD-converged band at that conductivity (335.1 ohm at 0.35 S/m,
+          scaled by 0.35/0.2 = 586.4 ohm);
+        * so the spreading resistance is about 16 % above their 500 ohm (their figure is
+          14 % below it), conservative in the direction they said: a lower assumed
+          impedance means a higher assumed current.
         """
+        import oracles
+
         contact = CylindricalBandElectrode(1260.0, 1500.0, "PtIr")
-        current_A = 3.0 / contact.access_resistance_ohm(0.35)
-        predicted = jd.average_current_density_A_per_cm2(
-            current_A * 1e6, contact.area_cm2
-        )
-        assert predicted == pytest.approx(0.0993, rel=0.03)
+        area_cm2 = math.pi * 0.126 * 0.150
+        assert contact.area_cm2 == pytest.approx(area_cm2, rel=1e-12)
+
+        implied_ohm = 3.0 / (0.0993 * area_cm2)
+        assert implied_ohm == pytest.approx(508.8, abs=0.1)
+        assert implied_ohm == pytest.approx(500.0, rel=0.02)
+
+        fd_at_their_sigma = oracles.FD_BAND_REFERENCE[oracles.CLINICAL_DBS_ASPECT] * 0.35 / 0.2
+        assert fd_at_their_sigma == pytest.approx(586.4, abs=0.05)
+        sphere = contact.access_resistance_ohm(0.2)
+        assert sphere == pytest.approx(578.8, abs=0.1)
+        assert abs(sphere / fd_at_their_sigma - 1.0) < 0.015
+        assert 500.0 / sphere - 1.0 == pytest.approx(-0.136, abs=0.005)
 
     def test_thirty_uC_cm2_limit_derives_from_shannon_at_k_1_75(self):
         """'the largest charge for a contact area of 0.06 cm^2 that did not result in

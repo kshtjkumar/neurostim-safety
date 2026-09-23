@@ -11,7 +11,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ..units import um_to_m
-from .base import Electrode, _check_conductivity, _check_positive
+from .base import (
+    Electrode,
+    Environment,
+    _check_conductivity,
+    _check_environment,
+    _check_positive,
+)
 
 TipShape = Literal["flat", "hemispherical", "conical"]
 
@@ -32,21 +38,25 @@ class CylindricalBandElectrode(Electrode):
     diameter_um: float
     height_um: float
     material: str = "PtIr"
+    environment: Environment = "full_space"
 
     def __post_init__(self) -> None:
         _check_positive("diameter_um", self.diameter_um)
         _check_positive("height_um", self.height_um)
+        _check_environment(self.environment)
 
     @property
     def area_um2(self) -> float:
         return math.pi * self.diameter_um * self.height_um
 
     def access_resistance_ohm(self, sigma_S_per_m: float = 0.35) -> float:
-        """Equal-area disc substitution.
+        """Equal-area sphere substitution; see :meth:`Electrode.access_resistance_ohm`.
 
-        No compact exact solution exists for a band on an insulating cylinder. For the
-        near-unity aspect ratios of clinical DBS contacts the substitution is
-        reasonable; for a tall narrow band it degrades.
+        No compact exact solution exists for a band on an insulating cylinder. Against a
+        converged finite-difference solve the sphere is within 2 % from aspect 0.39 to 2.0
+        -- the clinical 3389 contact reads 329.5 ohm against 335.1 -- and high by 17 % at
+        aspect 10. It replaced the half-space equal-area disc, which is 40-70 % high
+        throughout because it assumes tissue on one side only (ledger 20).
         """
         return super().access_resistance_ohm(sigma_S_per_m)
 
@@ -78,9 +88,11 @@ class MicrowireElectrode(Electrode):
     tip_shape: TipShape = "flat"
     cone_height_um: float | None = None
     material: str = "Pt"
+    environment: Environment = "full_space"
 
     def __post_init__(self) -> None:
         _check_positive("diameter_um", self.diameter_um)
+        _check_environment(self.environment)
         if not math.isfinite(self.exposed_length_um) or self.exposed_length_um < 0:
             raise ValueError(
                 f"exposed_length_um must be a finite value >= 0, "
@@ -167,6 +179,11 @@ class SphericalElectrode(Electrode):
     def area_um2(self) -> float:
         return 4.0 * math.pi * self.radius_um**2
 
+    @property
+    def environment(self) -> Environment:  # type: ignore[override]
+        """Always ``full_space``: that is what makes this geometry exact."""
+        return "full_space"
+
     def access_resistance_ohm(self, sigma_S_per_m: float = 0.35) -> float:
         _check_conductivity(sigma_S_per_m)
         return 1.0 / (4.0 * math.pi * sigma_S_per_m * um_to_m(self.radius_um))
@@ -201,6 +218,11 @@ class HemisphericalElectrode(Electrode):
     @property
     def area_um2(self) -> float:
         return 2.0 * math.pi * self.radius_um**2
+
+    @property
+    def environment(self) -> Environment:  # type: ignore[override]
+        """Always ``half_space``: flush in the insulating plane, by definition."""
+        return "half_space"
 
     def access_resistance_ohm(self, sigma_S_per_m: float = 0.35) -> float:
         _check_conductivity(sigma_S_per_m)

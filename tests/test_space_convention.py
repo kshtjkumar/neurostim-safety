@@ -1,0 +1,225 @@
+"""Phase 3 -- one half-space/full-space convention per geometry (fix plan D4, C3.1).
+
+The field model gave every electrode but the hemisphere a full-space point source,
+``V = I / (4 pi sigma r)``, while the access resistance of the planar geometries was
+Newman's *half*-space disc. The same disc was therefore half-space in the compliance budget
+and full-space in the field, so its far field was exactly half the true value (ledger 17).
+Immersed geometries -- the clinical band and the microwire -- took the half-space disc
+formula for a body with tissue on every side, high by a factor that the FD solve below
+measures at 40-70 % (ledger 20).
+
+Expected values here come from ``tests.oracles``: the exact half-space disc solution
+``V(r) = (2/pi) I R arcsin(a/r)`` with Newman's ``R = 1/(4 sigma a)`` derived inside the
+oracle, and a converged finite-difference Laplace solve of the band. Neither calls the
+package. The sphere and the hemisphere are pinned against their own exact surface
+identity at their *physical* radius, which is what makes the assignment per geometry:
+a uniform 4 pi breaks the hemisphere by 2, and a uniform 2 pi breaks the sphere by 2.
+"""
+
+from __future__ import annotations
+
+import math
+
+import pytest
+
+from neurostim import (
+    CylindricalBandElectrode,
+    DiscElectrode,
+    HemisphericalElectrode,
+    MicrowireElectrode,
+    RectangularElectrode,
+    RingElectrode,
+    SphericalElectrode,
+)
+from neurostim.models import field
+
+SIGMA = 0.35
+CURRENT_UA = 100.0
+
+
+def _planar():
+    return (
+        DiscElectrode(1000.0, "Pt"),
+        RingElectrode(1000.0, 600.0, "Pt"),
+        RectangularElectrode(700.0, 900.0, "Pt"),
+    )
+
+
+class TestPinAPlanarFarFieldIsTheHalfSpaceDisc:
+    """The exact flush-disc potential against the package's field model, at 100a and 10a.
+
+    Only one of the four combinations of field factor (2 pi, 4 pi) and access resistance
+    (Newman, ``1/(2 pi sigma a)``) passes. So this cannot be made green by the 57 % error in
+    the access resistance that v1's false invariant would have forced.
+    """
+
+    @pytest.mark.parametrize("electrode", _planar(), ids=lambda e: e.shape_name)
+    @pytest.mark.parametrize(("multiple", "rel"), [(100.0, 1e-4), (10.0, 1e-2)])
+    def test_the_far_field_matches_the_exact_disc(self, electrode, multiple, rel):
+        import oracles
+
+        a_um = electrode.equivalent_radius_um
+        expected = oracles.disc_potential_V(
+            CURRENT_UA * 1e-6, SIGMA, a_um * 1e-6, multiple * a_um * 1e-6
+        )
+        got = field.potential_V(CURRENT_UA, multiple * a_um, SIGMA, electrode=electrode)
+        assert got == pytest.approx(expected, rel=rel)
+
+    def test_the_disc_access_resistance_is_still_newman(self):
+        """The pin is not satisfied by moving R: the disc keeps ``1/(4 sigma a)``."""
+        from oracles.disc_field import newman_disc_resistance_ohm
+
+        disc = DiscElectrode(1000.0, "Pt")
+        assert disc.access_resistance_ohm(SIGMA) == pytest.approx(
+            newman_disc_resistance_ohm(SIGMA, 500e-6), rel=1e-15
+        )
+
+
+class TestPinBSurfaceIdentityAtThePhysicalRadius:
+    """``V(a) == I * R_access`` exactly, for the two geometries where both are exact."""
+
+    @pytest.mark.parametrize(
+        "electrode",
+        [SphericalElectrode(400.0, "Pt"), HemisphericalElectrode(400.0, "Pt")],
+        ids=lambda e: e.shape_name,
+    )
+    def test_the_surface_potential_is_i_times_r(self, electrode):
+        radius = electrode.radius_um
+        surface = field.potential_V(CURRENT_UA, radius, SIGMA, electrode=electrode)
+        assert surface == pytest.approx(
+            CURRENT_UA * 1e-6 * electrode.access_resistance_ohm(SIGMA), rel=1e-12
+        )
+
+    def test_the_assignment_is_per_geometry(self):
+        """The sphere is full-space and the hemisphere half-space, by default."""
+        assert SphericalElectrode(400.0).environment == "full_space"
+        assert HemisphericalElectrode(400.0).environment == "half_space"
+
+
+class TestPinCImmersedGeometriesUseTheEqualAreaSphere:
+    """The band against a converged FD Laplace solve (``tests/oracles/fd_band``)."""
+
+    @pytest.mark.parametrize("aspect", [0.39, 0.5, 1.0, 1.181, 2.0])
+    def test_within_five_per_cent_over_the_clinical_range(self, aspect):
+        import oracles
+
+        band = CylindricalBandElectrode(1270.0, 1270.0 * aspect, "PtIr")
+        fd = oracles.FD_BAND_REFERENCE[aspect]
+        assert abs(band.access_resistance_ohm(0.35) / fd - 1.0) < 0.05
+
+    @pytest.mark.parametrize("aspect", [4.0, 10.0])
+    def test_within_twenty_per_cent_to_aspect_ten(self, aspect):
+        import oracles
+
+        band = CylindricalBandElectrode(1270.0, 1270.0 * aspect, "PtIr")
+        fd = oracles.FD_BAND_REFERENCE[aspect]
+        assert abs(band.access_resistance_ohm(0.35) / fd - 1.0) < 0.20
+
+    def test_the_clinical_contact_is_the_equal_area_sphere(self):
+        """``1/(4 pi sigma a)`` with ``4 pi a^2 = A``: 329.5 ohm, against 517.5 before.
+
+        Not tautological: the expected value is the sphere formula written out here on the
+        band's lateral area, and the FD solve puts the truth at 335.1 ohm.
+        """
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        area_m2 = math.pi * 1270e-6 * 1500e-6
+        a_m = math.sqrt(area_m2 / (4.0 * math.pi))
+        assert band.access_resistance_ohm(0.35) == pytest.approx(
+            1.0 / (4.0 * math.pi * 0.35 * a_m), rel=1e-12
+        )
+        assert band.access_resistance_ohm(0.35) == pytest.approx(329.5, abs=0.05)
+        assert band.environment == "full_space"
+        assert band.access_resistance_is_exact is False
+
+    def test_the_microwire_is_immersed_too(self):
+        wire = MicrowireElectrode(50.0, 200.0, "flat")
+        area_m2 = wire.area_um2 * 1e-12
+        a_m = math.sqrt(area_m2 / (4.0 * math.pi))
+        assert wire.environment == "full_space"
+        assert wire.access_resistance_ohm(0.35) == pytest.approx(
+            1.0 / (4.0 * math.pi * 0.35 * a_m), rel=1e-12
+        )
+
+    def test_the_field_of_an_immersed_geometry_is_full_space(self):
+        """The band's far field is the 4 pi point source, and at its own equal-area
+        sphere radius it reads I * R: the field and the resistance agree."""
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        a_um = math.sqrt(band.area_um2 / (4.0 * math.pi))
+        assert field.potential_V(CURRENT_UA, a_um, SIGMA, electrode=band) == pytest.approx(
+            CURRENT_UA * 1e-6 * band.access_resistance_ohm(SIGMA), rel=1e-12
+        )
+
+
+class TestTheEnvironmentIsAnInstanceField:
+    """Physics M5: a class default, overridable, because presets model immersed
+    electrodes as equal-area discs."""
+
+    def test_class_defaults(self):
+        for electrode in _planar():
+            assert electrode.environment == "half_space"
+        assert CylindricalBandElectrode(1270.0, 1500.0).environment == "full_space"
+
+    def test_an_immersed_disc_takes_the_sphere_and_the_full_space_field(self):
+        disc = DiscElectrode(91.0, "AIROF", environment="full_space")
+        a_m = math.sqrt(disc.area_um2 * 1e-12 / (4.0 * math.pi))
+        assert disc.access_resistance_ohm(SIGMA) == pytest.approx(
+            1.0 / (4.0 * math.pi * SIGMA * a_m), rel=1e-12
+        )
+        assert disc.access_resistance_is_exact is False
+        assert field.potential_V(1.0, 1000.0, SIGMA, electrode=disc) == pytest.approx(
+            1e-6 / (4.0 * math.pi * SIGMA * 1e-3), rel=1e-12
+        )
+
+    def test_an_unknown_environment_is_refused(self):
+        with pytest.raises(ValueError, match="environment"):
+            DiscElectrode(100.0, "Pt", environment="vacuum")  # type: ignore[arg-type]
+
+    def test_a_disc_standing_in_for_another_shape_is_not_exact(self):
+        """Ledger 21: a preset's note can say 'equal-area disc' while describe() printed
+        '(exact)'."""
+        disc = DiscElectrode(228.4, "AIROF", stands_in_for="a protruding wire stub")
+        assert disc.environment == "half_space"
+        assert disc.access_resistance_is_exact is False
+        assert "(exact)" not in disc.describe()
+
+
+class TestPresetsAreTaggedFromTheirSources:
+    """Each preset's environment and exactness, from what its paper describes."""
+
+    @pytest.mark.parametrize(
+        ("key", "environment", "exact"),
+        [
+            ("rose_robblee_typeA", "half_space", True),  # disc in a silicone support
+            ("beebe_iridium_wire", "half_space", False),  # stub through a septum
+            ("mccreery_microelectrode", "full_space", False),  # penetrating, faceted
+            ("mccreery2010_chronic", "full_space", False),  # penetrating
+            ("weiland_tin", "half_space", False),  # source not in the library
+        ],
+    )
+    def test_the_tag(self, key, environment, exact):
+        from neurostim.electrodes import electrode
+
+        e = electrode(key)
+        assert e.environment == environment
+        assert e.access_resistance_is_exact is exact
+
+
+class TestTheFemComparisonUsesTheElectrode:
+    """Physics m4: ``compare_with_point_source`` called ``potential_V`` with no electrode, so
+    it would have compared an imported planar field against a full-space source."""
+
+    def test_an_exact_disc_field_compares_to_one_far_out(self):
+        import numpy as np
+        import oracles
+
+        from neurostim.io.fem import FEMField, compare_with_point_source
+
+        disc = DiscElectrode(1000.0, "Pt")
+        r = np.array([50.0, 100.0, 200.0, 400.0]) * 500.0
+        points = np.column_stack([np.zeros_like(r), np.zeros_like(r), r])
+        exact = np.array(
+            [oracles.disc_potential_V(1e-4, SIGMA, 500e-6, x * 1e-6) for x in r]
+        )
+        imported = FEMField(points_um=points, potential_V=exact, current_uA=100.0)
+        table = compare_with_point_source(imported, 100.0, SIGMA, electrode=disc)
+        assert np.allclose(table["ratio"], 1.0, rtol=1e-3)

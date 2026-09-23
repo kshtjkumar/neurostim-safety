@@ -26,9 +26,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..geometry.base import Electrode
 
 _POSITION_ALIASES = {
     "x": ("x", "x_um", "x [um]", "x (um)", "coord_x", "% x"),
@@ -241,12 +245,19 @@ def compare_with_point_source(
     sigma_S_per_m: float = 0.35,
     *,
     min_distance_um: float = 1.0,
+    electrode: Electrode | None = None,
 ) -> pd.DataFrame:
     """Compare an imported field against the analytic point-source solution.
 
     Useful as a sanity check on units and on how far from the electrode the homogeneous
     approximation stays usable. Large deviations near the electrode are expected and
     correct; large deviations far from it usually mean a unit-scale mistake on import.
+
+    Pass the ``electrode`` the field was solved for. Its
+    :attr:`~neurostim.geometry.base.Electrode.environment` picks the half-space or the
+    full-space point source, and a planar electrode compared against the full-space one
+    reads a spurious factor of two far out (physics m4). ``None`` compares against a
+    full-space point source.
     """
     from ..models.field import potential_V
 
@@ -258,7 +269,9 @@ def compare_with_point_source(
             f"is the field centred on the electrode?"
         )
     r_keep = r[keep]
-    analytic = np.asarray(potential_V(current_uA, r_keep, sigma_S_per_m))
+    analytic = np.asarray(
+        potential_V(current_uA, r_keep, sigma_S_per_m, electrode=electrode)
+    )
     fem = field.potential_V[keep]
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio = np.where(analytic != 0, fem / analytic, np.nan)

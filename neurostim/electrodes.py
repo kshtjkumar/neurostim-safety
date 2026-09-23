@@ -107,7 +107,10 @@ _PRESETS: tuple[ElectrodePreset, ...] = (
     ElectrodePreset(
         key="mccreery_microelectrode",
         name="Penetrating activated-iridium microelectrode",
-        electrode=DiscElectrode(91.0, "AIROF"),
+        electrode=DiscElectrode(
+            91.0, "AIROF", environment="full_space",
+            stands_in_for="a faceted penetrating wire tip",
+        ),
         reference="mccreery1990",
         context=(
             "75 um iridium wire ground to a conical point with an ellipsoidal facet "
@@ -117,19 +120,26 @@ _PRESETS: tuple[ElectrodePreset, ...] = (
             "Modelled as an equal-area disc: the facet is elliptical, and the paper "
             "gives its mean radius as about 45 um. Showed no damage at 800 and "
             "1600 uC/cm^2 -- the observation that forces charge density and charge per "
-            "phase to be treated as cofactors"
+            "phase to be treated as cofactors. Full-space: 'The penetrating "
+            "microelectrodes were inserted approximately 1.5 mm deep into the parietal "
+            "cortex'"
         ),
     ),
     # --- chronic microstimulation ---
     ElectrodePreset(
         key="mccreery2010_chronic",
         name="Chronic activated-iridium microelectrode, 2000 um^2",
-        electrode=DiscElectrode(50.5, "AIROF"),
+        electrode=DiscElectrode(
+            50.5, "AIROF", environment="full_space",
+            stands_in_for="a penetrating microelectrode site",
+        ),
         reference="mccreery2010",
         context="implanted 450-1282 days in cat sensorimotor cortex, pulsed 240 h",
         note=(
             "Safe at 2 nC/phase; 4 nC/phase caused neuron loss to at least 150 um at "
-            "100 % duty cycle and about 60 um at 50 %"
+            "100 % duty cycle and about 60 um at 50 %. Tagged full-space as a penetrating "
+            "microelectrode; geometry not verified against the source, because the paper "
+            "is not in the package's library"
         ),
     ),
     # --- electrochemical characterisation ---
@@ -139,25 +149,41 @@ _PRESETS: tuple[ElectrodePreset, ...] = (
         electrode=DiscElectrode(1100.0, "Pt"),
         reference="rose_robblee1990",
         context="Type A electrode used to set the 50-150 uC/cm^2 platinum limit",
-        note="Measured roughness factor 3x; 9.5e-3 cm^2 geometric",
+        note=(
+            "Measured roughness factor 3x; 9.5e-3 cm^2 geometric. 'A smooth disk, 1.1 mm "
+            "diam, cut from Pt foil and mounted in a silicone rubber support' -- a real "
+            "flush disc, so the half-space Newman resistance applies"
+        ),
     ),
     ElectrodePreset(
         key="beebe_iridium_wire",
         name="Activated iridium wire, 4.1e-4 cm^2",
-        electrode=DiscElectrode(228.4, "AIROF"),
+        electrode=DiscElectrode(
+            228.4, "AIROF", stands_in_for="a wire stub protruding through a septum",
+        ),
         reference="beebe_rose1988",
         context="iridium wire in bicarbonate buffered saline at pH 7.3",
         note=(
             "Source of the AIROF limits: 1.0 mC/cm^2 cathodic-first, 2.1 anodic-first, "
-            "3.5 biased to +0.8 V vs SCE"
+            "3.5 biased to +0.8 V vs SCE. The wires 'were inserted through a silicone "
+            "septum, sanded flat, and then positioned to leave an exposed length of under "
+            "0.01 cm': a stub protruding into the half-space the septum bounds, so "
+            "half-space, and the disc resistance is an approximation"
         ),
     ),
     ElectrodePreset(
         key="weiland_tin",
         name="Porous titanium nitride, 4000 um^2",
-        electrode=DiscElectrode(71.4, "TiN"),
+        electrode=DiscElectrode(
+            71.4, "TiN", stands_in_for="an electrode whose geometry the library cannot check",
+        ),
         reference="weiland2002_tin",
         context="in vitro measurement giving 0.9 mC/cm^2 at 0.5 ms",
+        note=(
+            "Geometry not verified against the source; the paper is not in the package's "
+            "library, so whether this was a planar thin-film site or an immersed wire "
+            "cannot be checked. Left half-space by default and marked approximate"
+        ),
     ),
 )
 
