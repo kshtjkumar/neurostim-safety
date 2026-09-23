@@ -1067,12 +1067,12 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 102 | LOW | — (found in Phase 1b review, recorded at C2.7) | **unscheduled** — reported to the team lead | policy warning compares a derated `limit` with an underated `endorsed` under `medium="in_vivo"`; unreachable in the shipped database |
 | 103 | CRIT | — (found in Phase 2 review, F1) | **C2.8** | **FIXED** `f4f08b8`; exact-linear unrecovered charge; drift gated on `is_charge_balanced`; the seed refuses a zero DC. MUST land before Phase 3 |
 | 104 | CRIT | — (found in Phase 2 review, F2) | **C2.8** | **FIXED** `f4f08b8`; removed by the same exact-linear net, which makes the drift clause exactly monotone; sweep over r_a in {0.9,...,1-1e-6} |
-| 105 | HIGH | — (found in Phase 2 review, F3) | **C2.9** | drift budget carries the excursion riding on the offset; the drift oracle is extended to partial recovery |
+| 105 | HIGH | — (found in Phase 2 review, F3) | **C2.9** | **FIXED** `1fc2cbc`; drift budget carries the excursion riding on the offset; the drift oracle is extended to partial recovery |
 | 106 | HIGH | — (found in Phase 2 review, F4) | **C2.10** | booking only: the missing section 6 rows, and the C2.4 row corrected |
 | 107 | HIGH | — (found in Phase 2 review, F5) | **C2.11** | README, CHANGELOG, module docstrings, GUI train_duty_cycle field, example_output regenerated |
 | 108 | MED | — (found in Phase 2 review, F6) | C5.11 | render text: describe() must print the combined peak-and-drift verdict |
 | 109 | MED | — (found in Phase 2 review, F7) | **unscheduled** | needs a decision on whether drift runs over on-time or wall-clock; conservative today. To be settled at the Phase 3 start, before C3.5 touches the voltage budget |
-| 110 | MED | — (found in Phase 2 review, F8) | C2.8, C2.9 | residual-net and partial-recovery populations at C2.8; partial-recovery oracle, `exits_during_train` boundary pair and over-recovery edge at C2.9 |
+| 110 | MED | — (found in Phase 2 review, F8) | C2.8, C2.9 | **FIXED** `1fc2cbc`; residual-net and partial-recovery populations at C2.8; partial-recovery oracle, `exits_during_train` boundary pair and over-recovery edge at C2.9 |
 | 111 | LOW | — (found in Phase 2 review, F9) | **unscheduled** | test-only. Run the oracle over the whole sweep with the set written literally; first Phase 3 commit |
 | 112 | LOW | — (found in Phase 2 review, F10) | C2.8 | **FIXED** `f4f08b8`; removed by the exact-linear net: the balance test becomes amplitude-independent |
 | 113 | LOW | — (found in Phase 2 review, F11) | **unscheduled** | documentation-only today (not rendered); fix with the next change to the interval, or narrow the docstring |
