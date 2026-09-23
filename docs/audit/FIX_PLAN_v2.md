@@ -1073,7 +1073,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 103 | CRIT | — (found in Phase 2 review, F1) | **C2.8** | **FIXED** `f4f08b8`; exact-linear unrecovered charge; drift gated on `is_charge_balanced`; the seed refuses a zero DC. MUST land before Phase 3 |
 | 104 | CRIT | — (found in Phase 2 review, F2) | **C2.8** | **FIXED** `f4f08b8`; removed by the same exact-linear net, which makes the drift clause exactly monotone; sweep over r_a in {0.9,...,1-1e-6} |
 | 105 | HIGH | — (found in Phase 2 review, F3) | **C2.9** | **FIXED** `1fc2cbc`; drift budget carries the excursion riding on the offset; the drift oracle is extended to partial recovery |
-| 106 | HIGH | — (found in Phase 2 review, F4) | **C2.10** | booking only: the missing section 6 rows, and the C2.4 row corrected |
+| 106 | HIGH | — (found in Phase 2 review, F4) | **C2.10** | **FIXED** `4dbca6e`; booking only: the missing section 6 rows, and the C2.4 row corrected |
 | 107 | HIGH | — (found in Phase 2 review, F5) | **C2.11** | README, CHANGELOG, module docstrings, GUI train_duty_cycle field, example_output regenerated |
 | 108 | MED | — (found in Phase 2 review, F6) | C5.11 | render text: describe() must print the combined peak-and-drift verdict |
 | 109 | MED | — (found in Phase 2 review, F7) | **unscheduled** | needs a decision on whether drift runs over on-time or wall-clock; conservative today. To be settled at the Phase 3 start, before C3.5 touches the voltage budget |
