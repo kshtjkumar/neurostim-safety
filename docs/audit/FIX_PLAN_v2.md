@@ -954,7 +954,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 7 | MED | LISTED-ONLY | C4.2 | split out, with a polarity test |
 | 8 | MED | LISTED-ONLY | C4.2 | split out, with the half-window test; ledger row repaired at C0.5 |
 | 9 | HIGH | OK | C1.3 | T2 split into T2a (here) and T2b (C1.6) |
-| 10 | MED | OK | C3.3 | elliptic-disc pin |
+| 10 | MED | OK | C3.3 | **FIXED** `c327cee`; elliptic-disc pin |
 | 11 | MED | OK | C1.1 | T17 verified reachable |
 | 12 | MED | DOC | C3.6 | value unchanged; `provisional` flag added |
 | 13 | LOW | OK | C1.9 | |
