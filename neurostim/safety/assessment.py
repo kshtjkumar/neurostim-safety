@@ -23,9 +23,10 @@ Status vocabulary
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from ..data import cogan2016
 from ..geometry.base import Electrode
@@ -567,10 +568,87 @@ def _margin_from_ceiling(ceiling_uA: float, current_uA: float) -> float:
     return ceiling_uA / current_uA
 
 
-def _water_window_ceiling_uA(
+class _WindowSearch(NamedTuple):
+    """Everything ``floor_to_pass`` needs for the water window, built in one place.
+
+    The seed and the predicate are two expressions for one boundary -- a closed-form
+    inversion and a forward comparison -- and ``floor_to_pass``'s contract is that they
+    are inverses to within a few floats (ledger 9). Returning them together is what makes
+    that contract assertable: a test can hand the seed to the predicate that it seeds,
+    rather than re-deriving one of them and asserting against its own copy.
+
+    That matters for what comes next. C2.3 adds a DC-drift clause to ``passes`` -- FAIL
+    when the interface leaves the window before the train ends -- and the pulse-peak seed
+    knows nothing about it. On the plan's own case the drift ceiling is
+    ``Q_window / (PW . f . T) = 767.2735903959687`` uA against a seed of
+    ``99745.56675147594`` uA: a factor of ``f . T = 130``, 8.7e17 ulps, against a 4-float
+    budget. ``floor_to_pass`` would raise on every monophasic protocol. The seed must gain
+    the matching term **in the same commit**, and
+    ``TestTheWaterWindowSeedInvertsItsOwnPredicate`` fails if it does not.
+    """
+
+    seed_uA: float
+    """Largest amplitude every clause of :attr:`passes` admits, in closed form."""
+
+    passes: Callable[[float], bool]
+    """The forward comparison the seed must invert."""
+
+    plateau_uA: float
+    """Smallest change in current :attr:`passes` can resolve. See ``_limits.floor_to_pass``."""
+
+
+def _water_window_seed_uA(
     result: ww_mod.WaterWindowResult, protocol: StimProtocol, area_cm2: float
 ) -> float:
-    """Largest amplitude whose peak potential stays inside the window.
+    """Closed-form inverse of the water-window check: one term per clause, minimised.
+
+    A minimum over a list with one member today, and the shape rather than the arithmetic
+    is the point: the check has exactly one clause -- the peak excursion of a single pulse
+    -- and a clause added to the predicate must add its inverse here or the two stop being
+    inverses of each other.
+
+    **The term C2.3 adds**, written out so it is one line rather than a derivation. The
+    DC-drift clause FAILs when the interface reaches the window edge before the train
+    ends, so its closed-form inverse is the amplitude at which ``t_exit`` equals
+    ``train_duration_s``::
+
+        (window_headroom_V * capacitance_uF_cm2 * area_cm2)
+            / (net_charge_fraction * pulse_width_s * frequency_hz * train_duration_s)
+
+    with ``window_headroom_V`` the distance from ``resting_potential_V`` to the window
+    edge in the drift direction and ``net_charge_fraction`` the per-pulse unrecovered
+    fraction (1.0 monophasic; ``1 - charge_recovery_ratio`` after C2.1, hence ``inf`` --
+    no drift ceiling -- for a balanced biphasic pulse). Verified against the plan's own
+    constants: ``0.6 V * 250 uF/cm^2 * 0.05984734 cm^2 = 8.9771 uC``, which at 35.1 uA is
+    ``0.25576 s`` (the plan's 0.2558 s), and ``8.9771 / (90e-6 * 130 * 1) = 767.27`` uA.
+
+    It is **not** added here, and the reason is measured rather than assumed: the clause it
+    inverts does not exist yet, so a seed 130x below the live boundary passes and the climb
+    cannot reach it -- 160 of 160 swept monophasic configurations raise
+    ``LimitDidNotSettle`` on the way *up* instead of on the way down. Seed and clause are
+    one change.
+
+    Both branches are individually monotone-decreasing in current, so their conjunction is
+    too and ``floor_to_pass``'s precondition survives the addition.
+    """
+    seed_density = ww_mod.max_charge_density_in_window_uC_cm2(
+        result.material_key,
+        anodic_first=protocol.anodic_first,
+        resting_potential_V=result.resting_potential_V,
+        capacitance_uF_cm2=result.capacitance_uF_cm2,
+    )
+    pulse_width_s = protocol.pulse_width_us * 1e-6
+    return min(
+        [
+            seed_density * area_cm2 / pulse_width_s,  # peak excursion of one pulse
+        ]
+    )
+
+
+def _water_window_search(
+    result: ww_mod.WaterWindowResult, protocol: StimProtocol, area_cm2: float
+) -> _WindowSearch:
+    """The seed, the predicate it must invert, and the predicate's own resolution.
 
     Monotone in current only because the resting potential is inside the window, which
     ``SafetyCalculator`` now enforces at construction: from outside it, a small pulse
@@ -579,15 +657,9 @@ def _water_window_ceiling_uA(
     ``water_window.validate_resting_potential_V``).
     """
     window = result.window
-    if window is None:
-        return math.inf
+    if window is None:  # pragma: no cover - the caller returns inf before reaching here
+        raise ValueError(f"{result.material_key} has no water window on record")
     sign = 1.0 if protocol.anodic_first else -1.0
-    seed_density = ww_mod.max_charge_density_in_window_uC_cm2(
-        result.material_key,
-        anodic_first=protocol.anodic_first,
-        resting_potential_V=result.resting_potential_V,
-        capacitance_uF_cm2=result.capacitance_uF_cm2,
-    )
 
     def stays_in_window(current_uA: float) -> bool:
         density = charge_mod.charge_density_uC_cm2(
@@ -619,11 +691,25 @@ def _water_window_ceiling_uA(
         * area_cm2
         / (protocol.pulse_width_us * 1e-6)
     )
+    return _WindowSearch(
+        seed_uA=_water_window_seed_uA(result, protocol, area_cm2),
+        passes=stays_in_window,
+        plateau_uA=plateau_uA,
+    )
+
+
+def _water_window_ceiling_uA(
+    result: ww_mod.WaterWindowResult, protocol: StimProtocol, area_cm2: float
+) -> float:
+    """Largest amplitude whose peak potential stays inside the window."""
+    if result.window is None:
+        return math.inf
+    search = _water_window_search(result, protocol, area_cm2)
     return floor_to_pass(
-        seed_density * area_cm2 / (protocol.pulse_width_us * 1e-6),
-        stays_in_window,
+        search.seed_uA,
+        search.passes,
         name="Water window",
-        plateau=plateau_uA,
+        plateau=search.plateau_uA,
     )
 
 

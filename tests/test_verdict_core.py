@@ -599,6 +599,191 @@ class TestTheClimbIsBoundedByThePredicatesOwnResolution:
             _limits.floor_to_pass(0.5, passes, name="synthetic", plateau=plateau)
 
 
+class TestTheWaterWindowSeedInvertsItsOwnPredicate:
+    """The seed and the check it seeds must stay one change (review B3 / F6).
+
+    ``_water_window_ceiling_uA`` hands ``floor_to_pass`` a seed obtained by inverting the
+    window expression in closed form, and a predicate that evaluates it forward. The two
+    are written separately, and ``floor_to_pass``'s whole contract is that they are
+    inverses: it walks four floats down and raises otherwise (ledger 9).
+
+    C2.3 adds a DC-drift clause to that predicate -- FAIL when ``t_exit < train_duration_s``
+    -- which the peak-only seed knows nothing about. On the plan's own case
+    (``CylindricalBandElectrode(1270, 1500, "PtIr")``, 3000 uA / 90 us / 130 Hz monophasic,
+    ``capacitance_uF_cm2=250``, area 0.05984734 cm^2) the two ends are
+
+        pulse-peak seed          99745.56675147594 uA
+        drift ceiling            767.2735903959687 uA   = Q_window / (PW . f . T)
+        ratio                    130.0                  = f . T
+        gap                      8.7e17 ulps            against a 4-float budget
+
+    so ``floor_to_pass`` would walk down four floats, still fail, and raise on **every**
+    monophasic protocol -- exactly the population C2.4 is about. The seed must become the
+    minimum of the two closed forms, because the predicate becomes their conjunction; both
+    branches are individually monotone-decreasing in current, so the conjunction is too.
+
+    These tests do not add the drift term -- the clause it inverts does not exist yet, and
+    a seed 130x below the live boundary raises on the way *up* instead (measured: 160 of
+    160 monophasic configurations). They pin the coupling, so that adding the clause
+    without adding its inverse fails here and is not discovered as a crash inside C2.3.
+    """
+
+    GRID = [
+        ("PtIr", 1270.0, 3000.0, 90.0, "monophasic"),
+        ("Pt", 100.0, 80.0, 200.0, "monophasic"),
+        ("Pt", 100.0, 80.0, 200.0, "biphasic"),
+        ("SIROF", 500.0, 500.0, 50.0, "monophasic"),
+        ("AIROF", 20.0, 10.0, 500.0, "biphasic"),
+    ]
+
+    def _search(self, key, diameter_um, current_uA, pulse_width_us, waveform):
+        """The package's own seed, predicate and plateau for one grid row."""
+        from neurostim.safety import water_window as ww
+        from neurostim.safety.assessment import _water_window_search
+
+        electrode = DiscElectrode(diameter_um, key)
+        protocol = StimProtocol(
+            current_uA, pulse_width_us, 130.0, 1.0, waveform=waveform
+        )
+        result = ww.evaluate(
+            key,
+            0.0,
+            anodic_first=protocol.anodic_first,
+            resting_potential_V=-0.25,
+            capacitance_uF_cm2=137.0,
+            anodic_first_for_capacitance=protocol.anodic_first,
+        )
+        return _water_window_search(result, protocol, electrode.area_cm2)
+
+    def test_the_seed_inverts_the_predicate_it_seeds(self):
+        """The coupling, asserted against the package's own predicate object.
+
+        The contract is not "the seed passes" -- a one-ulp overshoot is what the walk down
+        exists for (ledger 9), and one grid row does overshoot. It is that the seed is
+        within the *declared budget* of the boundary in whichever direction it landed:
+        ``STEP_BUDGET`` floats down, ``max(CLIMB_TOLERANCE x seed, PLATEAU_ALLOWANCE x
+        plateau)`` up.
+
+        Not tautological: the seed is a closed-form inversion and the predicate a forward
+        comparison, written as different expressions and brought together here only
+        because ``_water_window_search`` returns both; the budget is recomputed from
+        ``_limits``' own constants. A clause added to one and not the other makes this
+        false, which is the whole of B3 and cannot be reproduced by re-deriving either
+        side inside the test.
+        """
+        import math
+
+        from neurostim.safety._limits import (
+            CLIMB_TOLERANCE,
+            PLATEAU_ALLOWANCE,
+            STEP_BUDGET,
+            LimitDidNotSettle,
+            floor_to_pass,
+        )
+
+        for row in self.GRID:
+            search = self._search(*row)
+            try:
+                settled = floor_to_pass(
+                    search.seed_uA,
+                    search.passes,
+                    name="Water window",
+                    plateau=search.plateau_uA,
+                )
+            except LimitDidNotSettle as exc:  # pragma: no cover - the tripwire firing
+                pytest.fail(
+                    f"the water-window seed no longer inverts the predicate it seeds, "
+                    f"for {row}: {exc}. A clause added to the forward check needs its "
+                    f"closed-form inverse in _water_window_seed_uA, in the same commit."
+                )
+
+            if settled <= search.seed_uA:
+                steps, probe = 0, search.seed_uA
+                while probe > settled and steps <= STEP_BUDGET:
+                    probe = math.nextafter(probe, -math.inf)
+                    steps += 1
+                assert steps <= STEP_BUDGET, (row, steps)
+            else:
+                budget = max(
+                    abs(search.seed_uA) * CLIMB_TOLERANCE,
+                    PLATEAU_ALLOWANCE * search.plateau_uA,
+                )
+                assert settled - search.seed_uA <= budget, (row, settled)
+
+            assert search.passes(settled), row
+            assert not search.passes(math.nextafter(settled, math.inf)), row
+
+    def test_the_seed_is_a_minimum_over_the_clauses_the_check_actually_has(self):
+        """One term today, and it is the peak-excursion inverse.
+
+        The assertion that will move: when C2.3 adds the drift clause, this is where the
+        second term has to appear, and the value below stops being the seed for a
+        monophasic protocol.
+
+        Not tautological: the expected seed is recomputed here from
+        ``max_charge_density_in_window_uC_cm2`` and the geometry -- the published window
+        and capacitance, not the check -- and compared with what the package seeds.
+        """
+        from neurostim.safety import water_window as ww
+
+        for key, diameter_um, current_uA, pulse_width_us, waveform in self.GRID:
+            electrode = DiscElectrode(diameter_um, key)
+            protocol = StimProtocol(
+                current_uA, pulse_width_us, 130.0, 1.0, waveform=waveform
+            )
+            expected = (
+                ww.max_charge_density_in_window_uC_cm2(
+                    key,
+                    anodic_first=protocol.anodic_first,
+                    resting_potential_V=-0.25,
+                    capacitance_uF_cm2=137.0,
+                )
+                * electrode.area_cm2
+                / (pulse_width_us * 1e-6)
+            )
+            search = self._search(key, diameter_um, current_uA, pulse_width_us, waveform)
+
+            assert search.seed_uA == expected, (key, waveform)
+
+    def test_the_monophasic_water_window_ceiling_is_the_pulse_peak_inverse_today(self):
+        """The tripwire on the value itself. C2.3 moves this to 767.2735903959687 uA and
+        must move the seed in the same commit; until then the peak-only answer stands.
+
+        Not tautological: 99745.56675147594 is
+        ``max_charge_density_in_window_uC_cm2 * area / pulse_width_s`` on the plan's own
+        case, recomputed here from the material database and the geometry rather than read
+        from the check, and the drift ceiling it will become is written out beside it --
+        ``0.6 V * 250 uF/cm^2 * 0.05984734 cm^2 = 8.9771 uC``, over
+        ``90e-6 s * 130 Hz * 1 s``.
+        """
+        from neurostim import CylindricalBandElectrode
+        from neurostim.safety import water_window as ww
+
+        electrode = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        calc = SafetyCalculator(
+            electrode,
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic"),
+            capacitance_uF_cm2=250.0,
+        )
+        seed_density = ww.max_charge_density_in_window_uC_cm2(
+            "PtIr",
+            anodic_first=False,
+            resting_potential_V=0.0,
+            capacitance_uF_cm2=250.0,
+        )
+        peak_inverse_uA = seed_density * electrode.area_cm2 / 90e-6
+        drift_uA = (0.6 * 250.0 * electrode.area_cm2) / (90e-6 * 130.0 * 1.0)
+
+        ceiling = next(
+            c for c in calc.assess().checks if c.name == "Water window"
+        ).ceiling_uA
+
+        assert peak_inverse_uA == pytest.approx(99745.56675147594, rel=1e-12)
+        assert drift_uA == pytest.approx(767.2735903959687, rel=1e-12)
+        assert peak_inverse_uA / drift_uA == pytest.approx(130.0, rel=1e-12)
+        assert ceiling == pytest.approx(peak_inverse_uA, rel=1e-12)
+
+
 class TestFormatLimit:
     """A limit must never be printed larger than it is (ledger 49)."""
 

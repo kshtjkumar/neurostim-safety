@@ -763,6 +763,7 @@ are marked **[!]**; the three added after Phase 0 are marked **[84]**.
 | C2.2 | `required_V`, `J_avg` for `return_phase_ratio ≠ 1` | 0.524 V → ~2.6 V; 0.0167 → 0.0836 A/cm² peak at r = 0.2 | compliance + current-density docstrings |
 | C2.2 **[+]** | `limiting_current_uA` / `limiting_mechanism` for **asymmetric** protocols | the current-density margin is in the candidate set after C1.6, so the headline moves for every `return_phase_ratio ≠ 1` | plus an assertion that symmetric protocols are byte-identical across this commit |
 | C2.4 | monophasic charge-injection limit | a number → NOT_EVALUATED, `limits_incomplete = True` | README "What it computes" table, `charge.py` module docstring |
+| C2.3 **[91]** | monophasic water-window **ceiling** (`_water_window_ceiling_uA`) | `99745.56675147594` µA (pulse-peak inverse) → `767.2735903959687` µA (`Q_window / (PW·f·T)`), a factor of `f·T = 130`. **`_water_window_seed_uA` must gain the drift term in the same commit as the clause**: the peak-only seed is 8.7e17 ulps above the new boundary against a 4-float budget, so `floor_to_pass` raises on every monophasic protocol otherwise. Pinned by `TestTheWaterWindowSeedInvertsItsOwnPredicate` | `_water_window_seed_uA` docstring (carries the expression), `assessment.json`, `current_sweep.csv` |
 | C2.4 | monophasic water-window verdict | PASS with 0.58 V headroom → **FAIL, drift time 0.256 s** (verified 0.2558 s) | water_window docstring, PDF |
 | C2.4 | monophasic `limiting_current_uA` | capped at the biphasic value; **0.0 for a continuous train** | JSON, PDF, GUI |
 | C2.5 | envelope excursion list | the pulse-duty entry is removed; a train-duty entry appears | `EnvelopeResult.describe()` golden. `report()["duty_cycle"]` is **unchanged** (0.052) — v1 would have moved it; v2 does not |
@@ -1029,6 +1030,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 88 | HIGH | — (found in the Phase 1 review) | C1.10 | **FIXED** — `_climb_to_boundary`'s relative bound is joined by a caller-declared absolute `plateau` (D2 point 3); `assess()` stopped raising on the 6.3 % of edge-clustered valid inputs that used to crash |
 | 89 | CRIT | — (found in the Phase 1 review) | C1.3, C1.5 | **FIXED** — `sensitivity.py` and `examples/worked_example.py` were byte-untouched by Phase 1 and are render surfaces for both conventions; §6 had no row for either file |
 | 90 | MED | — (found in the Phase 1 review) | C1.9 | **FIXED** — the `UNCONSTRUCTIBLE` guard was one-sided; a *lower* amplitude bound crashed the bisection where an upper bound was handled. No package number moves: the defect is in `tests/oracles/fail_ceiling.py` |
+| 91 | HIGH | — (found in the Phase 1 review) | C2.3 | seed refactored into `_water_window_seed_uA` with the required drift term written out and a tripwire test in Phase 1b; **the term itself must land inside C2.3**, beside the clause it inverts |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
