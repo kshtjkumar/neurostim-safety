@@ -56,6 +56,20 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### The current-density detail describes the electrode's own distribution
+
+The Current density check printed a disc's primary distribution for every electrode:
+centre at 0.50× average, the outer 25 % above it, and the density diverging at the rim.
+A sphere or a hemisphere flush in its plane has a uniform distribution, with no edge at
+all. A ring, rectangle, band or microwire crowds at its own edges, but not with the disc's
+figures. The detail now says which, and gives the disc's figures only for a real disc.
+No margin, limit or verdict moves, because the threshold comparison uses the average
+density.
+
+`current_density.evaluate` takes the `electrode`. `CurrentDensityResult` gains
+`distribution`, and its `centre_ratio` and `fraction_above_average` are `None` where no
+figure is known. `ratio_at_area_fraction` raises for anything but a disc.
+
 ### One half-space/full-space convention per geometry
 
 The field model and the access resistance disagreed about which space an electrode injects

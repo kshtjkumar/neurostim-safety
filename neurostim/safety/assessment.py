@@ -1818,6 +1818,7 @@ class SafetyCalculator:
             n_pulses=n_pulses,
             return_phase_current_uA=self.p.return_phase_current_uA,
             return_phase_width_us=self.p.return_phase_width_us,
+            electrode=self.e,
         )
         ww_result = ww_mod.evaluate(
             self.material,

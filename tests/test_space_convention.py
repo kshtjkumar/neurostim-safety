@@ -223,3 +223,105 @@ class TestTheFemComparisonUsesTheElectrode:
         imported = FEMField(points_um=points, potential_V=exact, current_uA=100.0)
         table = compare_with_point_source(imported, 100.0, SIGMA, electrode=disc)
         assert np.allclose(table["ratio"], 1.0, rtol=1e-3)
+
+
+class TestTheCurrentDistributionIsTheGeometrys:
+    """Ledger 18 (C3.2). The disc's primary distribution was printed for every geometry.
+
+    ``J(r)/J_avg = 0.5 / sqrt(1 - (r/a)^2)`` is the flush disc: its centre runs at half the
+    average, its outer 25 % runs above it, and the density diverges at the rim. For a
+    sphere, and for a hemisphere flush in its plane, the primary distribution is uniform:
+    ``J = I/A`` everywhere, with no edge. A band, ring, rectangle or microwire crowds at
+    its own edges, but not with the disc's numbers. No closed form is used for those here,
+    and the package says so instead of borrowing the disc's.
+    """
+
+    @staticmethod
+    def _density(electrode):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        assessment = SafetyCalculator(
+            electrode, StimProtocol(100.0, 200.0, 130.0, 1.0)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Current density")
+        return assessment, check
+
+    @pytest.mark.parametrize(
+        "electrode",
+        [SphericalElectrode(400.0, "Pt"), HemisphericalElectrode(400.0, "Pt")],
+        ids=lambda e: e.shape_name,
+    )
+    def test_a_sphere_and_a_hemisphere_are_uniform(self, electrode):
+        """Not tautological: the expected values are the uniform distribution's own, 1 and
+        0, written here. The disc's are 0.5 and 0.25."""
+        from neurostim.safety import current_density as jd
+
+        result = jd.evaluate(100.0, electrode.area_cm2, 200.0, electrode=electrode)
+        assert result.distribution == "uniform"
+        assert result.centre_ratio == 1.0
+        assert result.fraction_above_average == 0.0
+        text = result.describe()
+        assert "diverges at the rim" not in text
+        assert "uniform" in text
+        with pytest.raises(ValueError, match="disc"):
+            result.ratio_at_area_fraction(0.25)
+
+    def test_the_disc_keeps_its_own_distribution(self):
+        from neurostim.safety import current_density as jd
+
+        disc = DiscElectrode(500.0, "Pt")
+        result = jd.evaluate(100.0, disc.area_cm2, 200.0, electrode=disc)
+        assert result.distribution == "disc"
+        assert result.centre_ratio == 0.5
+        assert result.fraction_above_average == 0.25
+        assert result.ratio_at_area_fraction(0.25) == pytest.approx(1.0)
+        assert "diverges at the rim" in result.describe()
+
+    @pytest.mark.parametrize(
+        "electrode",
+        [
+            RingElectrode(1000.0, 600.0, "Pt"),
+            RectangularElectrode(700.0, 900.0, "Pt"),
+            CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            MicrowireElectrode(50.0, 200.0, "flat"),
+            DiscElectrode(91.0, "AIROF", environment="full_space", stands_in_for="a tip"),
+        ],
+        ids=lambda e: e.shape_name,
+    )
+    def test_other_geometries_do_not_borrow_the_discs_numbers(self, electrode):
+        from neurostim.safety import current_density as jd
+
+        result = jd.evaluate(100.0, electrode.area_cm2, 200.0, electrode=electrode)
+        assert result.distribution == "edge"
+        assert result.centre_ratio is None
+        assert result.fraction_above_average is None
+        text = result.describe()
+        assert "0.50x" not in text
+        assert "25 %" not in text
+        assert "edges" in text
+
+    def test_the_assessment_threads_the_electrode(self):
+        """The API change v1 hid (execution M12): ``evaluate`` had no electrode parameter,
+        so the assessment could not have passed one."""
+        _, check = self._density(SphericalElectrode(400.0, "Pt"))
+        assert "uniform" in check.detail
+        assert "diverges at the rim" not in check.detail
+
+    @pytest.mark.parametrize(
+        "electrode",
+        [SphericalElectrode(400.0, "Pt"), CylindricalBandElectrode(1270.0, 1500.0, "PtIr")],
+        ids=lambda e: e.shape_name,
+    )
+    def test_no_margin_or_limit_moves(self, electrode):
+        """The Butterwick comparison uses the average, not the peak, so the distribution is
+        reporting only.
+
+        Not tautological: the comparison without the electrode (the old code path) and with
+        it are computed separately and compared bit for bit.
+        """
+        from neurostim.safety import current_density as jd
+
+        without = jd.evaluate(100.0, electrode.area_cm2, 200.0)
+        with_electrode = jd.evaluate(100.0, electrode.area_cm2, 200.0, electrode=electrode)
+        assert with_electrode.threshold == without.threshold
+        assert with_electrode.average_A_per_cm2 == without.average_A_per_cm2

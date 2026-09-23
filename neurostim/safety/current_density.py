@@ -49,6 +49,14 @@ Kuncel & Grill (2004) obtained by finite element modelling of a cylindrical DBS 
 Two different geometries and two different methods agreeing this closely is good evidence
 the edge effect is real and about this size.
 
+**Only a disc has these numbers** (ledger 18). They used to be printed for every
+geometry. A sphere, and a hemisphere flush in its plane, have a *uniform* primary
+distribution: ``J = I/A`` everywhere, no edge and no divergence. A ring, rectangle, band
+or microwire does crowd at its own edges, but its centre ratio and fraction above average
+are not the disc's. No closed form for them is used here, so the result says the edges
+crowd and gives no number. :func:`primary_distribution` classifies an electrode, and the
+Butterwick comparison, which uses the average, is unaffected by the classification.
+
 Mitigations, from the sources
 -----------------------------
 Recessing the electrode into its carrier, or flaring the recess, reduces the edge
@@ -63,8 +71,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 
 from ..data import butterwick2007
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..geometry.base import Electrode
+
+Distribution = Literal["disc", "uniform", "edge"]
+"""The primary current distribution of a geometry, as far as this package can state it."""
 
 DISC_CENTRE_RATIO = 0.5
 """``J(0)/J_avg`` for a disc under the primary current distribution."""
@@ -83,6 +98,26 @@ DBS_CLINICAL_REFERENCE_A_PER_CM2 = 0.0993
 Kuncel & Grill (2004), 1.26 mm x 1.5 mm contact. A reference point for scale, **not** a
 damage threshold.
 """
+
+
+def primary_distribution(electrode: Electrode | None) -> Distribution:
+    """Which primary current distribution ``electrode`` has.
+
+    ``"disc"`` for a real flush disc, and for ``None`` (the pre-C3.2 behaviour of a caller
+    that names no geometry). ``"uniform"`` for a sphere and a hemisphere. ``"edge"`` for
+    everything else, including a disc that stands in for another shape by area: it
+    crowds at its edges by an amount no closed form here gives.
+    """
+    from ..geometry.planar import DiscElectrode
+    from ..geometry.volumetric import HemisphericalElectrode, SphericalElectrode
+
+    if electrode is None:
+        return "disc"
+    if isinstance(electrode, SphericalElectrode | HemisphericalElectrode):
+        return "uniform"
+    if isinstance(electrode, DiscElectrode) and electrode.access_resistance_is_exact:
+        return "disc"
+    return "edge"
 
 
 def average_current_density_A_per_cm2(current_uA: float, area_cm2: float) -> float:
@@ -142,13 +177,18 @@ class CurrentDensityResult:
     average_A_per_cm2: float
     pulse_width_us: float
     edge_concentrates: bool
-    fraction_above_average: float
-    centre_ratio: float
+    fraction_above_average: float | None
+    """Share of the surface above the average: 0.25 for a disc, 0.0 for a uniform
+    distribution, ``None`` where the geometry crowds at edges by an unquantified amount."""
+    centre_ratio: float | None
+    """``J(centre)/J_avg``: 0.5 for a disc, 1.0 for a uniform distribution, else ``None``."""
     threshold: butterwick2007.ThresholdComparison | None = None
     return_phase_current_uA: float = 0.0
     return_phase_width_us: float = 0.0
     return_A_per_cm2: float = 0.0
     return_threshold: butterwick2007.ThresholdComparison | None = None
+    distribution: Distribution = "disc"
+    """See :func:`primary_distribution`."""
 
     @property
     def has_return_phase(self) -> bool:
@@ -193,7 +233,15 @@ class CurrentDensityResult:
         return self.average_A_per_cm2 / DBS_CLINICAL_REFERENCE_A_PER_CM2
 
     def ratio_at_area_fraction(self, area_fraction: float) -> float:
-        """Peak factor over the outermost fraction of a disc-like electrode."""
+        """Peak factor over the outermost fraction of a disc.
+
+        Raises for any other distribution: the formula is the disc's (ledger 18).
+        """
+        if self.distribution != "disc" or not self.edge_concentrates:
+            raise ValueError(
+                f"ratio_at_area_fraction is the disc's primary distribution; this "
+                f"electrode's is {self.distribution!r}"
+            )
         return disc_ratio_at_area_fraction(area_fraction)
 
     def describe(self) -> str:
@@ -214,15 +262,26 @@ class CurrentDensityResult:
             f"{DBS_CLINICAL_REFERENCE_A_PER_CM2:g} A/cm^2 modelled for a clinical DBS "
             f"contact at 3 V",
         ]
-        if self.edge_concentrates:
+        if self.distribution == "uniform":
+            lines.append(
+                "  uniform primary distribution: J = I/A everywhere on a sphere or "
+                "hemisphere; no edge"
+            )
+        elif not self.edge_concentrates:
+            lines.append("  recessed geometry: edge concentration designed out")
+        elif self.distribution == "edge":
+            lines.append(
+                "  current crowds at this geometry's edges, so the local peak exceeds the "
+                "average; the disc's centre and area-fraction figures do not apply and no "
+                "closed form is used here"
+            )
+        else:
             lines += [
                 f"  centre        {self.centre_ratio:.2f}x average "
                 f"(primary distribution)",
-                f"  outer {self.fraction_above_average * 100:.0f} % of the surface runs "
-                f"above average; density diverges at the rim",
+                f"  outer {(self.fraction_above_average or 0.0) * 100:.0f} % of the surface "
+                f"runs above average; density diverges at the rim",
             ]
-        else:
-            lines.append("  recessed geometry: edge concentration designed out")
         if self.threshold is not None:
             lines.append("  vs electroporation damage threshold:")
             lines.append(self.threshold.describe())
@@ -246,6 +305,7 @@ def evaluate(
     n_pulses: int = butterwick2007.PULSE_COUNT_SATURATION,
     return_phase_current_uA: float = 0.0,
     return_phase_width_us: float = 0.0,
+    electrode: Electrode | None = None,
 ) -> CurrentDensityResult:
     """Compute each phase's current density, the geometric peak factor, and the threshold.
 
@@ -253,6 +313,9 @@ def evaluate(
     "there is no second phase" and reproduces the pre-ledger-4 answer exactly. They are
     supplied by :mod:`neurostim.safety.assessment` from the protocol; passing one without
     the other is a return phase with no duration or no current, which is the same thing.
+
+    ``electrode`` selects the primary distribution the result reports (ledger 18); it
+    moves no number the threshold comparison uses. ``None`` reports the disc's, as before.
     """
     applied = average_current_density_A_per_cm2(current_uA, area_cm2)
     comparison = butterwick2007.compare(
@@ -267,17 +330,28 @@ def evaluate(
         return_comparison = butterwick2007.compare(
             return_applied, return_phase_width_us, diameter_um, n_pulses=n_pulses
         )
+    distribution = primary_distribution(electrode)
+    if recessed:
+        fraction: float | None = 0.0
+        centre: float | None = 1.0
+    elif distribution == "disc":
+        fraction, centre = DISC_FRACTION_ABOVE_AVERAGE, DISC_CENTRE_RATIO
+    elif distribution == "uniform":
+        fraction, centre = 0.0, 1.0
+    else:
+        fraction, centre = None, None
     return CurrentDensityResult(
         threshold=comparison,
         current_uA=current_uA,
         area_cm2=area_cm2,
         average_A_per_cm2=applied,
         pulse_width_us=pulse_width_us,
-        edge_concentrates=not recessed,
-        fraction_above_average=0.0 if recessed else DISC_FRACTION_ABOVE_AVERAGE,
-        centre_ratio=1.0 if recessed else DISC_CENTRE_RATIO,
+        edge_concentrates=not recessed and distribution != "uniform",
+        fraction_above_average=fraction,
+        centre_ratio=centre,
         return_phase_current_uA=return_phase_current_uA,
         return_phase_width_us=return_phase_width_us,
         return_A_per_cm2=return_applied,
         return_threshold=return_comparison,
+        distribution=distribution,
     )
