@@ -111,6 +111,33 @@ configurations, by up to 44 %, and never rose. The clinical band at
 capacitance throughout, which raised the worked example to 1.06 V. It was a wrong
 mechanism and is reversed here.)
 
+### An unbalanced train's DC offset is in the voltage budget
+
+The compliance budget took every pulse from rest. A waveform that recovers less than it
+injects, or more, leaves the difference on the interface, and the Water window check's
+drift clause already follows that offset over the train. The last pulse of a train of `N`
+starts `N − 1` residues from rest, and the stimulator must drive through that too. The
+budget now includes it:
+
+- under-recovery and monophasic delivery, on the leading phase;
+- over-recovery, on the return phase's overshoot;
+- on the counter as well, from its own area and material.
+
+`N` counts the pulses `train_duty_cycle` delivers. On the active electrode the offset is
+capped at the water-window headroom from the resting potential; beyond that the interface
+is at the edge and the Water window check fails the waveform in its own right. The counter
+(whose window is not assessed) and a material with no window (Ta₂O₅) are not capped, so a
+continuous unbalanced train with either permits no current. The assessment then refuses and
+names Compliance voltage.
+
+A charge-balanced waveform is unchanged, bit for bit (720 of 720 swept configurations).
+Of 2520 unbalanced ones, 2049 needed more voltage, 504 of them an infinite one, and none
+less. For a 500 µm Pt disc at 100 µA, 200 µs, 130 Hz and 95 % recovery:
+
+- a 1 s train goes from 0.326 V to 0.589 V;
+- a continuous one goes to 0.926 V, the 0.6 V cap reached;
+- with a counter, a continuous train goes to an infinite requirement (it was 0.506 V).
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,

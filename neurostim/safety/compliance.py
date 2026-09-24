@@ -44,6 +44,34 @@ against a pulse-by-pulse integration of the same circuit (``tests/oracles/pulse_
 C3.9 gave the whole return charge the opposite polarity's ``C_eff``. That is not the
 physics, and the reviewer who asked for it retracted the request.
 
+**The train's DC offset** (ledger 140). A waveform that recovers less, or more, than it
+injects leaves ``d = |1 - r_a| Q`` on each interface per pulse, and under the same
+leak-free capacitor model the water-window drift clause uses, the offset is still there
+when the next pulse starts. So pulse ``N`` starts ``(N - 1) d`` from rest, where ``N`` is
+the number of pulses the train delivers, ``ceil(n_pulses)`` including ``train_duty_cycle``,
+and infinite for continuous stimulation. The offset adds to the phase that drives the
+interface further the same way. Under-recovery (and monophasic delivery) leaves it on the
+leading polarity's branch, so it adds to the leading phase at the leading ``C_eff``.
+Over-recovery leaves it on the opposite branch, so it adds to the return phase's overshoot
+at the opposite ``C_eff``. The phase it opposes is left alone rather than credited. The
+counter carries the same charge with the opposite sign, on its own area and material.
+A balanced waveform (Charge balance's own test) has no offset, and its numbers are
+unchanged.
+
+The active electrode's offset term is capped at the water-window headroom toward the edge
+it is heading for, from ``resting_potential_V``. Beyond it the interface is at the edge,
+where the charge goes into electrolysis rather than into the voltage, and the Water window
+check FAILs the waveform in its own right: the drift clause counts ``f T`` pulses, at least
+as many as ``N`` here, so an offset that reaches the headroom here has reached it there
+too. (For an over-recovery drift that holds only once ledger 141 is fixed: the drift clause
+still budgets that drift at the leading polarity's ``C_eff``, twice the opposite one for a
+cathodic-first Pt pulse.) Two cases are **not capped**, and a continuous unbalanced train
+then needs an infinite voltage, a compliance ceiling of zero:
+
+- the counter, because its water window is not assessed (ledger 133), so a cap would hide
+  the voltage with nothing to FAIL in its place;
+- a material with no water window (Ta2O5), for the same reason.
+
 with each electrode's own access resistance, ``G = 4 pi`` in a full space or ``2 pi`` for
 two electrodes flush on one insulating plane (the convention of
 :attr:`~neurostim.geometry.base.Electrode.environment`), and each interface's own
@@ -77,6 +105,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 from ..data import gabriel1996
 from ..geometry.base import Electrode
@@ -87,7 +116,38 @@ from ..protocol import StimProtocol
 from ..units import charge_uC
 from ._limits import floor_to_pass, format_limit
 from .charge import charge_density_uC_cm2
-from .water_window import effective_capacitance_uF_cm2, polarisation_V
+from .water_window import (
+    drift_headroom_V,
+    effective_capacitance_uF_cm2,
+    polarisation_V,
+    validate_resting_potential_V,
+)
+
+
+def train_offset_V(
+    current_uA: float,
+    *,
+    pulse_width_us: float,
+    offset_factor: float,
+    area_cm2: float,
+    capacitance_uF_cm2: float,
+    cap_V: float = math.inf,
+) -> float:
+    """The DC offset the train has built up when its last pulse starts (ledger 140).
+
+    ``offset_factor`` is ``(N - 1) |1 - r_a|``, the offset as a multiple of the leading
+    charge; ``inf`` for a continuous unbalanced train and ``0.0`` for a balanced one.
+    Linear in the amplitude up to ``cap_V`` and flat beyond it, so it is monotone. At zero
+    amplitude it is zero, and an infinite factor gives the cap directly: no ``0 * inf``.
+    """
+    if offset_factor == 0.0 or current_uA == 0.0:
+        return 0.0
+    if math.isinf(offset_factor):
+        return cap_V
+    offset = charge_uC(current_uA, pulse_width_us) * offset_factor
+    return min(
+        polarisation_V(charge_density_uC_cm2(offset, area_cm2), capacitance_uF_cm2), cap_V
+    )
 
 
 def required_voltage_V(
@@ -99,11 +159,17 @@ def required_voltage_V(
     capacitance_uF_cm2: float,
     counter_area_cm2: float = 0.0,
     counter_capacitance_uF_cm2: float = 0.0,
+    offset_factor: float = 0.0,
+    offset_cap_V: float = math.inf,
 ) -> float:
     """Voltage the stimulator must supply to deliver ``current_uA`` into this load.
 
     ``counter_area_cm2 = 0`` means no counter interface is modelled; otherwise the same
     charge polarises the counter over its own area (ledger 5).
+
+    ``offset_factor`` is the train's DC offset when it builds on this phase's branch, as
+    under-recovery does (ledger 140, :func:`train_offset_V`): capped at ``offset_cap_V`` on
+    the active electrode, uncapped on the counter.
 
     One expression, used both to report the requirement and to back-solve the limit. The
     back-solve used to scale the requested current by the voltage ratio, which is exact in
@@ -120,7 +186,49 @@ def required_voltage_V(
     if counter_area_cm2 > 0.0:
         counter_density = charge_density_uC_cm2(charge, counter_area_cm2)
         required += polarisation_V(counter_density, counter_capacitance_uF_cm2)
+    if offset_factor:
+        required += _offsets_V(
+            current_uA,
+            pulse_width_us=pulse_width_us,
+            offset_factor=offset_factor,
+            offset_cap_V=offset_cap_V,
+            area_cm2=area_cm2,
+            capacitance_uF_cm2=capacitance_uF_cm2,
+            counter_area_cm2=counter_area_cm2,
+            counter_capacitance_uF_cm2=counter_capacitance_uF_cm2,
+        )
     return required
+
+
+def _offsets_V(
+    current_uA: float,
+    *,
+    pulse_width_us: float,
+    offset_factor: float,
+    offset_cap_V: float,
+    area_cm2: float,
+    capacitance_uF_cm2: float,
+    counter_area_cm2: float,
+    counter_capacitance_uF_cm2: float,
+) -> float:
+    """Both interfaces' train offsets on one phase: the active one capped, the counter not."""
+    total = train_offset_V(
+        current_uA,
+        pulse_width_us=pulse_width_us,
+        offset_factor=offset_factor,
+        area_cm2=area_cm2,
+        capacitance_uF_cm2=capacitance_uF_cm2,
+        cap_V=offset_cap_V,
+    )
+    if counter_area_cm2 > 0.0:
+        total += train_offset_V(
+            current_uA,
+            pulse_width_us=pulse_width_us,
+            offset_factor=offset_factor,
+            area_cm2=counter_area_cm2,
+            capacitance_uF_cm2=counter_capacitance_uF_cm2,
+        )
+    return total
 
 
 def return_required_voltage_V(
@@ -134,6 +242,8 @@ def return_required_voltage_V(
     capacitance_uF_cm2: float,
     counter_area_cm2: float = 0.0,
     counter_capacitance_uF_cm2: float = 0.0,
+    offset_factor: float = 0.0,
+    offset_cap_V: float = math.inf,
 ) -> float:
     """Voltage the return phase needs, at a leading amplitude ``current_uA`` (ledger 135).
 
@@ -151,17 +261,34 @@ def return_required_voltage_V(
     symmetric pulse. C3.9 then gave that fictitious excursion the opposite polarity's C_eff,
     which made the return phase bind every symmetric Pt pulse: the worked example went from
     0.8287 to 1.0550 V. The reviewer retracted the finding that prompted it.
+
+    ``offset_factor`` is the train's DC offset when over-recovery builds it on the opposite
+    branch, which this phase's overshoot extends (ledger 140).
     """
     ohmic = (current_uA * return_current_factor * 1e-6) * total_resistance_ohm
     overshoot = charge_uC(current_uA, pulse_width_us) * overshoot_fraction
-    if overshoot <= 0.0:
-        return ohmic
-    required = ohmic + polarisation_V(
-        charge_density_uC_cm2(overshoot, area_cm2), capacitance_uF_cm2
-    )
-    if counter_area_cm2 > 0.0:
+    required = ohmic
+    if overshoot > 0.0:
         required += polarisation_V(
-            charge_density_uC_cm2(overshoot, counter_area_cm2), counter_capacitance_uF_cm2
+            charge_density_uC_cm2(overshoot, area_cm2), capacitance_uF_cm2
+        )
+        if counter_area_cm2 > 0.0:
+            required += polarisation_V(
+                charge_density_uC_cm2(overshoot, counter_area_cm2),
+                counter_capacitance_uF_cm2,
+            )
+    # Outside the overshoot's branch: at a subnormal amplitude the overshoot underflows to
+    # zero while an infinite offset does not, and skipping it there broke monotonicity.
+    if offset_factor:
+        required += _offsets_V(
+            current_uA,
+            pulse_width_us=pulse_width_us,
+            offset_factor=offset_factor,
+            offset_cap_V=offset_cap_V,
+            area_cm2=area_cm2,
+            capacitance_uF_cm2=capacitance_uF_cm2,
+            counter_area_cm2=counter_area_cm2,
+            counter_capacitance_uF_cm2=counter_capacitance_uF_cm2,
         )
     return required
 
@@ -214,6 +341,21 @@ class ComplianceResult:
     """The counter's C_eff for an overshoot past rest, at the leading polarity."""
     overshoot_fraction: float = 0.0
     """``max(0, r_a - 1)``: the share of the leading charge the return phase carries past rest."""
+    offset_pulses: float = 0.0
+    """``N - 1``: the pulses before the last one, each leaving its residue (ledger 140).
+
+    0.0 for a balanced waveform or a single pulse, ``inf`` for a continuous unbalanced train.
+    """
+    offset_factor: float = 0.0
+    """``(N - 1) |1 - r_a|``: the train's offset as a multiple of the leading charge."""
+    offset_on_return: bool = False
+    """Whether the offset builds on the return phase's branch (over-recovery) or the leading one."""
+    offset_cap_V: float = math.inf
+    """The active electrode's water-window headroom toward the offset's edge; ``inf`` uncapped."""
+    offset_V: float = 0.0
+    """The active electrode's train offset at the configured amplitude, capped."""
+    counter_offset_V: float = 0.0
+    """The counter's train offset at the configured amplitude; never capped."""
 
     @property
     def counter_modelled(self) -> bool:
@@ -241,31 +383,98 @@ class ComplianceResult:
         return phase alone needs 2.59 V. A stimulator sized on that number drops out of
         regulation during the return phase, silently.
         """
-        leading = required_voltage_V(
-            current_uA,
-            total_resistance_ohm=self.total_resistance_ohm,
-            pulse_width_us=self.pulse_width_us,
-            area_cm2=self.area_cm2,
-            capacitance_uF_cm2=self.capacitance_uF_cm2,
-            counter_area_cm2=self.counter_area_cm2,
-            counter_capacitance_uF_cm2=self.counter_capacitance_uF_cm2,
-        )
+        leading = required_voltage_V(current_uA, **self._leading_terms(offset=True))
         if not self.has_return_phase:
             return leading
         returning = return_required_voltage_V(
-            current_uA,
-            return_current_factor=self.return_current_factor,
-            total_resistance_ohm=self.total_resistance_ohm,
-            pulse_width_us=self.pulse_width_us,
-            overshoot_fraction=self.overshoot_fraction,
-            area_cm2=self.area_cm2,
-            capacitance_uF_cm2=self.return_capacitance_uF_cm2 or self.capacitance_uF_cm2,
-            counter_area_cm2=self.counter_area_cm2,
-            counter_capacitance_uF_cm2=(
-                self.counter_return_capacitance_uF_cm2 or self.counter_capacitance_uF_cm2
-            ),
+            current_uA, **self._returning_terms(offset=True)
         )
         return max(leading, returning)
+
+    def _leading_terms(self, *, offset: bool) -> dict[str, Any]:
+        """The leading phase's arguments; ``offset=False`` leaves out the train offset."""
+        return {
+            "total_resistance_ohm": self.total_resistance_ohm,
+            "pulse_width_us": self.pulse_width_us,
+            "area_cm2": self.area_cm2,
+            "capacitance_uF_cm2": self.capacitance_uF_cm2,
+            "counter_area_cm2": self.counter_area_cm2,
+            "counter_capacitance_uF_cm2": self.counter_capacitance_uF_cm2,
+            "offset_factor": (
+                self.offset_factor if offset and not self.offset_on_return else 0.0
+            ),
+            "offset_cap_V": self.offset_cap_V,
+        }
+
+    def _returning_terms(self, *, offset: bool) -> dict[str, Any]:
+        """The return phase's arguments; ``offset=False`` leaves out the train offset."""
+        return {
+            "return_current_factor": self.return_current_factor,
+            "total_resistance_ohm": self.total_resistance_ohm,
+            "pulse_width_us": self.pulse_width_us,
+            "overshoot_fraction": self.overshoot_fraction,
+            "area_cm2": self.area_cm2,
+            "capacitance_uF_cm2": self.return_capacitance_uF_cm2 or self.capacitance_uF_cm2,
+            "counter_area_cm2": self.counter_area_cm2,
+            "counter_capacitance_uF_cm2": (
+                self.counter_return_capacitance_uF_cm2 or self.counter_capacitance_uF_cm2
+            ),
+            "offset_factor": self.offset_factor if offset and self.offset_on_return else 0.0,
+            "offset_cap_V": self.offset_cap_V,
+        }
+
+    def _seed_uA(self, available_V: float) -> float:
+        """The amplitude at which the worse phase reaches ``available_V``, in real arithmetic.
+
+        Without a train offset both phases are linear in the amplitude, and scaling the
+        configured one by the voltage ratio is exact. The offset makes the phase it lands on
+        ``a I + min(b I, H)`` (the active electrode, capped at ``H``) plus ``c I`` (the
+        counter, uncapped), and that is inverted piece by piece. ``floor_to_pass`` then
+        settles the seed onto the float boundary of the forward comparison, as before.
+        """
+        if not self.offset_factor:
+            return self.current_uA * (available_V / self.required_V)
+        seeds = [self._phase_seed_uA(available_V, returning=False)]
+        if self.has_return_phase:
+            seeds.append(self._phase_seed_uA(available_V, returning=True))
+        return min(seeds)
+
+    def _phase_seed_uA(self, available_V: float, *, returning: bool) -> float:
+        terms = self._returning_terms if returning else self._leading_terms
+        phase = return_required_voltage_V if returning else required_voltage_V
+        with_offset = terms(offset=True)
+        if not with_offset["offset_factor"]:
+            return available_V / phase(1.0, **terms(offset=False))
+        common = {
+            "pulse_width_us": self.pulse_width_us,
+            "offset_factor": with_offset["offset_factor"],
+        }
+        if math.isinf(with_offset["offset_factor"]):
+            active_slope = math.inf
+            counter_slope = math.inf if self.counter_modelled else 0.0
+        else:
+            active_slope = train_offset_V(
+                1.0, **common, area_cm2=with_offset["area_cm2"],
+                capacitance_uF_cm2=with_offset["capacitance_uF_cm2"],
+            )
+            counter_slope = (
+                train_offset_V(
+                    1.0, **common, area_cm2=self.counter_area_cm2,
+                    capacitance_uF_cm2=with_offset["counter_capacitance_uF_cm2"],
+                )
+                if self.counter_modelled
+                else 0.0
+            )
+        linear = phase(1.0, **terms(offset=False)) + counter_slope
+        cap = self.offset_cap_V
+        if math.isinf(linear):
+            return 0.0
+        if math.isinf(active_slope):
+            # The active offset is at its cap for every positive amplitude.
+            return 0.0 if available_V <= cap else (available_V - cap) / linear
+        if math.isinf(cap) or available_V <= (linear * cap / active_slope) + cap:
+            return available_V / (linear + active_slope)
+        return (available_V - cap) / linear
 
     @property
     def evaluated(self) -> bool:
@@ -310,7 +519,7 @@ class ComplianceResult:
             return math.inf
         available_V = self.available_V
         return floor_to_pass(
-            self.current_uA * (available_V / self.required_V),
+            self._seed_uA(available_V),
             lambda current_uA: self.required_V_at(current_uA) <= available_V,
             name="Compliance voltage",
         )
@@ -343,6 +552,22 @@ class ComplianceResult:
         ]
         if self.counter_modelled:
             lines.append(f"  counter pol.  {self.counter_polarisation_V:.3f} V")
+        if self.offset_factor:
+            phase = "return" if self.offset_on_return else "leading"
+            cap = (
+                f", capped at the {self.offset_cap_V:.3f} V water-window headroom"
+                if math.isfinite(self.offset_cap_V)
+                else ", uncapped (no water window)"
+            )
+            lines.append(
+                f"  train offset  {self.offset_V:.3f} V on the {phase} phase after "
+                f"{self.offset_pulses:g} unbalanced pulses{cap}"
+            )
+            if self.counter_modelled:
+                lines.append(
+                    f"  counter off.  {self.counter_offset_V:.3f} V (uncapped: the "
+                    f"counter's water window is not assessed)"
+                )
         if self.has_return_phase:
             lines.append(
                 f"  return phase  {self.return_required_V:.3f} V "
@@ -381,11 +606,14 @@ def evaluate(
     capacitance_uF_cm2: float | None = None,
     counter_electrode: Electrode | None = None,
     counter_separation_um: float | None = None,
+    resting_potential_V: float = 0.0,
 ) -> ComplianceResult:
     """Compute the voltage a stimulator must supply to deliver ``protocol``.
 
     ``counter_electrode`` and ``counter_separation_um`` go together. See
-    :func:`validate_counter` for what is refused and why.
+    :func:`validate_counter` for what is refused and why. ``resting_potential_V`` sets the
+    water-window headroom that caps the active electrode's train offset (ledger 140), and
+    is checked against the material's window as the Water window check checks it.
     """
     validate_counter(
         electrode, counter_electrode, counter_separation_um, measured_impedance_ohm
@@ -470,6 +698,29 @@ def evaluate(
         return_capacitance = capacitance_uF_cm2
     polar = polarisation_V(density, capacitance_uF_cm2)
 
+    # The train's DC offset (ledger 140), gated on Charge balance's own test as the drift
+    # clause is, so a balanced waveform is unchanged to the bit.
+    validate_resting_potential_V(mat, resting_potential_V)
+    residue = 1.0 - protocol.recovered_fraction
+    offset_pulses = 0.0
+    if not protocol.is_charge_balanced:
+        offset_pulses = (
+            math.inf
+            if math.isinf(protocol.n_pulses)
+            else float(max(math.ceil(protocol.n_pulses) - 1, 0))
+        )
+    offset_factor = offset_pulses * abs(residue) if offset_pulses else 0.0
+    offset_on_return = residue < 0.0
+    offset_cap = (
+        math.inf
+        if mat.water_window is None
+        else drift_headroom_V(
+            mat.water_window,
+            resting_potential_V,
+            anodic=protocol.anodic_first != offset_on_return,
+        )
+    )
+
     # The return phase's own budget. Its amplitude is a fixed multiple of the leading
     # one, taken from the protocol rather than divided out of two amplitudes, so the
     # back-solve can ask what the return phase does at an amplitude the protocol was
@@ -483,6 +734,8 @@ def evaluate(
         capacitance_uF_cm2=capacitance_uF_cm2,
         counter_area_cm2=counter_area,
         counter_capacitance_uF_cm2=counter_capacitance,
+        offset_factor=0.0 if offset_on_return else offset_factor,
+        offset_cap_V=offset_cap,
     )
     overshoot_fraction = max(0.0, protocol.recovered_fraction - 1.0)
     return_required = 0.0
@@ -497,6 +750,8 @@ def evaluate(
             capacitance_uF_cm2=return_capacitance,
             counter_area_cm2=counter_area,
             counter_capacitance_uF_cm2=counter_return_capacitance,
+            offset_factor=offset_factor if offset_on_return else 0.0,
+            offset_cap_V=offset_cap,
         )
     counter_polar = (
         polarisation_V(
@@ -534,6 +789,31 @@ def evaluate(
         return_capacitance_uF_cm2=return_capacitance,
         counter_return_capacitance_uF_cm2=counter_return_capacitance,
         overshoot_fraction=overshoot_fraction,
+        offset_pulses=offset_pulses,
+        offset_factor=offset_factor,
+        offset_on_return=offset_on_return,
+        offset_cap_V=offset_cap,
+        offset_V=train_offset_V(
+            protocol.current_uA,
+            pulse_width_us=protocol.pulse_width_us,
+            offset_factor=offset_factor,
+            area_cm2=electrode.area_cm2,
+            capacitance_uF_cm2=return_capacitance if offset_on_return else capacitance_uF_cm2,
+            cap_V=offset_cap,
+        ),
+        counter_offset_V=(
+            train_offset_V(
+                protocol.current_uA,
+                pulse_width_us=protocol.pulse_width_us,
+                offset_factor=offset_factor,
+                area_cm2=counter_area,
+                capacitance_uF_cm2=(
+                    counter_return_capacitance if offset_on_return else counter_capacitance
+                ),
+            )
+            if counter_area > 0.0
+            else 0.0
+        ),
     )
 
 

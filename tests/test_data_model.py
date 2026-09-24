@@ -1672,6 +1672,24 @@ class TestTheRefusalContractHoldsInBothDirections:
             ("Pt/mid-resting", disc, StimProtocol(80.0, 200.0, 130.0, 1.0),
              {"resting_potential_V": -0.2}),
         ]
+        # Ledger 140: an uncapped train offset makes the compliance ceiling zero on its own
+        # -- the counter, whose window is not assessed, and Ta2O5, which has none -- beside
+        # a capped one that leaves a positive ceiling.
+        continuous = StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9)
+        counter = {"counter_electrode": DiscElectrode(900.0, "Pt"),
+                   "counter_separation_um": 20000.0}
+        cases += [
+            ("Ta2O5/continuous-unbalanced/compliance", DiscElectrode(500.0, "Ta2O5"),
+             continuous, {"compliance_V": 10.0}),
+            ("Pt/continuous-unbalanced/counter/compliance", DiscElectrode(500.0, "Pt"),
+             continuous, {"compliance_V": 10.0, **counter}),
+            ("Pt/partial-recovery/counter/compliance", DiscElectrode(500.0, "Pt"),
+             StimProtocol(80.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9),
+             {"compliance_V": 10.0, **counter}),
+            ("Pt/partial-recovery/compliance", DiscElectrode(500.0, "Pt"),
+             StimProtocol(80.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9),
+             {"compliance_V": 10.0}),
+        ]
         return cases
 
     def test_none_exactly_when_no_amplitude_is_safe(self) -> None:
@@ -1814,6 +1832,20 @@ class TestTheRefusalContractHoldsInBothDirections:
             continuous, names=oracles.LIMIT_BEARING
         ) == ("Water window",)
         assert continuous.assess().limiting_current_uA is None
+
+        # Ledger 140: with no water window the drift clause cannot refuse, and the uncapped
+        # train offset in the compliance budget is what admits no amplitude.
+        no_window = SafetyCalculator(
+            DiscElectrode(500.0, "Ta2O5"),
+            StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9),
+            compliance_V=10.0,
+        )
+        assert oracles.fail_ceiling_uA(no_window, names=oracles.LIMIT_BEARING) == 0.0
+        assert oracles.amplitude_independent_failures(
+            no_window, names=oracles.LIMIT_BEARING
+        ) == ("Compliance voltage",)
+        assert no_window.assess().limiting_current_uA is None
+        assert "Compliance voltage" in no_window.assess().no_safe_amplitude_note()
 
 
 class TestTheUnrecoveredChargeIsExactlyLinear:

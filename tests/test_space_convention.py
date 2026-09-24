@@ -706,12 +706,19 @@ class TestTheReturnPhaseOnlyPolarisesPastRest:
     @pytest.mark.parametrize("ratio", [1.0, 0.25])
     @pytest.mark.parametrize("anodic_first", [False, True])
     @pytest.mark.parametrize("with_counter", [False, True])
+    @pytest.mark.parametrize("pulses", [1, 5])
     def test_the_requirement_is_the_stepped_circuits_peak(
-        self, material, recovery, ratio, anodic_first, with_counter
+        self, material, recovery, ratio, anodic_first, with_counter, pulses
     ):
         """Not tautological: Pt's two branches differ (250 against 125 uF/cm^2) and TiN's
         agree, and the oracle integrates the circuit rather than evaluating the package's
-        per-phase expression."""
+        per-phase expression.
+
+        Stepped over the whole train since ledger 140 (G12: this test used a 1 s train at
+        130 Hz against a one-pulse oracle, which stopped being the package's model once the
+        train's DC offset entered the budget). Trains of 1 and 5 pulses, short enough that
+        the water-window cap does not bind; the cap has its own tests below.
+        """
         import oracles
 
         from neurostim import SafetyCalculator, StimProtocol
@@ -723,11 +730,14 @@ class TestTheReturnPhaseOnlyPolarisesPastRest:
             if with_counter else {}
         )
         protocol = StimProtocol(
-            300.0, 200.0, 130.0, 1.0, anodic_first=anodic_first,
+            300.0, 200.0, 100.0, pulses / 100.0, anodic_first=anodic_first,
             return_phase_ratio=ratio, charge_recovery_ratio=recovery,
         )
+        assert math.ceil(protocol.n_pulses) == pulses  # the premise
         result = SafetyCalculator(active, protocol, compliance_V=10.0, **kwargs).assess().compliance
+        assert result.offset_V < result.offset_cap_V  # the premise: the cap does not bind
         expected = oracles.peak_stimulator_voltage_V(
+            pulses=pulses, steps=2_000,
             current_uA=300.0, pulse_width_us=200.0, return_phase_ratio=ratio,
             recovered_fraction=recovery, anodic_first=anodic_first,
             resistance_ohm=result.total_resistance_ohm, area_cm2=active.area_cm2,
@@ -741,17 +751,39 @@ class TestTheReturnPhaseOnlyPolarisesPastRest:
                 if with_counter else {}
             ),
         )
-        if recovery >= 1.0:
+        # The offset itself, pinned: N - 1 residues at the offset branch's C_eff (the
+        # leading one for under-recovery, the opposite one for over-recovery).
+        residue = abs(1.0 - recovery) * (pulses - 1)
+        if recovery < 1.0:
+            assert result.offset_V == pytest.approx(residue * result.polarisation_V, rel=1e-12)
+            if with_counter:
+                assert result.counter_offset_V == pytest.approx(
+                    residue * result.counter_polarisation_V, rel=1e-12
+                )
+        elif recovery > 1.0:
+            density = 300.0 * 200.0 * 1e-6 / active.area_cm2
+            assert result.offset_V == pytest.approx(
+                residue * density / result.return_capacitance_uF_cm2, rel=1e-12
+            )
+            if with_counter:
+                assert result.counter_offset_V == pytest.approx(
+                    residue * (300.0 * 200.0 * 1e-6 / counter.area_cm2)
+                    / result.counter_return_capacitance_uF_cm2,
+                    rel=1e-12,
+                )
+        if recovery >= 1.0 or result.return_required_V < result.required_V:
+            # Over-recovery, and any pulse whose leading phase binds, is exact: the last
+            # pulse's leading phase (or overshoot) is the stepped circuit's peak.
             assert result.required_V == pytest.approx(expected, rel=1e-9)
         else:
-            # Under-recovery ends the return phase with a residual (1 - r_a) of the leading
-            # excursion still stored on the leading branch, opposing the drive, so the
-            # stepped peak can sit below I_ret R by up to that residual. The package keeps
-            # I_ret R there, as the review specified: an upper bound, conservative by at most
-            # the residual.
-            residual = (1.0 - recovery) * result.polarisation_V
+            # Under-recovery ends the last return phase with the train's residue,
+            # N (1 - r_a) of the leading excursion, still stored on the leading branch and
+            # opposing the drive, so the stepped peak can sit below I_ret R by up to that
+            # residue. The package keeps I_ret R there, as the review specified: an upper
+            # bound, conservative by at most the residue.
+            residual = pulses * (1.0 - recovery) * result.polarisation_V
             if with_counter:
-                residual += (1.0 - recovery) * result.counter_polarisation_V
+                residual += pulses * (1.0 - recovery) * result.counter_polarisation_V
             assert expected * (1.0 - 1e-12) <= result.required_V <= expected + residual * (
                 1.0 + 1e-9
             )
@@ -776,18 +808,270 @@ class TestTheReturnPhaseOnlyPolarisesPastRest:
 
     def test_a_measured_capacitance_still_applies_to_an_overshoot(self):
         """A measured capacitance_uF_cm2 is one value for the active interface, used for
-        the overshoot as for the leading phase."""
+        the overshoot as for the leading phase, and for the train offset the overshoots
+        build (ledger 140).
+
+        G12: the train was 1 s at 130 Hz, whose offset now enters the return phase and
+        reaches the water-window cap there. At 0.05 s the train delivers ceil(6.5) = 7
+        pulses, so the offset is 6 overshoots, below the 0.8 V cap.
+        """
         from neurostim import SafetyCalculator, StimProtocol
 
         disc = DiscElectrode(500.0, "Pt")
         result = SafetyCalculator(
-            disc, StimProtocol(200.0, 200.0, 130.0, 1.0, charge_recovery_ratio=1.5),
+            disc, StimProtocol(200.0, 200.0, 130.0, 0.05, charge_recovery_ratio=1.5),
             compliance_V=10.0, capacitance_uF_cm2=300.0,
         ).assess().compliance
         overshoot = 0.5 * 200e-6 * 200e-6 * 1e6 / disc.area_cm2
+        assert result.offset_pulses == 6.0  # the premise
+        assert result.offset_V == pytest.approx(6.0 * overshoot / 300.0, rel=1e-12)
+        assert result.offset_V < result.offset_cap_V
         assert result.return_required_V == pytest.approx(
-            300e-6 * result.total_resistance_ohm + overshoot / 300.0, rel=1e-12
+            300e-6 * result.total_resistance_ohm + 7.0 * overshoot / 300.0, rel=1e-12
         )
+
+
+class TestTheTrainOffsetIsInTheBudget:
+    """Ledger 140. Under partial or over-recovery each pulse leaves ``|1 - r_a| Q`` on the
+    interface, and under the leak-free capacitor model the drift clause uses, pulse ``N``
+    starts ``(N - 1)`` residues from rest. The compliance budget took every pulse from rest.
+
+    Expected values come from ``oracles.peak_stimulator_voltage_V`` stepped over the whole
+    train, with the water window as a clamp on the active interface where the cap binds.
+    """
+
+    @staticmethod
+    def _c(material, anodic):
+        from neurostim.safety.water_window import effective_capacitance_uF_cm2
+
+        return effective_capacitance_uF_cm2(material, anodic_first=anodic)
+
+    @staticmethod
+    def _calc(electrode, protocol, **kwargs):
+        from neurostim import SafetyCalculator
+
+        return SafetyCalculator(electrode, protocol, compliance_V=10.0, **kwargs)
+
+    @pytest.mark.parametrize("material", ["Pt", "TiN"])
+    @pytest.mark.parametrize("recovery", [0.8, 1.3])
+    @pytest.mark.parametrize("anodic_first", [False, True])
+    @pytest.mark.parametrize("with_counter", [False, True])
+    def test_where_the_cap_binds_the_package_bounds_the_clamped_circuit(
+        self, material, recovery, anodic_first, with_counter
+    ):
+        """200 pulses: the offset reaches the window edge. The stepped circuit holds the
+        active interface at the edge and loses the charge beyond it; the package caps the
+        offset alone and keeps the last pulse's own excursion on top, so it is high by at
+        most that one excursion (the leading one for under-recovery, the overshoot for
+        over-recovery). The counter is uncapped on both sides."""
+        import oracles
+
+        from neurostim import StimProtocol
+        from neurostim.materials import get_material
+
+        active = DiscElectrode(500.0, material)
+        counter = DiscElectrode(900.0, material)
+        kwargs = (
+            {"counter_electrode": counter, "counter_separation_um": 20000.0}
+            if with_counter else {}
+        )
+        protocol = StimProtocol(
+            300.0, 200.0, 100.0, 2.0, anodic_first=anodic_first, charge_recovery_ratio=recovery
+        )
+        result = self._calc(active, protocol, **kwargs).assess().compliance
+        assert result.offset_V == result.offset_cap_V  # the premise: the cap binds
+        window = get_material(material).water_window
+        expected = oracles.peak_stimulator_voltage_V(
+            current_uA=300.0, pulse_width_us=200.0, return_phase_ratio=1.0,
+            recovered_fraction=recovery, anodic_first=anodic_first,
+            resistance_ohm=result.total_resistance_ohm, area_cm2=active.area_cm2,
+            c_cathodic_uF_cm2=self._c(material, False), c_anodic_uF_cm2=self._c(material, True),
+            pulses=200, steps=100, active_window_V=(-window.cathodic_V, window.anodic_V),
+            **(
+                {
+                    "counter_area_cm2": counter.area_cm2,
+                    "counter_c_cathodic_uF_cm2": self._c(material, False),
+                    "counter_c_anodic_uF_cm2": self._c(material, True),
+                }
+                if with_counter else {}
+            ),
+        )
+        density = 300.0 * 200.0 * 1e-6 / active.area_cm2
+        excursion = (
+            result.polarisation_V
+            if recovery < 1.0
+            else (recovery - 1.0) * density / result.return_capacitance_uF_cm2
+        )
+        assert expected * (1.0 - 1e-9) <= result.required_V <= expected + excursion * (
+            1.0 + 1e-9
+        )
+
+    def test_the_offset_counts_the_pulses_the_duty_cycle_delivers(self):
+        """``N = ceil(T f duty)``: 5 pulses at 5 % duty over 1 s at 100 Hz, and 6 at 5.2 %."""
+        from neurostim import StimProtocol
+
+        disc = DiscElectrode(500.0, "Pt")
+        for duty, before in ((0.05, 4.0), (0.052, 5.0), (1.0, 99.0)):
+            protocol = StimProtocol(
+                100.0, 200.0, 100.0, 1.0, charge_recovery_ratio=0.9, train_duty_cycle=duty
+            )
+            result = self._calc(disc, protocol).assess().compliance
+            assert result.offset_pulses == before, duty
+            assert result.offset_factor == pytest.approx(before * 0.1, rel=1e-12), duty
+
+    def test_a_balanced_waveform_is_unchanged_to_the_bit(self):
+        """Charge balance's own test gates the offset, so a balanced train of any length
+        gives the one-pulse requirement exactly, with and without a counter."""
+        from dataclasses import replace
+
+        from neurostim import StimProtocol
+
+        for material in ("Pt", "SIROF"):
+            for ratio in (1.0, 0.25):
+                for kwargs in (
+                    {},
+                    {"counter_electrode": DiscElectrode(900.0, material),
+                     "counter_separation_um": 20000.0},
+                ):
+                    one = StimProtocol(300.0, 200.0, 100.0, 0.01, return_phase_ratio=ratio)
+                    disc = DiscElectrode(500.0, material)
+                    single = self._calc(disc, one, **kwargs).assess().compliance
+                    for train in (1.0, math.inf):
+                        result = self._calc(
+                            disc, replace(one, train_duration_s=train), **kwargs
+                        ).assess().compliance
+                        assert result.offset_factor == 0.0
+                        assert result.required_V == single.required_V
+                        assert result.max_current_uA == single.max_current_uA
+
+    def test_the_cap_is_the_headroom_from_the_resting_potential(self):
+        """A continuous train reaches the cap; from -0.2 V the cathodic headroom is 0.4 V,
+        and the over-recovering drift heads for the anodic edge, 1.0 V away."""
+        from neurostim import StimProtocol
+
+        disc = DiscElectrode(500.0, "Pt")
+        for recovery, cap in ((0.9, 0.4), (1.1, 1.0)):
+            protocol = StimProtocol(100.0, 200.0, 100.0, math.inf, charge_recovery_ratio=recovery)
+            result = self._calc(disc, protocol, resting_potential_V=-0.2).assess().compliance
+            assert result.offset_cap_V == pytest.approx(cap, abs=1e-15)
+            assert result.offset_V == result.offset_cap_V
+            assert math.isfinite(result.required_V)
+
+    @pytest.mark.parametrize(
+        ("label", "material", "counter"),
+        [("counter", "Pt", True), ("no window", "Ta2O5", False)],
+    )
+    def test_an_uncapped_continuous_offset_refuses_by_name(self, label, material, counter):
+        """The counter (its window is not assessed) and a material with no window are not
+        capped, so a continuous unbalanced train needs an infinite voltage: a ceiling of
+        zero, a Compliance FAIL, and a refusal that names the check. No nan anywhere."""
+        from dataclasses import fields
+
+        from neurostim import StimProtocol
+
+        kwargs = (
+            {"counter_electrode": DiscElectrode(900.0, material), "counter_separation_um": 20000.0}
+            if counter else {}
+        )
+        protocol = StimProtocol(100.0, 200.0, 100.0, math.inf, charge_recovery_ratio=0.9)
+        assessment = self._calc(DiscElectrode(500.0, material), protocol, **kwargs).assess()
+        result = assessment.compliance
+        assert result.required_V == math.inf, label
+        assert result.max_current_uA == 0.0, label
+        check = next(c for c in assessment.checks if c.name == "Compliance voltage")
+        assert check.status.value == "FAIL", label
+        assert check.ceiling_uA == 0.0, label
+        assert assessment.limiting_current_uA is None, label
+        assert "Compliance voltage" in assessment.no_safe_amplitude_note(), label
+        for entry in fields(result):
+            value = getattr(result, entry.name)
+            if isinstance(value, float):
+                assert not math.isnan(value), (label, entry.name)
+        assert "nan" not in assessment.describe(), label
+
+    def test_the_offset_is_named_where_the_budget_is_shown(self):
+        """describe() and the PDF report's row name the offset, its phase and its cap;
+        a balanced train shows neither."""
+        from neurostim import StimProtocol
+        from neurostim.io.report import _required_compliance_text
+
+        counter = {"counter_electrode": DiscElectrode(900.0, "Pt"),
+                   "counter_separation_um": 20000.0}
+        calc = self._calc(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(100.0, 200.0, 100.0, 0.05, charge_recovery_ratio=0.9),
+            **counter,
+        )
+        result = calc.assess().compliance
+        text = result.describe()
+        assert "train offset  " in text and "on the leading phase after 4 unbalanced pulses" in text
+        assert "counter off." in text
+        row = _required_compliance_text(calc, result)
+        assert f"train DC offset {result.offset_V:.3f} V" in row
+        assert "on the leading phase" in row
+
+        balanced = self._calc(
+            DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 100.0, 0.05), **counter
+        )
+        assert "offset" not in balanced.assess().compliance.describe()
+        assert "offset" not in _required_compliance_text(
+            balanced, balanced.assess().compliance
+        )
+
+    def test_the_back_solve_inverts_the_budget_across_the_cap(self):
+        """The requirement is ``a I + min(b I, H)`` on the phase the offset lands on, so the
+        closed-form seed is no longer a scaling. Over materials, recoveries, trains, counters
+        and compliance voltages on both sides of the kink: no LimitDidNotSettle, and every
+        ceiling is the float boundary of its own comparison."""
+        from neurostim import SafetyCalculator, StimProtocol
+
+        checked = 0
+        for material in ("Pt", "TiN", "SIROF", "Ta2O5"):
+            for recovery in (0.8, 0.95, 1.3):
+                for train in (0.05, 1.0, math.inf):
+                    for counter in (False, True):
+                        for compliance_V in (0.3, 1.0, 3.0, 10.0, 50.0):
+                            kwargs = (
+                                {"counter_electrode": DiscElectrode(900.0, material),
+                                 "counter_separation_um": 20000.0}
+                                if counter else {}
+                            )
+                            result = SafetyCalculator(
+                                DiscElectrode(500.0, material),
+                                StimProtocol(
+                                    100.0, 200.0, 130.0, train,
+                                    charge_recovery_ratio=recovery,
+                                ),
+                                compliance_V=compliance_V, **kwargs,
+                            ).assess().compliance
+                            limit = result.max_current_uA
+                            if limit == 0.0:
+                                assert result.required_V_at(5e-324) > compliance_V
+                            else:
+                                assert result.required_V_at(limit) <= compliance_V
+                                assert result.required_V_at(
+                                    math.nextafter(limit, math.inf)
+                                ) > compliance_V
+                            checked += 1
+        assert checked == 360
+
+    def test_the_bisection_oracle_agrees_where_the_cap_binds(self):
+        """Independent of the seed: a binary search over ``assess().failed``."""
+        from oracles.fail_ceiling import check_fail_ceiling_uA
+
+        from neurostim import SafetyCalculator, StimProtocol
+
+        for recovery in (0.8, 1.3):
+            for compliance_V in (1.0, 10.0):
+                calc = SafetyCalculator(
+                    DiscElectrode(500.0, "Pt"),
+                    StimProtocol(100.0, 200.0, 130.0, math.inf, charge_recovery_ratio=recovery),
+                    compliance_V=compliance_V,
+                )
+                limit = calc.assess().compliance.max_current_uA
+                assert check_fail_ceiling_uA(calc, "Compliance voltage") == pytest.approx(
+                    limit, rel=1e-9
+                ), (recovery, compliance_V)
 
 
 class TestTheSeparationGuardSeesTheWholeElectrode:

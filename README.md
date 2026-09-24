@@ -82,7 +82,7 @@ change. Exports the PDF report and the four-panel summary figure.
 | Water window | Peak interfacial excursion vs electrolysis limits, plus DC drift: when the charge a waveform leaves behind (with each pulse riding on it) reaches the edge, against the train duration | Cogan 2008; Merrill 2005 |
 | Charge balance | Fraction of charge recovered and the resulting net DC. FAIL only when nothing is recovered; CAUTION for a partial recovery, whose consequence is judged by Water window | Merrill 2005 |
 | Counter charge injection | Only with a `counter_electrode`: the counter's larger phase charge density against its own material's CIC for the mirrored waveform (a cathodic-first protocol is anodic-first at the counter) | Cogan 2008 Table 2; Merrill 2005 |
-| Compliance voltage | `I(R_access + R_lead) + ΔV_polarisation`; with a `counter_electrode`, `I(R_a + R_c − 2/(Gσd) + R_lead) + ΔV_a + ΔV_c`. Without one, CAUTION: a single-interface budget is assumed | Newman 1966 |
+| Compliance voltage | `I(R_access + R_lead) + ΔV_polarisation`; with a `counter_electrode`, `I(R_a + R_c − 2/(Gσd) + R_lead) + ΔV_a + ΔV_c`. An unbalanced train adds the DC offset its first `N − 1` pulses leave behind, capped at the water-window headroom on the active electrode. Without a counter, CAUTION: a single-interface budget is assumed | Newman 1966 |
 
 Plus models, each documenting its own validity range:
 
@@ -278,7 +278,11 @@ the electrode's own access resistance.
   CAUTION at best. With a counter the mutual term is first-order superposition of two
   compact sources, not a solved two-body problem. The equilibrium-potential difference
   between two dissimilar materials is not modelled. No compliance-voltage measurement in
-  this bibliography pins the two-terminal model.
+  this bibliography pins the two-terminal model. An unbalanced train's DC offset uses the
+  water window's leak-free capacitor, so it is an upper bound. On the active electrode it
+  is capped at the window headroom, where the Water window check FAILs anyway. It is not
+  capped on the counter, whose window is not assessed, or on a material with no window, so
+  a continuous unbalanced train with either permits no current.
 - **Counter electrode's own limits** — with a counter supplied, its charge injection is
   checked and can bind the limiting current. Its water window and chronic dissolution
   threshold are **not** assessed. A counter smaller than the active electrode carries the

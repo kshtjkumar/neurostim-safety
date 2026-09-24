@@ -203,17 +203,23 @@ def _required_compliance_text(calc: SafetyCalculator, result: ComplianceResult) 
     """The requirement and a breakdown that adds up, naming the budget it assumes.
 
     With a counter electrode the counter's own polarisation is a third term; without one
-    the single-interface assumption is stated on the row (ledger 5, C3.5).
+    the single-interface assumption is stated on the row (ledger 5, C3.5). An unbalanced
+    train's DC offset is named on the row, electrode by electrode (ledger 140).
     """
     text = (
         f"{result.required_V:.3f} V ({result.ohmic_drop_V:.3f} V ohmic + "
         f"{result.polarisation_V:.3f} V polarisation"
     )
     if result.counter_modelled:
-        return (
-            f"{text} + {result.counter_polarisation_V:.3f} V counter polarisation; "
-            f"counter electrode at {calc.counter_separation_um:g} um)"
-        )
+        text += f" + {result.counter_polarisation_V:.3f} V counter polarisation"
+    if result.offset_factor:
+        phase = "return" if result.offset_on_return else "leading"
+        text += f"; train DC offset {result.offset_V:.3f} V"
+        if result.counter_modelled:
+            text += f" + {result.counter_offset_V:.3f} V counter"
+        text += f" on the {phase} phase"
+    if result.counter_modelled:
+        return f"{text}; counter electrode at {calc.counter_separation_um:g} um)"
     return f"{text}; monopolar single-interface budget assumed)"
 
 

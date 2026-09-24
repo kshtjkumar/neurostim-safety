@@ -1972,6 +1972,8 @@ class SafetyCalculator:
             capacitance_uF_cm2=self.capacitance_uF_cm2,
             counter_electrode=self.counter_electrode,
             counter_separation_um=self.counter_separation_um,
+            # The headroom that caps the train offset is the Water window check's own.
+            resting_potential_V=self.resting_potential_V,
         )
 
         counter_result = None
