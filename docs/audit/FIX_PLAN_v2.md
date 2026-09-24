@@ -1096,14 +1096,14 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 77/S-11 | MED | OK | C4.7a | **FIXED** `3a31f3a`; two Ta2O5 designs measured by different methods |
 | 77/S-12 | MED | OK | C4.7a | **FIXED** `3a31f3a`; McCreery 2010's four defining conditions; damage radius |
 | 77/S-13 | MED | OK | C4.7b (awaiting user decision) | Butterwick d⁻² measured on single pulses |
-| 78/S-14 | LOW | OK | C4.9 | zero-width `separating_k_range()` — changes a computed value |
-| 78/S-15 | LOW | OK | C4.9 | |
-| 78/S-16 | LOW | OK | C4.9 | κ range excludes Elwassif's 0.45 |
-| 78/S-17 | LOW | OK | C4.9 | |
-| 78/S-18 | LOW | OK | C4.9 | |
+| 78/S-14 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); zero-width `separating_k_range()` — changes a computed value |
+| 78/S-15 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); |
+| 78/S-16 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); κ range excludes Elwassif's 0.45 |
+| 78/S-17 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); |
+| 78/S-18 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); |
 | 78/S-19 | LOW | OK | C4.8 | **FIXED** `a91b5d8` (C4.8); leung2014 is 2015 |
-| 78/S-20 | LOW | OK | C4.8 | itis2025 is v4.2, 2024 |
-| 78/S-21 | LOW | OK | C4.9 | |
+| 78/S-20 | LOW | OK | C4.8 | **NOT DONE**: the IT'IS spreadsheet is not in the library, so the year cannot be checked against its source (reported at C4.8); itis2025 is v4.2, 2024 |
+| 78/S-21 | LOW | OK | C4.9 | **FIXED** `889b525` (C4.4, found independently there); |
 | 78/S-22 | LOW | OK | C4.9 | |
 | 78/S-23 | LOW | OK | C4.9 | |
 | 78/S-24 | LOW | OK | C7.4 | six stale README claims |
