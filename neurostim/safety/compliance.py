@@ -71,6 +71,20 @@ needs an infinite voltage, a compliance ceiling of zero:
   the voltage with nothing to FAIL in its place;
 - a material with no water window (Ta2O5), for the same reason.
 
+**One exception to "upper bound"** (ledger 144). The budget bounds the stepped circuit
+from above except when an over-recovering pulse's leading phase already carries the
+interface past the window edge. The excess, ``e = max(0, Q - Q_edge)`` with ``Q_edge`` the
+charge the leading branch holds from rest to the edge, then goes to electrolysis, so the
+return phase overshoots by up to ``(r_a - 1) Q + e`` rather than ``(r_a - 1) Q``. By the
+stepping recurrence the budget is then low by at most ``min(N e / (C_opp A), H_opp)``.
+Modelling it would add a second kink to the back-solve for a regime that never bears a
+limit, so it is stated instead. ``e > 0`` means the peak clause of the Water window check
+already FAILs at that amplitude, so the limiting current is unaffected. Only this check's
+own figure, and the "instrument" figure in ``limiting_current_by_kind``, can be low
+there. Measured against a clamped whole-train oracle: 42 of 1 500 over-recovery
+configurations were low, by up to 6.7 %, every one inside the bound and a Water window
+FAIL (pinned by a test).
+
 with each electrode's own access resistance, ``G = 4 pi`` in a full space or ``2 pi`` for
 two electrodes flush on one insulating plane (the convention of
 :attr:`~neurostim.geometry.base.Electrode.environment`), and each interface's own

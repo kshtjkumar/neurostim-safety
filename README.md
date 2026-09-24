@@ -285,7 +285,11 @@ the electrode's own access resistance.
   compact sources, not a solved two-body problem. The equilibrium-potential difference
   between two dissimilar materials is not modelled. No compliance-voltage measurement in
   this bibliography pins the two-terminal model. An unbalanced train's DC offset uses the
-  water window's leak-free capacitor, so it is an upper bound. On the active electrode it
+  water window's leak-free capacitor, so it is an upper bound, with one exception.
+  Under over-recovery, once a leading phase already passes the window edge, the excess
+  goes to electrolysis and the budget can be low. That happens only where Water window
+  FAILs, so no limiting current is affected; the bound is in the compliance module
+  docstring. On the active electrode it
   is capped at the window headroom, where the Water window check FAILs anyway. It is not
   capped on the counter, whose window is not assessed, or on a material with no window, so
   a continuous unbalanced train with either permits no current.

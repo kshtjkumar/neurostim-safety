@@ -1074,6 +1074,92 @@ class TestTheTrainOffsetIsInTheBudget:
                 ), (recovery, compliance_V)
 
 
+class TestTheElectrolysisExceptionIsBounded:
+    """Ledger 144 (Phase 3c review K3). The train-offset budget is an upper bound on the
+    stepped circuit except in one regime, which is documented rather than modelled. Under
+    over-recovery, a leading phase that carries the interface past the window edge loses
+    the excess, ``e = max(0, Q - Q_edge)`` with ``Q_edge`` the charge the leading branch
+    holds from rest to the edge, to electrolysis. The return phase then overshoots by up
+    to ``(r_a - 1) Q + e``, not ``(r_a - 1) Q``. By the stepping recurrence the package is
+    low by at most ``min(N e / (C_opp A), H_opp)``. Since ``e > 0`` only where the Water
+    window peak clause already FAILs, no limiting current is affected.
+    """
+
+    def test_the_deficit_is_within_the_stated_bound_and_only_inside_a_window_fail(self):
+        """Not tautological: the expected peak is the clamped whole-train oracle's, and the
+        premise that the exception occurs at all is asserted."""
+        import random
+
+        import oracles
+
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.materials import get_material
+        from neurostim.safety.water_window import effective_capacitance_uF_cm2 as c_eff
+
+        rng = random.Random(144)
+        below = compared = 0
+        for _ in range(600):
+            material = rng.choice(("Pt", "TiN", "SIROF", "PEDOT", "AIROF"))
+            anodic_first = rng.random() < 0.5
+            recovery = rng.choice((1.01, 1.1, 1.3, 1.6))
+            current = 10.0 ** rng.uniform(1.5, 3.7)
+            pulses = rng.choice((1, 2, 5, 20))
+            counter = rng.random() < 0.4
+            active = DiscElectrode(rng.choice((100.0, 300.0, 500.0)), material)
+            other = DiscElectrode(900.0, material)
+            calc = SafetyCalculator(
+                active,
+                StimProtocol(
+                    current, 200.0, 100.0, pulses / 100.0, anodic_first=anodic_first,
+                    charge_recovery_ratio=recovery,
+                ),
+                compliance_V=1e6,
+                **({"counter_electrode": other, "counter_separation_um": 20000.0}
+                   if counter else {}),
+            )
+            assessment = calc.assess()
+            result = assessment.compliance
+            assert math.ceil(calc.p.n_pulses) == pulses
+            window = get_material(material).water_window
+            cathodic, anodic = -window.cathodic_V, window.anodic_V
+            lead_H, opposite_H = (anodic, cathodic) if anodic_first else (cathodic, anodic)
+            expected = oracles.peak_stimulator_voltage_V(
+                current_uA=current, pulse_width_us=200.0, return_phase_ratio=1.0,
+                recovered_fraction=recovery, anodic_first=anodic_first,
+                resistance_ohm=result.total_resistance_ohm, area_cm2=active.area_cm2,
+                c_cathodic_uF_cm2=c_eff(material, anodic_first=False),
+                c_anodic_uF_cm2=c_eff(material, anodic_first=True),
+                pulses=pulses, steps=200, active_window_V=(cathodic, anodic),
+                **(
+                    {
+                        "counter_area_cm2": other.area_cm2,
+                        "counter_c_cathodic_uF_cm2": c_eff(material, anodic_first=False),
+                        "counter_c_anodic_uF_cm2": c_eff(material, anodic_first=True),
+                    }
+                    if counter else {}
+                ),
+            )
+            compared += 1
+            deficit = expected - result.required_V
+            if deficit <= 1e-9 * expected:
+                continue
+            below += 1
+            charge = current * 200e-6
+            edge_charge = lead_H * c_eff(material, anodic_first=anodic_first) * active.area_cm2
+            excess = max(0.0, charge - edge_charge)
+            bound = min(
+                pulses * excess
+                / (c_eff(material, anodic_first=not anodic_first) * active.area_cm2),
+                opposite_H,
+            )
+            assert excess > 0.0
+            assert deficit <= bound * (1.0 + 1e-6), (material, recovery, current, pulses)
+            window_check = next(c for c in assessment.checks if c.name == "Water window")
+            assert window_check.status.value == "FAIL"
+        assert compared == 600
+        assert below >= 5, below  # the premise: the regime is drawn
+
+
 class TestAnUnboundedRequirementIsRefusedInWords:
     """Ledger 143 (Phase 3c review K2). Since C3.17 a continuous unbalanced train with a
     counter, or on a material with no water window, needs an unbounded voltage. Every
