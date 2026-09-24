@@ -109,14 +109,25 @@ LIMIT_BEARING: frozenset[str] = frozenset(
         "Microelectrode charge/phase",
         "Chronic degradation",
         "Compliance voltage",
+        "Counter charge injection",
     }
 )
-"""The seven checks that impose a ceiling on amplitude (fix plan D3, ledger 84).
+"""The eight checks that impose a ceiling on amplitude (fix plan D3, ledger 84; the eighth,
+the counter electrode's charge injection, since ledger 133).
 
 Written out, never imported: see the module docstring. ``Charge balance`` and
 ``Validated envelope`` are excluded because their verdicts do not move with amplitude --
 imbalance is a categorical property of the waveform and the envelope is a categorical
 property of the parameter set.
+"""
+
+
+COUNTER_ONLY_CHECKS: frozenset[str] = frozenset({"Counter charge injection"})
+"""Checks the package emits only when the calculator carries a ``counter_electrode``.
+
+Written out, like :data:`LIMIT_BEARING`. Their absence from a calculator without a counter
+is by design, not a misspelling, so the unknown-name guard below allows it there and only
+there: with a counter supplied, a missing counter check is still an error.
 """
 
 
@@ -263,7 +274,11 @@ def failing_checks(
     assessment = rebuilt.assess()
     if names is not None:
         emitted = {check.name for check in assessment.checks}
-        unknown = sorted(set(names) - emitted)
+        absent_by_design = (
+            COUNTER_ONLY_CHECKS if getattr(calculator, "counter_electrode", None) is None
+            else frozenset()
+        )
+        unknown = sorted(set(names) - emitted - absent_by_design)
         if unknown:
             raise ValueError(
                 f"no such check: {unknown}; this assessment emits {sorted(emitted)}"

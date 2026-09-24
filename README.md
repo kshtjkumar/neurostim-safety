@@ -81,6 +81,7 @@ change. Exports the PDF report and the four-panel summary figure.
 | Charge-injection limit | Material CIC vs applied charge density. NOT_EVALUATED for monophasic delivery, because every CIC was measured biphasic | Cogan 2008 Table 2; Merrill 2005 |
 | Water window | Peak interfacial excursion vs electrolysis limits, plus DC drift: when the charge a waveform leaves behind (with each pulse riding on it) reaches the edge, against the train duration | Cogan 2008; Merrill 2005 |
 | Charge balance | Fraction of charge recovered and the resulting net DC. FAIL only when nothing is recovered; CAUTION for a partial recovery, whose consequence is judged by Water window | Merrill 2005 |
+| Counter charge injection | Only with a `counter_electrode`: the counter's larger phase charge density against its own material's CIC for the mirrored waveform (a cathodic-first protocol is anodic-first at the counter) | Cogan 2008 Table 2; Merrill 2005 |
 | Compliance voltage | `I(R_access + R_lead) + ΔV_polarisation`; with a `counter_electrode`, `I(R_a + R_c − 2/(Gσd) + R_lead) + ΔV_a + ΔV_c`. Without one, CAUTION: a single-interface budget is assumed | Newman 1966 |
 
 Plus models, each documenting its own validity range:
@@ -278,6 +279,10 @@ the electrode's own access resistance.
   compact sources, not a solved two-body problem. The equilibrium-potential difference
   between two dissimilar materials is not modelled. No compliance-voltage measurement in
   this bibliography pins the two-terminal model.
+- **Counter electrode's own limits** — with a counter supplied, its charge injection is
+  checked and can bind the limiting current. Its water window and chronic dissolution
+  threshold are **not** assessed. A counter smaller than the active electrode carries the
+  same charge at a higher density, so check those separately.
 - **Thermal** — spreading-resistance heating only. Tissue properties are now IT'IS v4.2
   with uncertainty, but the model still omits electrode and lead self-heating and any
   encapsulation layer. Gives millikelvin rises for clinical DBS parameters, well below the

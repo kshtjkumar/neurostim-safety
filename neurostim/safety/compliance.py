@@ -46,6 +46,13 @@ two identical immersed contacts are *not* twice one: two 3389 contacts at 2 mm g
 431.6 ohm against a naive 658.9. At large separation it vanishes, and the requirement
 exactly doubles.
 
+**The counter's own limits** (ledger 133). With a counter supplied, the assessment also
+checks the counter's charge injection. That is the limit-bearing "Counter charge injection"
+check: the larger phase's charge over the counter's area, against its material's CIC for
+the mirrored waveform. The counter's **water window and chronic dissolution threshold are
+not assessed**. A counter smaller than the active electrode carries the same charge at a
+higher density, and those two limits must be checked separately.
+
 Without a counter electrode the arithmetic is the single-interface budget above,
 unchanged. The check says so and is at best CAUTION, because under-estimating the
 required voltage is the anti-conservative direction. The equilibrium-potential difference

@@ -863,3 +863,149 @@ class TestTheFlatMicrowireTipIsNotUnderstated:
         value, order = module.converged(2.0)
         assert value == pytest.approx(oracles.FD_MICROWIRE_REFERENCE[2.0], rel=2e-3)
         assert 1.0 < order < 2.0
+
+
+class TestTheCounterElectrodeIsAssessed:
+    """Ledger 133 (Phase 3 review H7). Since C3.5 the counter's area and material are inputs,
+    but its own charge injection was never checked: a small counter carrying the same charge
+    at a higher density could exceed its limit and pass silently.
+
+    User decision (a), CIC only: a limit-bearing "Counter charge injection" check. The
+    counter sees the mirrored waveform, so a cathodic-first protocol is anodic-first at the
+    counter, and the stored CICs are keyed by the waveform's leading polarity. Its phase
+    charge density -- the larger of the two phases, so over-recovery is covered -- is
+    compared against ``cic(anodic_first = not protocol.anodic_first)``, with the same policy,
+    medium and derating as the active electrode.
+    """
+
+    @staticmethod
+    def _assess(counter, protocol=None, **kwargs):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        return SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            protocol or StimProtocol(100.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+            counter_electrode=counter,
+            counter_separation_um=20000.0,
+            **kwargs,
+        ).assess()
+
+    @staticmethod
+    def _counter(assessment):
+        return next(c for c in assessment.checks if c.name == "Counter charge injection")
+
+    def test_a_small_counter_fails_its_own_limit_and_binds(self):
+        """Not tautological: the expected ceiling is Pt's anodic-first conservative CIC,
+        50 uC/cm^2 (Rose & Robblee), times the counter's area over the pulse width, written
+        out; the active 500 um disc alone would allow far more."""
+        from neurostim.materials import get_material
+
+        small = DiscElectrode(80.0, "Pt")
+        assessment = self._assess(small)
+        check = self._counter(assessment)
+        limit = get_material("Pt").cic_uC_cm2("conservative", anodic_first=True)
+        assert limit == 50.0  # the premise: cathodic-first protocol, anodic-first at the counter
+        expected = limit * small.area_cm2 / 200e-6
+        assert check.status.value == "FAIL"
+        assert check.ceiling_uA == pytest.approx(expected, rel=1e-12)
+        assert assessment.limiting_mechanism == "Counter charge injection"
+        assert assessment.limiting_current_uA == check.ceiling_uA
+
+    def test_a_large_counter_passes_and_does_not_bind(self):
+        assessment = self._assess(DiscElectrode(5000.0, "Pt"))
+        check = self._counter(assessment)
+        assert check.status.value == "PASS"
+        assert assessment.limiting_mechanism != "Counter charge injection"
+
+    def test_over_recovery_is_judged_on_the_larger_return_phase(self):
+        """A return phase recovering 150 % carries 1.5x the leading charge through the
+        counter, so the ceiling is two thirds of the leading-phase one."""
+        from neurostim import StimProtocol
+
+        counter = DiscElectrode(300.0, "Pt")
+        balanced = self._counter(self._assess(counter))
+        over = self._counter(
+            self._assess(counter, StimProtocol(100.0, 200.0, 130.0, 1.0, charge_recovery_ratio=1.5))
+        )
+        assert over.ceiling_uA == pytest.approx(balanced.ceiling_uA / 1.5, rel=1e-12)
+
+    def test_monophasic_is_not_evaluated(self):
+        from neurostim import StimProtocol
+
+        check = self._counter(
+            self._assess(DiscElectrode(300.0, "Pt"), StimProtocol(100.0, 200.0, 130.0, 1.0, waveform="monophasic"))
+        )
+        assert check.status.value == "NOT_EVALUATED"
+
+    def test_the_derating_applies_to_the_counter_too(self):
+        counter = DiscElectrode(300.0, "Pt")
+        saline = self._counter(self._assess(counter))
+        in_vivo = self._counter(self._assess(counter, medium="in_vivo"))
+        assert in_vivo.ceiling_uA < saline.ceiling_uA
+
+    def test_it_is_limit_bearing_everywhere_the_package_and_oracle_say_so(self):
+        import oracles
+
+        from neurostim.safety.assessment import CEILING_INTERVALS, CHECK_KINDS, LIMIT_BEARING
+
+        assert "Counter charge injection" in LIMIT_BEARING
+        assert "Counter charge injection" in oracles.LIMIT_BEARING
+        assert CHECK_KINDS["Counter charge injection"] == "electrode-acute"
+        assert "Counter charge injection" in CEILING_INTERVALS
+
+    def test_the_headline_matches_the_independent_bisection(self):
+        """The fail-ceiling oracle reads only assess().failed, and writes LIMIT_BEARING out
+        itself."""
+        import oracles
+
+        from neurostim import SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0, counter_electrode=DiscElectrode(80.0, "Pt"),
+            counter_separation_um=20000.0,
+        )
+        assert calc.assess().limit_bearing_ceiling_uA == pytest.approx(
+            oracles.fail_ceiling_uA(calc, names=oracles.LIMIT_BEARING), rel=1e-9
+        )
+
+
+class TestWithoutACounterNothingChanges:
+    """Ledger 133, user decision (ii): the counter check is emitted only when a counter is
+    supplied, so an assessment without one is byte-identical to before C3.11. The README
+    transcript check (``regenerate_example_output.py --check``) is the byte-level golden;
+    this pins the check set, and what monophasic delivery does with a counter."""
+
+    NINE = {
+        "Shannon criterion", "Charge injection limit", "Water window", "Validated envelope",
+        "Current density", "Microelectrode charge/phase", "Chronic degradation",
+        "Charge balance", "Compliance voltage",
+    }
+
+    def test_no_counter_emits_exactly_the_nine_checks(self):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        assessment = SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        ).assess()
+        assert {c.name for c in assessment.checks} == self.NINE
+        assert assessment.counter_charge is None
+
+    def test_monophasic_with_a_counter_is_incomplete_for_the_counter_too(self):
+        """Monophasic: the counter check is NOT_EVALUATED, like the active Charge injection
+        check, so both are named in limits_incomplete. The flag was already True for every
+        monophasic protocol (ledger 2); the counter adds its name to the note."""
+        from neurostim import SafetyCalculator, StimProtocol
+
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(100.0, 200.0, 130.0, 1.0, waveform="monophasic"),
+            compliance_V=10.0, counter_electrode=DiscElectrode(300.0, "Pt"),
+            counter_separation_um=20000.0,
+        ).assess()
+        assert assessment.limits_incomplete
+        note = assessment.limits_incomplete_note()
+        assert "Counter charge injection" in note
+        assert "Charge injection limit" in note

@@ -1859,6 +1859,14 @@ class TestEveryLimitBearingCheckHasAMargin:
             StimProtocol(20, 400, 50, 3600),
             compliance_V=20.0,
         )
+        # With a counter electrode, so the eighth limit-bearing check (C3.11) is pinned too.
+        yield SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(100.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+            counter_electrode=DiscElectrode(80.0, "Pt"),
+            counter_separation_um=20000.0,
+        )
 
     def test_every_limit_bearing_margin_is_its_own_fail_ceiling(self):
         """The pin. ``margin * current`` must equal the independent per-check bisection.
@@ -1874,7 +1882,13 @@ class TestEveryLimitBearingCheckHasAMargin:
         for calc in self._cases():
             assessment = calc.assess()
             named = {c.name for c in assessment.checks}
-            assert named >= LIMIT_BEARING, LIMIT_BEARING - named
+            # The counter check is emitted only with a counter electrode (C3.11).
+            expected = (
+                LIMIT_BEARING
+                if calc.counter_electrode is not None
+                else LIMIT_BEARING - {"Counter charge injection"}
+            )
+            assert named >= expected, expected - named
             for check in assessment.checks:
                 if check.name not in LIMIT_BEARING:
                     continue

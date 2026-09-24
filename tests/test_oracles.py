@@ -413,10 +413,11 @@ class TestFailCeiling:
         with pytest.raises(fail_ceiling.NonMonotonePredicate):
             fail_ceiling.fail_ceiling_uA(worked_example)
 
-    def test_the_limit_bearing_names_are_the_seven_the_plan_settles_on(
+    def test_the_limit_bearing_names_are_the_eight_the_plan_settles_on(
         self, worked_example
     ) -> None:
-        """D3 names seven. The two it excludes impose no current ceiling."""
+        """D3 names eight since C3.11 (the counter electrode's charge injection, emitted only
+        with a counter). The two it excludes impose no current ceiling."""
         assert set(fail_ceiling.LIMIT_BEARING) == {
             "Shannon criterion",
             "Charge injection limit",
@@ -425,9 +426,10 @@ class TestFailCeiling:
             "Microelectrode charge/phase",
             "Chronic degradation",
             "Compliance voltage",
+            "Counter charge injection",
         }
         emitted = {check.name for check in worked_example.assess().checks}
-        assert set(fail_ceiling.LIMIT_BEARING) <= emitted
+        assert set(fail_ceiling.LIMIT_BEARING) - fail_ceiling.COUNTER_ONLY_CHECKS <= emitted
         assert emitted - set(fail_ceiling.LIMIT_BEARING) == {
             "Charge balance",
             "Validated envelope",

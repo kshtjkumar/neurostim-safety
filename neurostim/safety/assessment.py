@@ -79,6 +79,7 @@ CHECK_KINDS: dict[str, CheckKind] = {
     "Chronic degradation": "electrode-chronic",
     "Charge balance": "electrode-chronic",
     "Compliance voltage": "instrument",
+    "Counter charge injection": "electrode-acute",
 }
 """The kind of every check this package emits.
 
@@ -96,9 +97,15 @@ LIMIT_BEARING: frozenset[str] = frozenset(
         "Microelectrode charge/phase",
         "Chronic degradation",
         "Compliance voltage",
+        "Counter charge injection",
     }
 )
-"""The seven checks whose verdict depends on the amplitude, so each imposes a ceiling.
+"""The eight checks whose verdict depends on the amplitude, so each imposes a ceiling.
+
+Eight since C3.11 (ledger 133): the counter electrode's own charge injection is
+amplitude-dependent, so it must bear a ceiling. Left outside, a verdict that moves with
+amplitude would break the invariant that makes ``unsafe_at_any_amplitude`` correct (fix
+plan D3, amended). It is emitted only when a counter electrode is supplied.
 
 ``Validated envelope`` and ``Charge balance`` are excluded, and the exclusion is load
 bearing rather than tidy. Both are categorical properties of the parameter set -- how far
@@ -134,6 +141,19 @@ def _charge_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Inte
     return Interval.exact(assessment.charge.max_current_uA)
 
 
+def _counter_charge_ceiling_interval(
+    assessment: SafetyAssessment, check: Check
+) -> Interval:
+    """The counter's charge-injection ceiling over its material's published CIC range."""
+    result = assessment.counter_charge
+    if result is None or result.max_current_interval_uA is None:
+        raise ValueError(
+            "a Counter charge injection check exists but the assessment carries no counter "
+            "charge result"
+        )
+    return result.max_current_interval_uA * (1.0 / _counter_charge_scale(assessment.protocol))
+
+
 def _chronic_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Interval:
     """The dissolution ceiling over the material's stored threshold band."""
     return _chronic_ceiling_interval_uA(
@@ -149,6 +169,7 @@ CEILING_INTERVALS: dict[str, CeilingInterval] = {
     "Current density": _exact_ceiling,
     "Microelectrode charge/phase": _exact_ceiling,
     "Compliance voltage": _exact_ceiling,
+    "Counter charge injection": _counter_charge_ceiling_interval,
 }
 """How each :data:`LIMIT_BEARING` check's ceiling widens over its published range.
 
@@ -311,6 +332,8 @@ class SafetyAssessment:
     """
     biphasic_mechanism: str | None = None
     """The check that binds the biphasic counterpart, named when the cap is what binds."""
+    counter_charge: charge_mod.ChargeResult | None = None
+    """The counter electrode's own charge-injection result; ``None`` without a counter."""
 
     @property
     def status(self) -> Status:
@@ -992,6 +1015,53 @@ def _water_window_ceiling_uA(
         name="Water window",
         plateau=search.plateau_uA,
     )
+
+
+def _counter_charge_scale(protocol: StimProtocol) -> float:
+    """The larger phase's charge as a multiple of the leading one, for the counter.
+
+    ``r_a`` when the return phase over-recovers, else 1: the counter carries both phases,
+    and the larger density is the one its limit must hold.
+    """
+    return max(1.0, protocol.recovered_fraction)
+
+
+def _counter_charge_ceiling_uA(
+    result: charge_mod.ChargeResult, protocol: StimProtocol, area_cm2: float
+) -> float:
+    """Largest leading amplitude at which the counter's larger phase stays within its CIC."""
+    limit = result.cic_limit_uC_cm2
+    scale = _counter_charge_scale(protocol)
+    return floor_to_pass(
+        limit * area_cm2 / (protocol.pulse_width_us * 1e-6 * scale),
+        lambda current_uA: charge_mod.charge_density_uC_cm2(
+            charge_uC(current_uA, protocol.pulse_width_us) * scale, area_cm2
+        )
+        <= limit,
+        name="Counter charge injection",
+    )
+
+
+def _counter_charge_check(
+    result: charge_mod.ChargeResult, waveform: str, ceiling_uA: float
+) -> Check:
+    """The counter electrode's own charge-injection capacity (ledger 133).
+
+    The counter sees the mirrored waveform: a cathodic-first protocol is anodic-first at the
+    counter, and the stored CICs are keyed by the waveform's leading polarity, so ``result``
+    was evaluated at the opposite polarity, with the same policy, medium and derating as the
+    active electrode. Its charge is the larger of the two phases. Otherwise it is judged
+    exactly as :func:`_charge_check` judges the active electrode, including NOT_EVALUATED for
+    monophasic delivery. The counter's water window and chronic threshold are **not**
+    assessed; see the compliance module docstring.
+    """
+    base = _charge_check(result, waveform)
+    # The "max" in a FAIL summary is the leading amplitude the counter allows, which is the
+    # charge result's own back-solve divided by the larger phase's share.
+    summary = base.summary.replace(
+        f"max {format_limit(result.max_current_uA)} uA", f"max {format_limit(ceiling_uA)} uA"
+    )
+    return replace(base, name="Counter charge injection", summary=f"counter electrode: {summary}")
 
 
 def _density_ceiling_uA(
@@ -1876,6 +1946,22 @@ class SafetyCalculator:
             counter_separation_um=self.counter_separation_um,
         )
 
+        counter_result = None
+        counter_ceiling_uA = math.inf
+        if self.counter_electrode is not None:
+            counter_result = charge_mod.evaluate(
+                get_material(self.counter_electrode.material),
+                self.charge_uC * _counter_charge_scale(self.p),
+                self.counter_electrode.area_cm2,
+                self.p.pulse_width_us,
+                self.policy,
+                self.medium,
+                not self.p.anodic_first,
+            )
+            counter_ceiling_uA = _counter_charge_ceiling_uA(
+                counter_result, self.p, self.counter_electrode.area_cm2
+            )
+
         raw_checks = (
             _shannon_check(
                 shannon_result,
@@ -1893,6 +1979,13 @@ class SafetyCalculator:
             _chronic_check(self.material, charge_result.charge_density_uC_cm2),
             _charge_balance_check(self.p, self.e.area_cm2),
             _compliance_check(compliance_result),
+        ) + (
+            # Emitted only with a counter: without one, the Compliance check already says a
+            # single-interface budget is assumed, and a NOT_EVALUATED here would mark every
+            # monopolar assessment incomplete for a limit it cannot have (ledger 133).
+            (_counter_charge_check(counter_result, self.p.waveform, counter_ceiling_uA),)
+            if counter_result is not None
+            else ()
         )
 
         # The ceiling and the caveat are attached here rather than inside each builder:
@@ -1915,6 +2008,7 @@ class SafetyCalculator:
                 self.material, self.p, self.e.area_cm2
             ),
             "Compliance voltage": compliance_result.max_current_uA,
+            "Counter charge injection": counter_ceiling_uA,
         }
         caveats = {
             # k above Shannon's own 1.5, a protocol far from the fit conditions, or a
@@ -1952,6 +2046,13 @@ class SafetyCalculator:
             "Chronic degradation": False,
             # An estimated access resistance is the dominant term in the voltage budget.
             "Compliance voltage": not compliance_result.access_resistance_is_exact,
+            # The same caveats as the active electrode's limit.
+            "Counter charge injection": counter_result is not None
+            and (
+                bool(counter_result.condition_warning)
+                or bool(counter_result.policy_warning)
+                or not counter_result.verified
+            ),
         }
         checks = tuple(
             replace(
@@ -1984,6 +2085,7 @@ class SafetyCalculator:
             policy=self.policy,
             biphasic_ceiling_uA=cap_uA,
             biphasic_mechanism=cap_mechanism,
+            counter_charge=counter_result,
         )
 
     def _biphasic_cap(self) -> tuple[float, str | None]:

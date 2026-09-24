@@ -56,6 +56,19 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### The counter electrode's charge injection is checked
+
+With a `counter_electrode` supplied, a new limit-bearing check, **Counter charge
+injection**, compares the counter's charge density against its own material's
+charge-injection capacity. It uses the larger of the two phases, the mirrored waveform's
+polarity (a cathodic-first protocol is anodic-first at the counter), and the same policy,
+medium and derating as the active electrode. A small counter can now bind the limiting
+current, which it could exceed silently before. In a 160-configuration sweep with
+counters, 36 limits fell to the counter's ceiling: for example a 50 µm Pt counter beside a
+200 µm Pt disc goes from 78.54 µA to 4.909 µA. Seventeen verdicts went CAUTION → FAIL.
+Without a counter nothing changes, and the check does not appear. The counter's water
+window and chronic threshold are not assessed.
+
 ### A bare flat microwire tip is no longer understated
 
 `MicrowireElectrode(d, 0, "flat")`, a wire exposed only at its cut end, took the
