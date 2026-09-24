@@ -1156,7 +1156,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 142 | HIGH | — (found in Phase 3c review, K1) | **C3.19** | **FIXED** `ebdf596`; include the distance the interface travels, \|edge − rest\|, in the max that sets the water-window plateau; far-side-rest sweep with zero raises and no previously returned float changed |
 | 143 | HIGH | — (found in Phase 3c review, K2) | **C3.20** | **FIXED** `362752e`; render an infinite requirement as a refusal sentence naming why on every surface; report_to_json strictly valid (null plus a reason field), schema change documented |
 | 144 | LOW | — (found in Phase 3c review, K3) | **C3.21** | **DOCUMENTED** `2d87352` (bound stated, not modelled); compute the over-recovery overshoot from the clamped state if cheap and model-sourced, otherwise document the exception and its bound |
-| 145 | LOW | — (found in Phase 3c review, K4) | **C3.22** | correct the C3.12 row: numbers, statuses and limits identical; the detail's 'return phase' line moves, with before/after text |
+| 145 | LOW | — (found in Phase 3c review, K4) | **C3.22** | **FIXED** `25cc8da`; correct the C3.12 row: numbers, statuses and limits identical; the detail's 'return phase' line moves, with before/after text |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
