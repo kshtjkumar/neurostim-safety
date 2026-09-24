@@ -56,6 +56,16 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### A bare flat microwire tip is no longer understated
+
+`MicrowireElectrode(d, 0, "flat")`, a wire exposed only at its cut end, took the
+full-space equal-area sphere, 0.159/(σa). A converged solve of a disc on the end of an
+insulating rod gives about 0.173/(σa), so the sphere was 8 % low: an under-estimate of the
+required compliance voltage. That case now takes Newman's half-space disc, 0.25/(σa), an
+upper bound. A 50 µm wire goes from 18 189 Ω to 28 571 Ω (×π/2). The solver and its table
+are committed (`scripts/fd_microwire_reference.py`), and the sphere's error for other
+exposures is documented.
+
 ### Two small guards
 
 - A counter electrode closer than the two electrodes' half-extents is refused. For a band

@@ -264,7 +264,11 @@ the electrode's own access resistance.
   finite-volume solve it is high at every aspect, so it errs toward a larger compliance
   requirement. It is +0.3 to +1.2 % from aspect 1 to 2 (the clinical 3389 contact reads
   329.5 Ω against 327.6 Ω), +7 to +10 % at aspect 0.39–0.5, and +17 to +23 % at aspects 10
-  and 0.2. Ring and rectangle
+  and 0.2. A microwire takes the sphere too: within about ±1.4 % for a flat tip with
+  0.25–5 wire radii of exposed shaft (−1.3 % at 2 radii), and high for longer exposures
+  (+17 % at 20 radii). A flat tip with no shaft takes Newman's half-space disc instead,
+  an upper bound, because the sphere is 8 % low there. Hemispherical and conical tips with
+  no shaft stay on the sphere and are not checked against a solve. Ring and rectangle
   take Newman's equal-area disc, which *over*estimates them. The disc is the most
   resistive plane shape of its area, so the substitution is an upper bound: 1.34× high
   for a 10:1 strip, 4.3× for a ring 1 % as wide as it is across.

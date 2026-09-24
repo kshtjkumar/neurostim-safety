@@ -798,3 +798,68 @@ class TestADriftCautionHeaderSaysCaution:
         header = check.detail.splitlines()[0]
         assert "-> CAUTION (peak within window; drift reaches the edge after the train)" in header
         assert "PASS" not in header
+
+
+class TestTheFlatMicrowireTipIsNotUnderstated:
+    """Ledger 129 (Phase 3 review H3). A flat-tipped wire with no exposed shaft took the
+    full-space sphere, 0.159/(sigma a), where a converged solve of a disc on the end of an
+    insulating rod gives about 0.173: 8 % low, anti-conservative for the compliance budget.
+    User decision: use Newman's half-space disc, 0.25/(sigma a), an upper bound, for that
+    case, and keep the sphere elsewhere, with its measured error documented."""
+
+    def test_a_bare_flat_tip_takes_newmans_disc(self):
+        wire = MicrowireElectrode(50.0, 0.0, "flat")
+        assert wire.access_resistance_ohm(SIGMA) == pytest.approx(
+            1.0 / (4.0 * SIGMA * 25e-6), rel=1e-15
+        )
+        assert wire.access_resistance_is_exact is False
+        assert "(exact)" not in wire.describe()
+
+    def test_it_is_an_upper_bound_on_the_converged_solve(self):
+        """Not tautological: the reference is the committed FV table, generated without the
+        package; the sphere it replaces is below it."""
+        import oracles
+
+        reference = oracles.FD_MICROWIRE_REFERENCE[0.0]
+        wire = MicrowireElectrode(50.0, 0.0, "flat")
+        r_sigma_a = wire.access_resistance_ohm(SIGMA) * SIGMA * 25e-6
+        assert r_sigma_a > reference * 1.02
+        sphere = 1.0 / (4.0 * math.pi * math.sqrt(math.pi / (4.0 * math.pi)))
+        assert sphere < reference  # the defect, written out
+
+    @pytest.mark.parametrize("exposed", [0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 10.0, 20.0])
+    def test_with_a_shaft_the_sphere_stays_within_its_documented_band(self, exposed):
+        """-1.3 % at worst for 0.25a-5a, and high beyond: +6.7 % at 10a, +17 % at 20a."""
+        import oracles
+
+        wire = MicrowireElectrode(50.0, 25.0 * exposed, "flat")
+        r_sigma_a = wire.access_resistance_ohm(SIGMA) * SIGMA * 25e-6
+        excess = r_sigma_a / oracles.FD_MICROWIRE_REFERENCE[exposed] - 1.0
+        bound = (-0.014, 0.015) if exposed <= 5.0 else (0.0, 0.18)
+        assert bound[0] < excess < bound[1], (exposed, excess)
+
+    @pytest.mark.parametrize("tip", ["hemispherical", "conical"])
+    def test_other_bare_tips_stay_on_the_sphere(self, tip):
+        wire = MicrowireElectrode(50.0, 0.0, tip, 30.0 if tip == "conical" else None)
+        a_m = math.sqrt(wire.area_um2 * 1e-12 / (4.0 * math.pi))
+        assert wire.access_resistance_ohm(SIGMA) == pytest.approx(
+            1.0 / (4.0 * math.pi * SIGMA * a_m), rel=1e-12
+        )
+
+    def test_the_generator_reproduces_the_table(self):
+        """A frozen table nothing can re-derive is a magic number: the 2a entry, rerun."""
+        import importlib.util
+        import sys
+        from pathlib import Path
+
+        import oracles
+
+        path = Path(__file__).resolve().parents[1] / "scripts" / "fd_microwire_reference.py"
+        spec = importlib.util.spec_from_file_location("fd_microwire_reference", path)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["fd_microwire_reference"] = module
+        spec.loader.exec_module(module)
+        value, order = module.converged(2.0)
+        assert value == pytest.approx(oracles.FD_MICROWIRE_REFERENCE[2.0], rel=2e-3)
+        assert 1.0 < order < 2.0

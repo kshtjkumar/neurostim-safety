@@ -82,6 +82,17 @@ class MicrowireElectrode(Electrode):
 
     ``exposed_length_um`` is the cylindrical exposure *behind* the tip cap and may be
     zero for a wire exposed only at its very end.
+
+    **Access resistance** (ledger 129). No closed form exists. Against a converged
+    finite-volume solve (``scripts/fd_microwire_reference.py``,
+    ``tests/oracles/fd_microwire``) the full-space equal-area sphere is within about
+    +-1.4 % for a flat tip with 0.25-5 wire radii of exposed shaft (-1.3 % at 2 radii,
+    the one mildly low region). It is high and growing for longer exposures: +6.7 % at 10
+    radii and +17 % at 20. For a flat tip with **no** shaft the sphere is about 8 % *low*
+    (0.159 against about 0.173 in units of ``1/(sigma a)``), which is anti-conservative.
+    That one case takes Newman's half-space disc of the tip, ``1/(4 sigma a)`` (0.25), an
+    upper bound, instead. Hemispherical and conical tips with no shaft stay on the sphere
+    and have **not** been checked against a solve.
     """
 
     diameter_um: float
@@ -126,6 +137,23 @@ class MicrowireElectrode(Electrode):
     def radius_um(self) -> float:
         """Wire radius in micrometres."""
         return self.diameter_um / 2.0
+
+    @property
+    def _bare_flat_tip(self) -> bool:
+        return self.tip_shape == "flat" and self.exposed_length_um == 0.0
+
+    def access_resistance_ohm(self, sigma_S_per_m: float = 0.35) -> float:
+        """The equal-area sphere, except Newman's disc for a bare flat tip (class docstring)."""
+        if self._bare_flat_tip:
+            _check_conductivity(sigma_S_per_m)
+            return 1.0 / (4.0 * sigma_S_per_m * um_to_m(self.radius_um))
+        return super().access_resistance_ohm(sigma_S_per_m)
+
+    @property
+    def substitute_name(self) -> str:
+        if self._bare_flat_tip:
+            return "half-space disc (upper bound)"
+        return super().substitute_name
 
     @property
     def shaft_area_um2(self) -> float:

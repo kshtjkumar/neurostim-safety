@@ -61,10 +61,12 @@ from .fail_ceiling import (
     no_check_fails,
 )
 from .fd_band import CLINICAL_DBS_ASPECT, FD_BAND_REFERENCE
+from .fd_microwire import FD_MICROWIRE_REFERENCE
 
 __all__ = [
     "CLINICAL_DBS_ASPECT",
     "FD_BAND_REFERENCE",
+    "FD_MICROWIRE_REFERENCE",
     "LIMIT_BEARING",
     "NonMonotonePredicate",
     "amplitude_independent_failures",
