@@ -450,13 +450,17 @@ class TestMcCreery1990Dataset:
             )
 
     def test_data_pin_the_boundary_near_k_1_7(self):
-        """Highest safe and lowest damaging surface points both sit at k = 1.699,
-        so Shannon's recommended 1.5 is deliberately below the observed boundary."""
+        """The highest safe surface point sits at k = 1.699, so Shannon's recommended 1.5
+        is deliberately below the observed boundary.
+
+        G12 (C4.9a, ledger 78 S-14): the band's upper end is now the lowest all-damage
+        point, 2.107, not a partial point at 1.699; the lower end is unchanged.
+        """
         from neurostim.data import mccreery1990 as m
 
         safe, hurt = m.separating_k_range()
         assert safe == pytest.approx(1.699, abs=0.01)
-        assert hurt == pytest.approx(1.699, abs=0.01)
+        assert hurt == pytest.approx(2.107, abs=0.01)
         assert safe > shannon.K_SHANNON
 
     def test_local_charge_density_falls_with_depth(self):
@@ -1600,3 +1604,68 @@ class TestTheElwassifCitationIsThePaperTheValuesCameFrom:
         )
         weiland = get_preset("weiland_tin")
         assert "not in the package's library" in weiland.note  # still true, and said
+
+
+class TestLedger78LowerSeverityCorrections:
+    """Ledger 78 (literature audit S-14 to S-18), C4.9a. One assertion per item."""
+
+    ROSE = "papers_stim_calc_ref/0165-0270%2885%2990001-9.pdf"
+
+    def test_s14_the_separating_band_is_not_zero_width(self):
+        """The highest no-damage point and a partial-damage point share k = 1.699, so
+        "the highest safe and lowest damaging" gave (1.699, 1.699). A separatrix must lie
+        at or above every no-damage point and below every all-damage point; the partial
+        points are the transition inside that band. Pinned to the k the package uses."""
+        from neurostim.data import mccreery1990 as m
+        from neurostim.safety import shannon
+
+        low, high = m.separating_k_range()
+        assert low == pytest.approx(1.69897, abs=1e-5)
+        assert high == pytest.approx(2.10721, abs=1e-5)
+        partial = [p.shannon_k for p in m.TABLE_I if p.outcome == "partial"]
+        assert all(low <= k <= high for k in partial)
+        assert low < shannon.K_MODERATE < high and low < shannon.K_DAMAGE_OBSERVED < high
+        assert low > shannon.K_SHANNON  # Shannon's 1.5 sits below the observed transition
+
+    def test_s15_the_target_densities_belong_to_the_introductions_electrode(self):
+        """Rose et al. p. 182: 10,000 uC/cm^2 and 50 A/cm^2 on "0.5 x 10-6 cm2 as used by
+        Schmidt and McIntosh"; on the module's 1e-4 mm^2 (1e-6 cm^2) the same 5 nC in
+        0.2 ms is 5,000 uC/cm^2 and 25 A/cm^2."""
+        from neurostim.data import ta2o5_capacitor as ta
+
+        assert "10,000" in _pdf_page_text(self.ROSE, 2)
+        doc = ta.__doc__
+        assert "5,000 uC/cm^2" in doc and "25 A/cm^2" in doc
+        assert "0.5e-6 cm^2" in doc
+
+    def test_s16_the_thermal_conductivity_range_is_the_papers_sweep(self):
+        """Elwassif Table I (p. 3582) sweeps 0.45, 0.50, 0.55 and 0.60 W/m/K; 0.45 gives the
+        hottest result in that block."""
+        from neurostim.data import elwassif2006 as e
+
+        swept = sorted({
+            p.thermal_conductivity_W_per_mK for p in e.TABLE_I
+            if p.sigma_S_per_m == 0.30 and p.perfusion_per_s == 0.0
+            and p.thermal_conductivity_W_per_mK != 0.527
+        })
+        assert e.THERMAL_CONDUCTIVITY_RANGE_W_PER_MK == (min(swept), max(swept)) == (0.45, 0.6)
+
+    def test_s17_the_peak_rise_docstring_names_its_own_row(self):
+        import inspect
+
+        from neurostim.data import elwassif2006 as e
+
+        source = inspect.getsource(e)
+        doc = source.split("PEAK_RISE_K = ", 1)[1].split('"""', 2)[1]
+        assert "lowest thermal conductivity in the sweep" not in doc
+        assert "0.527" in doc and "0.45" in doc
+
+    def test_s18_tio2_storage_is_as_the_source_states(self):
+        """Rose et al. p. 186: "a factor of as much as 4 relative to Ta based electrodes";
+        their Table III gives 2.6 against 6.3 uC/mm^2 (2.4x) and 0.07 against 0.10 nA/nF."""
+        from neurostim.data import ta2o5_capacitor as ta
+
+        assert "factorofasmuchas4" in _pdf_page_text(self.ROSE, 6)
+        design = next(d for d in ta.DESIGNS if "etched Ti, best reported" in d.label)
+        assert "5-10x" not in design.note
+        assert "as much as 4" in design.note and "2.4x" in design.note

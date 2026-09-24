@@ -46,7 +46,10 @@ conduct, which has no analogue in a faradaic electrode.
 The conclusion the authors drew
 -------------------------------
 Rose et al. set the target for intracortical single-neuron stimulation at 5 nC in a
-0.2 ms pulse on a 1e-4 mm^2 electrode, which is 10,000 uC/cm^2 and 50 A/cm^2. Scaling
+0.2 ms pulse. On the 0.5e-6 cm^2 electrode "as used by Schmidt and McIntosh", which is
+where their densities come from (p. 182), that is 10,000 uC/cm^2 and 50 A/cm^2. On the
+1e-4 mm^2 (1e-6 cm^2) electrode of their Table III it is 5,000 uC/cm^2 and 25 A/cm^2
+(ledger 78, S-15: this sentence used to give the first pair for the second area). Scaling
 their best measured designs down to that area gives 0.26 nC for Ta/Ta2O5 and 0.63 nC for
 Ti/TiO2 -- one to two orders of magnitude short. Their verdict was that capacitor
 electrodes are not competitive with activated iridium at microelectrode scale, and the
@@ -240,8 +243,10 @@ DESIGNS: tuple[CapacitorElectrode, ...] = (
             "lists its capacitance as '1570 (AC)', and footnote d reads 'AC indicates "
             "measurement made with capacitance bridge'. The highest density in their "
             "Table III comparison of microelectrode designs (p. 191), bought at 0.4 "
-            "nA/nF leakage. TiO2 buys 5-10x the storage of "
-            "Ta2O5 and pays about the same factor in leakage. Only the Guyton & "
+            "nA/nF leakage. TiO2 raises storage by 'a factor of as much as 4 relative to "
+            "Ta based electrodes' (p. 186); their Table III gives 6.3 against 2.6 "
+            "uC/mm^2 (2.4x) at 0.10 against 0.07 nA/nF lowest leakage (1.4x). Only the "
+            "Guyton & "
             "Hambrecht surface macroelectrode stores more, and it is not intracortical"
         ),
     ),

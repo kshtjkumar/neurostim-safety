@@ -115,10 +115,13 @@ TABLE_I: tuple[ThermalPoint, ...] = (
 )
 
 PEAK_RISE_K = 0.82
-"""Largest rise anywhere in Table I: sigma 0.35, kappa 0.527, no perfusion, lead 3389.
+"""Largest rise anywhere in Table I, lead 3389, reached in two rows.
 
-This is the "up to 0.8 C" quoted in the abstract. It is a worst case: highest tissue
-conductivity, lowest thermal conductivity in the sweep, and **zero** perfusion.
+This is the "up to 0.8 C" quoted in the abstract. The row usually quoted is sigma 0.35
+(the highest electrical conductivity swept) at kappa 0.527 and **zero** perfusion. The
+thermal-conductivity block reaches the same 37.82 C at sigma 0.30 and kappa 0.45, its
+lowest value (ledger 78, S-17: this said the 0.82 K row had "the lowest thermal
+conductivity in the sweep", conflating the two).
 """
 
 # --- the authors' stated tissue parameters ----------------------------------------
@@ -127,7 +130,9 @@ TISSUE_DENSITY_KG_PER_M3 = 1040.0
 TISSUE_SPECIFIC_HEAT_J_PER_KGK = 3650.0
 BLOOD_DENSITY_KG_PER_M3 = 1057.0
 BLOOD_SPECIFIC_HEAT_J_PER_KGK = 3600.0
-THERMAL_CONDUCTIVITY_RANGE_W_PER_MK = (0.5, 0.6)
+THERMAL_CONDUCTIVITY_RANGE_W_PER_MK = (0.45, 0.6)
+"""Table I's sweep, 0.45-0.60 W/m/K (p. 3582). It was (0.5, 0.6), dropping 0.45, the
+value that gives the block's hottest result (ledger 78, S-16)."""
 CONDUCTIVITY_RANGE_S_PER_M = (0.15, 0.35)
 PERFUSION_RANGE_PER_S = (0.004, 0.012)
 """Perfusion is tabulated in ml/s/ml, which is already a volumetric rate in 1/s."""

@@ -240,6 +240,20 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### Five smaller corrections to the data modules
+
+- `mccreery1990.separating_k_range()` returns (1.699, 2.107), from the highest no-damage
+  point to the lowest all-damage point, with the partial-damage points inside. It returned
+  (1.699, 1.699), a band of zero width.
+- The Ta2O5 module's target densities, 10,000 µC/cm² and 50 A/cm², belong to the
+  0.5 × 10⁻⁶ cm² electrode the paper quotes them for. On the module's 10⁻⁴ mm² electrode
+  they are 5,000 µC/cm² and 25 A/cm².
+- `elwassif2006.THERMAL_CONDUCTIVITY_RANGE_W_PER_MK` is the paper's full sweep, 0.45-0.6.
+  It had dropped 0.45, the hottest case. The 0.82 K peak's docstring now names its two
+  rows correctly.
+- The TiO2 capacitor note quotes the source's "a factor of as much as 4" and its table
+  (2.4× storage), not "5-10x".
+
 ### Citations that point at the paper the values came from
 
 - `elwassif2006` cited the J Neural Eng article, with its DOI and PMID, but its Table I

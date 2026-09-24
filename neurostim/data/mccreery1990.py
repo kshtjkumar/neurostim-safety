@@ -239,17 +239,26 @@ def partial() -> tuple[DamagePoint, ...]:
 
 
 def separating_k_range() -> tuple[float, float]:
-    """The band of Shannon ``k`` between the highest safe and lowest damaging point.
+    """The band of Shannon ``k`` from the highest no-damage point to the lowest all-damage one.
 
-    Any separatrix has to fall inside this band to be consistent with the data. It is
-    computed from the surface-electrode points only: the penetrating iridium
+    A separatrix consistent with the data must lie at or above every point where no site
+    was damaged and below every point where every site was. The partial-damage points
+    are the transition, and all three lie inside the band (k 1.699, 1.857 and 2.0).
+
+    It used to end at the lowest *damaging or partial* point. One partial point (1.0 uC,
+    50 uC/cm^2) shares k = 1.699 with the highest safe one (5 uC, 10 uC/cm^2), so the band
+    was (1.699, 1.699): zero width, admitting only k = 1.699 and excluding every k the
+    package and the literature use (ledger 78, S-14). The data do not separate in k at a
+    point; they overlap there, which is what the transition band says.
+
+    Computed from the surface-electrode points only: the penetrating iridium
     microelectrodes sit at extreme charge density with no damage and, as the authors
     note, the tissue actually adjacent to them experiences a lower local charge density
     than the geometric figure implies.
     """
     surface = [p for p in TABLE_I if "surface" in p.electrode]
     safe = max(p.shannon_k for p in surface if p.outcome == "none")
-    hurt = min(p.shannon_k for p in surface if p.outcome in ("damage", "partial"))
+    hurt = min(p.shannon_k for p in surface if p.outcome == "damage")
     return (safe, hurt)
 
 
