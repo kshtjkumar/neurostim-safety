@@ -41,6 +41,22 @@ Mechanism = Literal["capacitive", "faradaic", "faradaic/capacitive"]
 Policy = Literal["conservative", "nominal", "optimistic"]
 
 
+def _check_bounds(
+    owner: str, label: str, low: float, high: float, *, reference: str
+) -> None:
+    """Refuse a range whose bounds are not positive finite numbers in order (ledger 24)."""
+    for name, value in (("low", low), ("high", high)):
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError(
+                f"{owner} {label} {name} bound must be a finite number > 0, got {value!r} "
+                f"(reference {reference!r})"
+            )
+    if high < low:
+        raise ValueError(
+            f"{owner} {label} high ({high}) < low ({low}) for reference {reference!r}"
+        )
+
+
 @dataclass(frozen=True)
 class MeasuredRange:
     """A literature value with its measurement conditions and provenance.
@@ -82,11 +98,17 @@ class MeasuredRange:
     note: str = ""
 
     def __post_init__(self) -> None:
-        if self.high < self.low:
-            raise ValueError(
-                f"MeasuredRange high ({self.high}) < low ({self.low}) for "
-                f"reference {self.reference!r}"
-            )
+        # Each bound must be a positive finite number (ledger 24). ``high < low`` alone is
+        # False for NaN, so a NaN bound constructed and every policy that read it returned
+        # nan; inf and non-positive bounds passed too.
+        ranges = {
+            "range": (self.low, self.high),
+            "anodic-first range": self.anodic_first_range,
+            "cathodic-first range": self.cathodic_first_range,
+        }
+        for label, bounds in ranges.items():
+            if bounds is not None:
+                _check_bounds("MeasuredRange", label, *bounds, reference=self.reference)
         cite(self.reference)  # fail loudly on an unknown citation key
 
     @property
@@ -257,12 +279,18 @@ class ChronicThreshold:
     mechanism: str
     reference: str
     note: str = ""
+    verified: bool = True
+    """Whether the threshold is confirmed against its primary source (ledger 30).
+
+    Rolls into :attr:`Material.verified` beside the CIC's and the water window's flags;
+    it had no flag at all, so an unconfirmed threshold could not say so.
+    """
 
     def __post_init__(self) -> None:
-        if self.high_uC_cm2 < self.low_uC_cm2:
-            raise ValueError(
-                f"ChronicThreshold high ({self.high_uC_cm2}) < low ({self.low_uC_cm2})"
-            )
+        _check_bounds(
+            "ChronicThreshold", "band", self.low_uC_cm2, self.high_uC_cm2,
+            reference=self.reference,
+        )
         cite(self.reference)
 
     def describe(self) -> str:
@@ -273,6 +301,8 @@ class ChronicThreshold:
             else f"{self.low_uC_cm2:g}"
         )
         text = f"{body} uC/cm^2 ({self.mechanism}, {self.reference})"
+        if not self.verified:
+            text += " PROVISIONAL"
         if self.note:
             text += f" -- {self.note}"
         return text
@@ -295,7 +325,8 @@ class Material:
     def verified(self) -> bool:
         """True only when every constant attached to this material is primary-sourced."""
         ww_ok = self.water_window is None or self.water_window.verified
-        return self.cic.verified and ww_ok
+        chronic_ok = self.chronic_threshold is None or self.chronic_threshold.verified
+        return self.cic.verified and ww_ok and chronic_ok
 
     def cic_uC_cm2(
         self, policy: Policy = "conservative", anodic_first: bool | None = None
@@ -774,6 +805,8 @@ def with_measured_cic(
     if not math.isfinite(low_uC_cm2) or low_uC_cm2 <= 0:
         raise ValueError(f"low_uC_cm2 must be finite and > 0, got {low_uC_cm2!r}")
     high = low_uC_cm2 if high_uC_cm2 is None else high_uC_cm2
+    if not math.isfinite(high) or high <= 0:
+        raise ValueError(f"high_uC_cm2 must be finite and > 0, got {high_uC_cm2!r}")
     measured = MeasuredRange(
         low=low_uC_cm2 * 1e-3,
         high=high * 1e-3,

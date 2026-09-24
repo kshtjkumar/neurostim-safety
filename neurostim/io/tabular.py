@@ -263,6 +263,7 @@ def report_to_json(
         },
         "results": results,
         "null_reasons": null_reasons,
+        "provenance": _provenance(calc.material),
         # Top-level rather than inside ``results``: ``results`` is ``calc.report()``,
         # whose keys become the columns of a sweep CSV, and a list is not a CSV cell.
         "not_evaluated": [c.name for c in assessment.not_evaluated],
@@ -311,6 +312,25 @@ def report_to_json(
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
     return text
+
+
+def _provenance(material: Any) -> dict[str, Any]:
+    """Each applied constant's reference key and verified flag, and the roll-up (ledger 30).
+
+    ``None`` for a constant the material does not carry.
+    """
+
+    def entry(constant: Any) -> dict[str, Any] | None:
+        if constant is None:
+            return None
+        return {"reference": constant.reference, "verified": constant.verified}
+
+    return {
+        "material_verified": material.verified,
+        "cic": entry(material.cic),
+        "water_window": entry(material.water_window),
+        "chronic_threshold": entry(material.chronic_threshold),
+    }
 
 
 def current_sweep(

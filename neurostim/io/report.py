@@ -227,6 +227,53 @@ def _required_compliance_text(calc: SafetyCalculator, result: ComplianceResult) 
     return f"{text}; monopolar single-interface budget assumed)"
 
 
+def _provenance_rows(
+    calc: SafetyCalculator, assessment: SafetyAssessment
+) -> list[tuple[str, str]]:
+    """The PDF's "Provenance of applied limits" rows, one per applied constant.
+
+    The chronic threshold has a row of its own, with its PROVISIONAL flag when it is not
+    confirmed (ledger 30); it used to be applied with no provenance row at all.
+    """
+    prov: list[tuple[str, str]] = [
+        ("Charge-injection limit", calc.material.cic.describe()),
+    ]
+    if calc.material.water_window is not None:
+        prov.append(("Water window", calc.material.water_window.describe()))
+    else:
+        prov.append(
+            ("Water window", "no potential limits on record for this material")
+        )
+    if calc.material.chronic_threshold is not None:
+        prov.append(
+            ("Chronic degradation threshold", calc.material.chronic_threshold.describe())
+        )
+    else:
+        prov.append(
+            (
+                "Chronic degradation threshold",
+                "no chronic threshold on record for this material",
+            )
+        )
+    # The material records carry caveats that nothing rendered. SS316LVM's said the
+    # cited work argues its own high end down; it was 576 characters of stored text that
+    # never reached a page. A provenance section that omits the source's own reservations
+    # about its number is not stating provenance.
+    if calc.material.cic.note:
+        prov.append(("Limit, as the source states it", calc.material.cic.note))
+    if calc.material.note:
+        prov.append((f"{calc.material.key} notes", calc.material.note))
+    prov.append(
+        (
+            "Interface model",
+            f"{assessment.water_window.interface_model}, "
+            f"C_eff = {assessment.water_window.capacitance_uF_cm2:.0f} "
+            f"&micro;F/cm&sup2;",
+        )
+    )
+    return prov
+
+
 def build_report(
     calc: SafetyCalculator,
     path: str | Path,
@@ -381,32 +428,8 @@ def build_report(
     )
 
     story.append(Paragraph("Provenance of applied limits", styles["h2"]))
-    prov: list[tuple[str, str]] = [
-        ("Charge-injection limit", calc.material.cic.describe()),
-    ]
-    if calc.material.water_window is not None:
-        prov.append(("Water window", calc.material.water_window.describe()))
-    else:
-        prov.append(
-            ("Water window", "no potential limits on record for this material")
-        )
-    # The material records carry caveats that nothing rendered. SS316LVM's said the
-    # cited work argues its own high end down; it was 576 characters of stored text that
-    # never reached a page. A provenance section that omits the source's own reservations
-    # about its number is not stating provenance.
-    if calc.material.cic.note:
-        prov.append(("Limit, as the source states it", calc.material.cic.note))
-    if calc.material.note:
-        prov.append((f"{calc.material.key} notes", calc.material.note))
-    prov.append(
-        (
-            "Interface model",
-            f"{assessment.water_window.interface_model}, "
-            f"C_eff = {assessment.water_window.capacitance_uF_cm2:.0f} "
-            f"&micro;F/cm&sup2;",
-        )
-    )
-    story.append(_kv_table(prov, styles))
+    story.append(_kv_table(_provenance_rows(calc, assessment), styles))
+
 
     warnings = [c for c in assessment.checks if c.status in (Status.FAIL, Status.CAUTION)]
     if warnings:

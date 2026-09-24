@@ -74,6 +74,10 @@ guessing that it means a continuous train. In `assess_batch` and `current_sweep`
 `limiting_current_uA` and `required_compliance_V` hold a float or `None` in every row
 (object dtype), as `report()` does.
 
+The JSON's `provenance` object gives the reference key and `verified` flag of each
+applied constant (`cic`, `water_window`, `chronic_threshold`, or `null` where the material
+has none), and `material_verified`, which is true only when all three are.
+
 ## Desktop application
 
 ```bash

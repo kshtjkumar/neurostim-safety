@@ -197,6 +197,20 @@ A saved report reads back: `protocol_from_report(payload)` restores a continuous
 The batch and sweep frames hold `None`, not `NaN`, in `limiting_current_uA` and
 `required_compliance_V`, in every row. The CSV files are byte-identical.
 
+### Provenance: bounds that are numbers, and a flag for every constant
+
+- A charge-injection range, a polarity sub-range or a chronic threshold must have positive
+  finite bounds. A NaN bound used to construct, and every policy that read it returned
+  nan. So did an infinite or non-positive bound. `with_measured_cic` now checks its high
+  end as it already checked its low end.
+- `ChronicThreshold` has a `verified` flag. It rolls into `Material.verified` beside the CIC
+  and the water window, and `describe()` marks an unconfirmed threshold PROVISIONAL. Every
+  shipped threshold is verified, so no shipped verdict moves.
+- The JSON report gains a `provenance` object: each applied constant's reference key and
+  verified flag, and the material's roll-up.
+- The PDF's provenance section gains a "Chronic degradation threshold" row. The threshold
+  used to be applied without one.
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,
