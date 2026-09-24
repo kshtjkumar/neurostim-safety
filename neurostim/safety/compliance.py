@@ -80,6 +80,8 @@ from dataclasses import dataclass
 
 from ..data import gabriel1996
 from ..geometry.base import Electrode
+from ..geometry.planar import RectangularElectrode
+from ..geometry.volumetric import CylindricalBandElectrode, MicrowireElectrode
 from ..materials import Material, get_material
 from ..protocol import StimProtocol
 from ..units import charge_uC
@@ -544,7 +546,8 @@ def validate_counter(
     """Refuse a counter-electrode setting the two-terminal budget cannot honestly model.
 
     * a counter without a separation, or a separation without a counter: half an input;
-    * a separation that is not finite, or not larger than the two equal-area radii: the
+    * a separation that is not finite, or not larger than the two electrodes' reaches (the
+      larger of the equal-area radius and the enclosing sphere, :func:`_reach_um`): the
       superposition that gives the mutual term needs two separate bodies;
     * a half-space electrode with a full-space counter, or the reverse: no single
       superposition applies to one source flush in a plane and one immersed;
@@ -583,7 +586,8 @@ def validate_counter(
     if counter_separation_um <= closest:
         raise ValueError(
             f"counter_separation_um ({counter_separation_um!r} um) must exceed the sum of "
-            f"the electrode's and counter_electrode's half-extents ({closest:.4g} um): at "
+            f"the electrode's and counter_electrode's reaches ({closest:.4g} um, each the "
+            f"larger of its equal-area radius and its enclosing sphere): at "
             f"that distance the two overlap, and the superposition that gives the mutual "
             f"term needs two separate bodies"
         )
@@ -592,15 +596,43 @@ def validate_counter(
 def _reach_um(electrode: Electrode) -> float:
     """How far an electrode extends from its centre, for the overlap guard.
 
-    The larger of the equal-area substitute's radius and half the largest defining
-    dimension. The substitute alone is too small for an elongated body: a 3389 band's
-    equal-area sphere is 690 um across the middle, but the band is 1500 um long, so two on
-    one shaft overlap below a 1500 um centre spacing (ledger 130).
+    The larger of the equal-area substitute's radius and the radius of a sphere that
+    encloses the body. The substitute alone is too small for an elongated body: a 3389
+    band's equal-area sphere is 690 um across the middle, but the band is 1500 um long, so
+    two on one shaft overlap below a 1500 um centre spacing (ledger 130).
+
+    The enclosing radius is measured to the body's farthest point, not along its largest
+    dimension alone (ledger 139). A rectangle reaches half its diagonal. A band, and a
+    microwire's exposed shaft with its tip cap, reach their rim, ``sqrt(r^2 + (L/2)^2)``
+    from the middle of the axial extent ``L`` (the exposed length plus the cap: ``r`` for
+    a hemispherical tip, the cone height for a conical one). Discs, rings, spheres and
+    hemispheres reach their outer radius. A separation is a centre distance with no
+    orientation, so only an enclosing sphere guarantees two separate bodies. The price is
+    that two coaxial 3389 bands are refused below 1965 um rather than 1500 um; the 2 mm
+    clinical spacing is still accepted.
     """
     substitute = (
         electrode.equivalent_sphere_radius_um
         if electrode.environment == "full_space"
         else electrode.equivalent_radius_um
     )
-    dimensions = electrode.dimensions().values()
-    return max(substitute, max(dimensions, default=0.0) / 2.0)
+    return max(substitute, _enclosing_radius_um(electrode))
+
+
+def _enclosing_radius_um(electrode: Electrode) -> float:
+    """Radius of a sphere about the body's centre that contains all of it, in um."""
+    if isinstance(electrode, RectangularElectrode):
+        return math.hypot(electrode.width_um, electrode.length_um) / 2.0
+    if isinstance(electrode, CylindricalBandElectrode):
+        return math.hypot(electrode.diameter_um / 2.0, electrode.height_um / 2.0)
+    if isinstance(electrode, MicrowireElectrode):
+        radius = electrode.diameter_um / 2.0
+        if electrode.tip_shape == "hemispherical":
+            cap = radius
+        elif electrode.tip_shape == "conical":
+            assert electrode.cone_height_um is not None  # required at construction
+            cap = electrode.cone_height_um
+        else:
+            cap = 0.0
+        return math.hypot(radius, (electrode.exposed_length_um + cap) / 2.0)
+    return max(electrode.dimensions().values(), default=0.0) / 2.0

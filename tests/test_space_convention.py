@@ -818,6 +818,61 @@ class TestTheSeparationGuardSeesTheWholeElectrode:
             )
 
 
+class TestTheReachIsTheEnclosingSphere:
+    """Ledger 139 (Phase 3b review J5). Half the largest dimension understates how far an
+    electrode extends from its centre whenever it extends in two directions: a rectangle
+    reaches half its diagonal, and a band or an exposed microwire reaches its rim,
+    ``sqrt(r^2 + (L/2)^2)`` from the middle of its axial extent."""
+
+    @staticmethod
+    def _refused(electrode, spacing):
+        from neurostim.safety.compliance import validate_counter
+
+        try:
+            validate_counter(electrode, electrode, spacing)
+        except ValueError as error:
+            assert "counter_separation_um" in str(error)
+            return True
+        return False
+
+    @pytest.mark.parametrize(
+        ("electrode", "reach_um"),
+        [
+            # half the diagonal of 300 x 400
+            (RectangularElectrode(300.0, 400.0, "Pt"), 250.0),
+            # sqrt(635^2 + 750^2)
+            (CylindricalBandElectrode(1270.0, 1500.0, "PtIr"), math.hypot(635.0, 750.0)),
+            # 100 um of shaft behind a 25 um hemispherical cap: axial extent 125 um
+            (MicrowireElectrode(50.0, 100.0, tip_shape="hemispherical", material="PtIr"),
+             math.hypot(25.0, 62.5)),
+            # 100 um of shaft behind a 60 um cone: axial extent 160 um
+            (MicrowireElectrode(
+                50.0, 100.0, tip_shape="conical", cone_height_um=60.0, material="PtIr"
+            ),
+             math.hypot(25.0, 80.0)),
+        ],
+    )
+    def test_two_identical_electrodes_are_refused_up_to_twice_the_reach(
+        self, electrode, reach_um
+    ):
+        assert self._refused(electrode, 2.0 * reach_um * (1.0 - 1e-9))
+        assert self._refused(electrode, 2.0 * reach_um)
+        assert not self._refused(electrode, 2.0 * reach_um * (1.0 + 1e-9))
+
+    @pytest.mark.parametrize(
+        ("electrode", "reach_um"),
+        [
+            (DiscElectrode(200.0, "Pt"), 100.0),
+            (RingElectrode(330.0, 270.0, "Pt"), 165.0),
+            (SphericalElectrode(200.0, "Pt"), 100.0),
+            (MicrowireElectrode(50.0, 0.0, tip_shape="flat", material="PtIr"), 25.0),
+        ],
+    )
+    def test_a_body_with_one_extent_keeps_its_radius(self, electrode, reach_um):
+        assert self._refused(electrode, 2.0 * reach_um)
+        assert not self._refused(electrode, 2.0 * reach_um * (1.0 + 1e-9))
+
+
 class TestADriftCautionHeaderSaysCaution:
     """Ledger 132 (Phase 3 review H6). C3.0 fixed the FAIL case; a drift that reaches the
     edge after the train is a CAUTION, and the detail header led with "PASS"."""

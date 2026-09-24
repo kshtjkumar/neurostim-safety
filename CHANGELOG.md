@@ -79,11 +79,13 @@ upper bound. A 50 µm wire goes from 18 189 Ω to 28 571 Ω (×π/2). The solver
 are committed (`scripts/fd_microwire_reference.py`), and the sphere's error for other
 exposures is documented.
 
-### Two small guards
+### Three small guards
 
-- A counter electrode closer than the two electrodes' half-extents is refused. For a band
-  that means half its length, not its equal-area sphere, so two 1500 µm bands on one shaft
-  are refused below a 1500 µm spacing instead of returning a resistance.
+- A counter electrode closer than the two electrodes' reaches is refused. Each reach is the
+  radius of a sphere enclosing the electrode, not its equal-area sphere: half the diagonal
+  for a rectangle, and the rim, `sqrt(r^2 + (L/2)^2)`, for a band or an exposed microwire
+  with its tip cap. Two 3389 bands are refused below a 1965 µm centre spacing instead of
+  returning a resistance; the clinical 2 mm spacing is accepted.
 - A Water window check that CAUTIONs on a drift reaching the edge after the train now says
   "CAUTION" in its detail header, not "PASS".
 - Whether a limit is provisional is looked up by check name, and a missing or misspelt name
