@@ -1006,7 +1006,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 16 | LOW | BLOCKED | — (DOC, §8) | cylinder override rejected; documented limitation |
 | 17 | HIGH | BLOCKED | C3.1 | **FIXED** `a010103`; Pin A + Pin B replace the false invariant |
 | 18 | HIGH | OK | C3.2 | **FIXED** `0c3e79a`; signature change named |
-| 19 | HIGH | OK | C4.3 | |
+| 19 | HIGH | OK | C4.3 | **FIXED** `8520d84` |
 | 20 | MED | BLOCKED | C3.1 | **FIXED** `a010103`; equal-area sphere |
 | 21 | MED | OK | C3.1 | **FIXED** `a010103` |
 | 22 | MED | DOC | — | §8 |
@@ -1047,7 +1047,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 57 | HIGH | OK | C5.8 | |
 | 58 | HIGH | OK | C5.4 | |
 | 59 | HIGH | OK | C4.4 | |
-| 60 | HIGH | OK | C4.3 | |
+| 60 | HIGH | OK | C4.3 | **FIXED** `8520d84` |
 | 61/M1 | MED | OK | C1.1 + C5.11 | headline caveat pulled forward ~30 commits |
 | 61/M2 | MED | OK | C5.11 | |
 | 61/M3 | MED | OK | C5.11 | |
@@ -1136,7 +1136,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 115 | LOW | — (found in Phase 2 review, F13) | C2.8 | **FIXED** `f4f08b8`; one sentence in D2 point 2 |
 | 116 | LOW | — (found in Phase 2 review, F14) | C5.11 | viz |
 | 117 | LOW | — (found in Phase 2 review, F15; extended by Phase 2b review G1 = ledger 119) | C2.8, C4.2 | **FIXED** `76ffd06` (contract and charge interval; nan term earlier); the nan term closes at C2.8; water_window.evaluate's argument contract at C4.2, which already reworks its polarity arguments; the charge-interval fallback at C4.2 — nan term **FIXED** at `f4f08b8` |
-| 118 | LOW | — (found in Phase 2 review, F16) | C4.3 | provisional propagation: set provisional on Water window whenever drift binds, and say 'no-leak bound' |
+| 118 | LOW | — (found in Phase 2 review, F16) | C4.3 | **FIXED** `8520d84`; provisional propagation: set provisional on Water window whenever drift binds, and say 'no-leak bound' |
 | 119 | LOW | — (found in Phase 2b review, G1) | C4.2 (folded into 117) | **FIXED** `76ffd06`; the public `water_window.evaluate` keeps both old behaviours: no balance gate, and `recovered_charge_uC` defaults to 0.0. C4.2 makes the drift inputs one object, or makes the riding charge required with the DC, and applies the balance tolerance inside the function |
 | 120 | LOW | — (found in Phase 2b review, G2) | C5.5 | `report()["net_dc_current_uA"]` (a batch column) carries the raw 1.04e-12 residue for a pulse both checks call balanced; report 0.0 when balanced or document it as the raw residue |
 | 121 | LOW | — (found in Phase 2b review, G3) | **P2b docs commit** | **FIXED** `96ccae5`; mislabelled fixture in the section 6 C2.2 [106] row; relabelled |
@@ -1146,7 +1146,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 125 | LOW | — (found at C3.2) | C5.11 | condition charge.describe()'s perimeter-peak note on the geometry, using `current_density.primary_distribution` |
 | 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
 | 127 | HIGH | — (found in Phase 3 review, H1) | **C3.7** | **FIXED** `f2b6a0a`; regenerate the FD band table with radial resolution tied to band height, show convergence, cross-check against an independent solve, restate the sphere's accuracy everywhere. MUST land before Phase 4 closes (review condition) |
-| 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
+| 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | **FIXED** `8520d84`; render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
 | 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | **FIXED** `f072907`; flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
 | 130 | LOW | — (found in Phase 3 review, H4) | **C3.10** | **FIXED** `982b65b`; separation guard on the largest half-dimension for elongated geometries |
 | 131 | MED | — (found in Phase 3 review, H5) | **C3.9** | **FIXED** `248a6f5`, then **RETRACTED by the reviewer (ledger 135)** and corrected at C3.12; each phase uses its own polarity's C_eff for the counter and for the active electrode's return-phase term |
