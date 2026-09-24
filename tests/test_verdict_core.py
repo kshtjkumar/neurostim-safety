@@ -3605,6 +3605,112 @@ class TestDimensionalConsistency:
             ) == pytest.approx(current_uA)
 
 
+class TestEveryCeilingSitsInsideItsOwnInterval:
+    """Ledger 136 (Phase 3b review J2). The charge-injection interval's ends were the
+    unfloored closed form, ``limit * A / W``, while the point is floored onto the float
+    boundary of ``density <= limit``, which can sit one or two ulps above it. So the point
+    fell outside its own interval: 55 of 3000 random active protocols, and 47 of 600
+    counters (SIROF/SIROF optimistic in vivo: point 8.675795347284206 against high
+    8.675795347284204). The fixed-grid containment tests above never drew one.
+
+    Per check, not only for the minimum: the aggregate containment is a theorem once every
+    check's ceiling is inside its own interval (see TestTheIntervalContainsThePointEstimate),
+    so this is the premise that theorem needs, measured.
+    """
+
+    @staticmethod
+    def _misses(assessment):
+        misses = []
+        for check in assessment._limit_bearing:
+            if check.status is Status.NOT_EVALUATED:
+                continue
+            interval = assessment._ceiling_interval_uA(check)
+            if not interval.contains(check.ceiling_uA):
+                misses.append((check.name, check.ceiling_uA, interval))
+        if not assessment.limiting_current_interval_uA.contains(
+            assessment.limit_bearing_ceiling_uA
+        ):
+            misses.append(("limit", assessment.limit_bearing_ceiling_uA,
+                           assessment.limiting_current_interval_uA))
+        return misses
+
+    @staticmethod
+    def _draw(rng):
+        from neurostim.materials import MATERIALS
+
+        return {
+            "material": rng.choice(sorted(MATERIALS)),
+            "diameter_um": 10.0 ** rng.uniform(1.3, 3.5),
+            "pulse_width_us": 10.0 ** rng.uniform(1.3, 3.0),
+            "current_uA": 10.0 ** rng.uniform(0.0, 3.0),
+            "policy": rng.choice(("conservative", "nominal", "optimistic")),
+            "medium": rng.choice(("saline", "in_vivo")),
+            "anodic_first": rng.random() < 0.5,
+            # Over-recovery scales the counter's charge by r_a, the path its interval
+            # divides through.
+            "recovery": rng.choice((1.0, 1.0, 1.2, 1.5)),
+        }
+
+    def _calc(self, draw, **kwargs):
+        return SafetyCalculator(
+            DiscElectrode(draw["diameter_um"], draw["material"]),
+            StimProtocol(
+                draw["current_uA"], draw["pulse_width_us"], 130.0, 1.0,
+                anodic_first=draw["anodic_first"], charge_recovery_ratio=draw["recovery"],
+            ),
+            policy=draw["policy"], medium=draw["medium"], compliance_V=10.0, **kwargs,
+        )
+
+    def test_the_active_electrodes_ceilings_over_3000_random_protocols(self):
+        import random
+
+        rng = random.Random(136)
+        misses = []
+        for _ in range(3000):
+            draw = self._draw(rng)
+            misses += [(draw, *m) for m in self._misses(self._calc(draw).assess())]
+        assert misses == [], (len(misses), misses[:3])
+
+    def test_the_counters_ceiling_over_600_random_counters(self):
+        import random
+
+        from neurostim.materials import MATERIALS
+
+        rng = random.Random(1360)
+        misses = []
+        for _ in range(600):
+            draw = self._draw(rng)
+            counter = DiscElectrode(10.0 ** rng.uniform(1.3, 3.5), rng.choice(sorted(MATERIALS)))
+            assessment = self._calc(
+                draw, counter_electrode=counter, counter_separation_um=1e5
+            ).assess()
+            misses += [(draw, counter, *m) for m in self._misses(assessment)]
+        assert misses == [], (len(misses), misses[:3])
+
+    def test_a_pinned_case_on_the_active_electrode_and_on_the_counter(self):
+        """A 50 um Pt disc at 50 us, conservative, in saline: the floored point is
+        39.26990816987241 uA and the closed-form low end was 39.26990816987242, one ulp
+        above it. The same disc as a counter, beside a 200 um active disc, sees the mirrored
+        (anodic-first) range, 50-100 uC/cm^2: its point is 19.634954084936204 uA, and the
+        closed form's low end was 19.63495408493621."""
+        protocol = StimProtocol(80.0, 50.0, 130.0, 1.0)
+        active = SafetyCalculator(DiscElectrode(50.0, "Pt"), protocol).assess()
+        check = next(c for c in active.checks if c.name == "Charge injection limit")
+        assert check.ceiling_uA == 39.26990816987241
+        interval = active._ceiling_interval_uA(check)
+        assert interval.low == 39.26990816987241
+        assert interval.contains(check.ceiling_uA)
+
+        paired = SafetyCalculator(
+            DiscElectrode(200.0, "Pt"), protocol,
+            counter_electrode=DiscElectrode(50.0, "Pt"), counter_separation_um=1e5,
+        ).assess()
+        counter = next(c for c in paired.checks if c.name == "Counter charge injection")
+        assert counter.ceiling_uA == 19.634954084936204
+        assert paired._ceiling_interval_uA(counter).low == 19.634954084936204
+        assert paired._ceiling_interval_uA(counter).contains(counter.ceiling_uA)
+
+
 class TestIntervalContainmentAcrossPoliciesAndK:
     """T16 in the form ``audit_tests.md`` states it: the weak invariant, always true.
 

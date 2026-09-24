@@ -99,6 +99,18 @@ def cic_max_current_uA(
     )
 
 
+def _max_current_uA(limit_uC_cm2: float, area_cm2: float, pulse_width_us: float) -> float:
+    """Largest amplitude whose charge density stays at or below ``limit_uC_cm2``."""
+    return floor_to_pass(
+        (limit_uC_cm2 * area_cm2) / (pulse_width_us * 1e-6),
+        lambda current_uA: charge_density_uC_cm2(
+            charge_uC(current_uA, pulse_width_us), area_cm2
+        )
+        <= limit_uC_cm2,
+        name="Charge injection limit",
+    )
+
+
 @dataclass(frozen=True)
 class ChargeResult:
     """Outcome of the material charge-injection check."""
@@ -276,7 +288,15 @@ def evaluate(
     limit_interval = Interval(
         bound_low * scale / derating, bound_high * scale / derating
     )
-    current_interval = limit_interval * area_cm2 / (pulse_width_us * 1e-6)
+    # Each end floored through the point's own predicate (ledger 136). The closed form
+    # ``limit * A / W`` can sit an ulp or two below the float boundary the point is settled
+    # onto, and then the point fell outside its own interval. The ends' limits are formed
+    # by the same operations as the point's, so they bracket it, and the boundary is
+    # monotone in the limit.
+    current_interval = Interval(
+        _max_current_uA(limit_interval.low, area_cm2, pulse_width_us),
+        _max_current_uA(limit_interval.high, area_cm2, pulse_width_us),
+    )
 
     return ChargeResult(
         material_key=mat.key,
@@ -291,14 +311,7 @@ def evaluate(
         # Floored against this result's own forward comparison -- `density <= limit`,
         # with the same `limit` the derating and policy above produced, not the material's
         # raw value. See _limits.floor_to_pass and ledger 9.
-        max_current_uA=floor_to_pass(
-            (limit * area_cm2) / (pulse_width_us * 1e-6),
-            lambda current_uA: charge_density_uC_cm2(
-                charge_uC(current_uA, pulse_width_us), area_cm2
-            )
-            <= limit,
-            name="Charge injection limit",
-        ),
+        max_current_uA=_max_current_uA(limit, area_cm2, pulse_width_us),
         policy=policy,
         polarity=(
             "unspecified"

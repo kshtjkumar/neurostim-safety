@@ -79,7 +79,7 @@ upper bound. A 50 µm wire goes from 18 189 Ω to 28 571 Ω (×π/2). The solver
 are committed (`scripts/fd_microwire_reference.py`), and the sphere's error for other
 exposures is documented.
 
-### Three small guards
+### Four small guards
 
 - A counter electrode closer than the two electrodes' reaches is refused. Each reach is the
   radius of a sphere enclosing the electrode, not its equal-area sphere: half the diagonal
@@ -90,6 +90,10 @@ exposures is documented.
   "CAUTION" in its detail header, not "PASS".
 - Whether a limit is provisional is looked up by check name, and a missing or misspelt name
   now raises instead of silently reading "not provisional".
+- The charge-injection interval, on the active electrode and on the counter, always
+  contains its own point estimate. Its ends were an unrounded closed form, while the point
+  is settled onto the exact float boundary of its own check, and the two could differ by
+  1–3 ulps. No limit moves.
 
 ### The return phase polarises only past rest
 

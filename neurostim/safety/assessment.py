@@ -145,13 +145,13 @@ def _counter_charge_ceiling_interval(
     assessment: SafetyAssessment, check: Check
 ) -> Interval:
     """The counter's charge-injection ceiling over its material's published CIC range."""
-    result = assessment.counter_charge
-    if result is None or result.max_current_interval_uA is None:
+    interval = assessment.counter_charge_interval_uA
+    if interval is None:
         raise ValueError(
             "a Counter charge injection check exists but the assessment carries no counter "
-            "charge result"
+            "charge interval"
         )
-    return result.max_current_interval_uA * (1.0 / _counter_charge_scale(assessment.protocol))
+    return interval
 
 
 def _chronic_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Interval:
@@ -334,6 +334,8 @@ class SafetyAssessment:
     """The check that binds the biphasic counterpart, named when the cap is what binds."""
     counter_charge: charge_mod.ChargeResult | None = None
     """The counter electrode's own charge-injection result; ``None`` without a counter."""
+    counter_charge_interval_uA: Interval | None = None
+    """The counter's ceiling over its published CIC range, in leading amplitude (ledger 136)."""
 
     @property
     def status(self) -> Status:
@@ -1055,10 +1057,17 @@ def _counter_charge_scale(protocol: StimProtocol) -> float:
 
 
 def _counter_charge_ceiling_uA(
-    result: charge_mod.ChargeResult, protocol: StimProtocol, area_cm2: float
+    result: charge_mod.ChargeResult,
+    protocol: StimProtocol,
+    area_cm2: float,
+    limit_uC_cm2: float | None = None,
 ) -> float:
-    """Largest leading amplitude at which the counter's larger phase stays within its CIC."""
-    limit = result.cic_limit_uC_cm2
+    """Largest leading amplitude at which the counter's larger phase stays within its CIC.
+
+    ``limit_uC_cm2`` defaults to the result's own limit; the interval passes each end of
+    the published range through the same predicate (ledger 136).
+    """
+    limit = result.cic_limit_uC_cm2 if limit_uC_cm2 is None else limit_uC_cm2
     scale = _counter_charge_scale(protocol)
     return floor_to_pass(
         limit * area_cm2 / (protocol.pulse_width_us * 1e-6 * scale),
@@ -1067,6 +1076,24 @@ def _counter_charge_ceiling_uA(
         )
         <= limit,
         name="Counter charge injection",
+    )
+
+
+def _counter_charge_ceiling_interval_uA(
+    result: charge_mod.ChargeResult, protocol: StimProtocol, area_cm2: float
+) -> Interval:
+    """The counter's ceiling over its material's published CIC range, each end floored.
+
+    It used to be the charge result's interval divided by the larger phase's share, an
+    unfloored closed form, while the point is floored through the scaled predicate below:
+    the point then sat up to two ulps outside its own interval (ledger 136).
+    """
+    band = result.limit_interval_uC_cm2
+    if band is None:  # pragma: no cover - charge.evaluate always sets it
+        return Interval.exact(_counter_charge_ceiling_uA(result, protocol, area_cm2))
+    return Interval(
+        _counter_charge_ceiling_uA(result, protocol, area_cm2, band.low),
+        _counter_charge_ceiling_uA(result, protocol, area_cm2, band.high),
     )
 
 
@@ -2117,6 +2144,13 @@ class SafetyCalculator:
             biphasic_ceiling_uA=cap_uA,
             biphasic_mechanism=cap_mechanism,
             counter_charge=counter_result,
+            counter_charge_interval_uA=(
+                None
+                if counter_result is None or self.counter_electrode is None
+                else _counter_charge_ceiling_interval_uA(
+                    counter_result, self.p, self.counter_electrode.area_cm2
+                )
+            ),
         )
 
     def _biphasic_cap(self) -> tuple[float, str | None]:
