@@ -1087,13 +1087,13 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 74 | HIGH | OK | C0.4, C7.4 | transcript regenerates from C0.4 on every numeric commit |
 | 75 | HIGH | OK | C4.8 | |
 | 76 | HIGH | OK | C7.4 | exit criterion 6 restated so it no longer conflicts |
-| 77/S-6 | MED | OK | C4.7 | Butterwick exponent −0.48 vs the re-fit −0.4429 |
-| 77/S-7 | MED | OK | C4.7 | AIROF derating evidence string |
-| 77/S-8 | MED | OK | C4.7 | SIROF 2–4 vs Kane's 2–3 |
-| 77/S-10 | MED | OK | C4.7 | `audit.py` digest omits nine condition fields |
-| 77/S-11 | MED | OK | C4.7 | two Ta2O5 designs measured by different methods |
-| 77/S-12 | MED | OK | C4.7 | McCreery 2010's four defining conditions; damage radius |
-| 77/S-13 | MED | OK | C4.7 | Butterwick d⁻² measured on single pulses |
+| 77/S-6 | MED | OK | C4.7b (awaiting user decision) | Butterwick exponent −0.48 vs the re-fit −0.4429 |
+| 77/S-7 | MED | OK | C4.7a | **FIXED** `3a31f3a`; AIROF derating evidence string |
+| 77/S-8 | MED | OK | C4.7b (awaiting user decision) | SIROF 2–4 vs Kane's 2–3 |
+| 77/S-10 | MED | OK | C4.7b (awaiting user decision) | `audit.py` digest omits nine condition fields |
+| 77/S-11 | MED | OK | C4.7a | **FIXED** `3a31f3a`; two Ta2O5 designs measured by different methods |
+| 77/S-12 | MED | OK | C4.7a | **FIXED** `3a31f3a`; McCreery 2010's four defining conditions; damage radius |
+| 77/S-13 | MED | OK | C4.7b (awaiting user decision) | Butterwick d⁻² measured on single pulses |
 | 78/S-14 | LOW | OK | C4.9 | zero-width `separating_k_range()` — changes a computed value |
 | 78/S-15 | LOW | OK | C4.9 | |
 | 78/S-16 | LOW | OK | C4.9 | κ range excludes Elwassif's 0.45 |
