@@ -2868,13 +2868,16 @@ class TestEveryCeilingDeclaresItsInterval:
         from neurostim.safety import assessment as assessment_mod
 
         stale = "Chronic dissolution"
+        # Assessed before the rename (ledger 137): assess() now checks its caveat keys
+        # against LIMIT_BEARING and would raise first, so the interval dispatch this test
+        # is about would never be reached.
+        original = self._assessment()
         monkeypatch.setattr(
             assessment_mod,
             "LIMIT_BEARING",
             (assessment_mod.LIMIT_BEARING - {"Chronic degradation"}) | {stale},
         )
         monkeypatch.setitem(assessment_mod.CHECK_KINDS, stale, "electrode-chronic")
-        original = self._assessment()
         renamed = replace(
             original,
             checks=tuple(

@@ -1017,6 +1017,34 @@ def _water_window_ceiling_uA(
     )
 
 
+def _check_caveat_keys(caveats: dict[str, bool]) -> None:
+    """Every caveat key is a limit-bearing check; a misspelt key raises (ledger 137)."""
+    unknown = sorted(set(caveats) - LIMIT_BEARING)
+    if unknown:
+        raise ValueError(
+            f"caveat keys {unknown} name no limit-bearing check; LIMIT_BEARING is "
+            f"{sorted(LIMIT_BEARING)}"
+        )
+
+
+def _provisional(caveats: dict[str, bool], name: str) -> bool:
+    """Whether the check ``name`` is provisional, raising if a limit-bearing one has no entry.
+
+    ``caveats.get(name, False)`` let a typo in a key make that limit silently
+    non-provisional, and the full suite passed (ledger 137, the ledger 97 fall-through
+    again). A check that bears no limit has no ceiling to caveat and is never provisional.
+    """
+    if name not in LIMIT_BEARING:
+        return False
+    try:
+        return caveats[name]
+    except KeyError:
+        raise KeyError(
+            f"no caveat declared for limit-bearing check {name!r}; add it to the caveats "
+            f"in SafetyCalculator.assess"
+        ) from None
+
+
 def _counter_charge_scale(protocol: StimProtocol) -> float:
     """The larger phase's charge as a multiple of the leading one, for the counter.
 
@@ -2054,12 +2082,13 @@ class SafetyCalculator:
                 or not counter_result.verified
             ),
         }
+        _check_caveat_keys(caveats)
         checks = tuple(
             replace(
                 check,
                 ceiling_uA=ceiling,
                 margin=_margin_from_ceiling(ceiling, self.p.current_uA),
-                provisional=caveats.get(check.name, False),
+                provisional=_provisional(caveats, check.name),
             )
             for check, ceiling in (
                 (

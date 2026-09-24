@@ -86,6 +86,8 @@ exposures is documented.
   are refused below a 1500 µm spacing instead of returning a resistance.
 - A Water window check that CAUTIONs on a drift reaching the edge after the train now says
   "CAUTION" in its detail header, not "PASS".
+- Whether a limit is provisional is looked up by check name, and a missing or misspelt name
+  now raises instead of silently reading "not provisional".
 
 ### The return phase polarises only past rest
 

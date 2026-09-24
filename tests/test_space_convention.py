@@ -1045,3 +1045,29 @@ class TestWithoutACounterNothingChanges:
         note = assessment.limits_incomplete_note()
         assert "Counter charge injection" in note
         assert "Charge injection limit" in note
+
+
+class TestAMissingCaveatRaises:
+    """Ledger 137 (Phase 3b review J3). ``caveats.get(check.name, False)`` let a typo in a
+    caveat key survive the full suite, silently making that limit non-provisional -- the
+    ledger 97 fall-through pattern, left in place for ``provisional``."""
+
+    def test_a_limit_bearing_check_without_a_caveat_entry_raises(self):
+        from neurostim.safety.assessment import _provisional
+
+        with pytest.raises(KeyError, match="Counter charge injection"):
+            _provisional({"Shannon criterion": True}, "Counter charge injection")
+
+    def test_an_unknown_caveat_key_raises(self):
+        from neurostim.safety.assessment import LIMIT_BEARING, _check_caveat_keys
+
+        caveats = dict.fromkeys(LIMIT_BEARING, False)
+        caveats["Counter charge injectoin"] = True
+        with pytest.raises(ValueError, match="Counter charge injectoin"):
+            _check_caveat_keys(caveats)
+
+    def test_a_check_that_bears_no_limit_is_never_provisional(self):
+        from neurostim.safety.assessment import _provisional
+
+        assert _provisional({}, "Charge balance") is False
+        assert _provisional({}, "Validated envelope") is False
