@@ -1126,7 +1126,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
 | 127 | HIGH | — (found in Phase 3 review, H1) | **C3.7** | **FIXED** `f2b6a0a`; regenerate the FD band table with radial resolution tied to band height, show convergence, cross-check against an independent solve, restate the sphere's accuracy everywhere. MUST land before Phase 4 closes (review condition) |
 | 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
-| 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
+| 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | **FIXED** `f072907`; flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
 | 130 | LOW | — (found in Phase 3 review, H4) | **C3.10** | **FIXED** `982b65b`; separation guard on the largest half-dimension for elongated geometries |
 | 131 | MED | — (found in Phase 3 review, H5) | **C3.9** | **FIXED** `248a6f5`; each phase uses its own polarity's C_eff for the counter and for the active electrode's return-phase term |
 | 132 | LOW | — (found in Phase 3 review, H6) | **C3.10** | **FIXED** `982b65b`; the drift-CAUTION water-window header reads '-> CAUTION (...)' |
