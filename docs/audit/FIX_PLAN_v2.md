@@ -1148,7 +1148,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 138 | LOW | — (found in Phase 3b review, J4) | **C3.14** | **FIXED** `5372f77`; correct the 0.1755 citation to the reviewer's converged ~0.1731; state the generator's dependency on the band solver's node helper |
 | 139 | LOW | — (found in Phase 3b review, J5) | **C3.16** | **FIXED** `bd8297b`; the separation guard uses a rectangle's half-diagonal; check other geometries for the same reach error |
 | 140 | MED | — (found at C3.12) | **C3.17** | **FIXED** `b0ab74f`; the train's accumulated DC offset in the compliance budget, per the user's decisions: leading phase for under-recovery, return overshoot for over-recovery; active capped at the water-window headroom, counter and window-less materials uncapped; N = ceil(duty-scaled n_pulses) |
-| 141 | MED | — (found at C3.17) | **C3.18** | the drift clause budgets an over-recovery drift, which heads for the opposite edge, at the opposite polarity's C_eff instead of the leading one |
+| 141 | MED | — (found at C3.17) | **C3.18** | **FIXED** `758ac66`; the drift clause budgets an over-recovery drift, which heads for the opposite edge, at the opposite polarity's C_eff instead of the leading one |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
