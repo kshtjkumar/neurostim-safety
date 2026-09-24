@@ -517,19 +517,28 @@ def validate_counter(
             f"return path, and adding the counter's resistance would count it twice. "
             f"Supply one or the other"
         )
-    # The equal-area radius of the body each resistance substitutes: the sphere in a full
-    # space, the disc in a half-space.
-    closest = _substitute_radius_um(electrode) + _substitute_radius_um(counter_electrode)
+    closest = _reach_um(electrode) + _reach_um(counter_electrode)
     if counter_separation_um <= closest:
         raise ValueError(
             f"counter_separation_um ({counter_separation_um!r} um) must exceed the sum of "
-            f"the electrode's and counter_electrode's equal-area radii ({closest:.4g} um): "
-            f"at that distance the two overlap, and the superposition that gives the mutual "
+            f"the electrode's and counter_electrode's half-extents ({closest:.4g} um): at "
+            f"that distance the two overlap, and the superposition that gives the mutual "
             f"term needs two separate bodies"
         )
 
 
-def _substitute_radius_um(electrode: Electrode) -> float:
-    if electrode.environment == "full_space":
-        return electrode.equivalent_sphere_radius_um
-    return electrode.equivalent_radius_um
+def _reach_um(electrode: Electrode) -> float:
+    """How far an electrode extends from its centre, for the overlap guard.
+
+    The larger of the equal-area substitute's radius and half the largest defining
+    dimension. The substitute alone is too small for an elongated body: a 3389 band's
+    equal-area sphere is 690 um across the middle, but the band is 1500 um long, so two on
+    one shaft overlap below a 1500 um centre spacing (ledger 130).
+    """
+    substitute = (
+        electrode.equivalent_sphere_radius_um
+        if electrode.environment == "full_space"
+        else electrode.equivalent_radius_um
+    )
+    dimensions = electrode.dimensions().values()
+    return max(substitute, max(dimensions, default=0.0) / 2.0)

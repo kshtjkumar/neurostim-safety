@@ -355,9 +355,10 @@ class WaterWindowResult:
             if drift.exits_during_train:
                 verdict = f"EXCEEDS ({peak}; drift reaches the edge within the train)"
             else:
-                verdict = (
-                    f"{verdict} ({peak}; drift reaches the edge after the train)"
-                )
+                # The check is a CAUTION here, never a PASS: the no-leak capacitor makes the
+                # time a lower bound, not a licence (ledger 132).
+                outcome = "CAUTION" if self.passes else "EXCEEDS"
+                verdict = f"{outcome} ({peak}; drift reaches the edge after the train)"
         lines = [
             f"Water window ({self.material_key}, {self.polarity} phase) -> {verdict}",
             f"  window        {self.window.describe()}",

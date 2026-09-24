@@ -705,7 +705,8 @@ class TestEachPhasePolarisesAtItsOwnPolarity:
         protocol = StimProtocol(1000.0, 90.0, 130.0, 1.0, return_phase_ratio=0.25)
         result = SafetyCalculator(
             active, protocol, compliance_V=10.0,
-            counter_electrode=counter, counter_separation_um=3000.0,
+            # Clear of the 6 mm counter's half-length (C3.10's overlap guard).
+            counter_electrode=counter, counter_separation_um=5000.0,
         ).assess().compliance
 
         c_cath, c_anod = self._c("AIROF", False), self._c("AIROF", True)
@@ -751,3 +752,49 @@ class TestEachPhasePolarisesAtItsOwnPolarity:
             200e-6 * result.total_resistance_ohm + (200e-6 * 200e-6 * 1e6 / disc.area_cm2) / 300.0,
             rel=1e-12,
         )
+
+
+class TestTheSeparationGuardSeesTheWholeElectrode:
+    """Ledger 130 (Phase 3 review H4). The guard used equal-area sphere radii, 690 um for a
+    3389 contact. Two 1500 um bands on one shaft were accepted at centre spacings of
+    1390-1499 um, where they overlap, and a resistance came back."""
+
+    @pytest.mark.parametrize("spacing", [1390.0, 1400.0, 1499.0, 1500.0])
+    def test_overlapping_bands_are_refused(self, spacing):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        with pytest.raises(ValueError, match="counter_separation_um"):
+            SafetyCalculator(
+                band, StimProtocol(1000.0, 90.0, 130.0, 1.0),
+                counter_electrode=band, counter_separation_um=spacing,
+            )
+
+    def test_the_clinical_spacings_are_accepted(self):
+        """The 3389's 2 mm and the 3387's 3 mm centre spacings."""
+        from neurostim import SafetyCalculator, StimProtocol
+
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        for spacing in (2000.0, 3000.0):
+            SafetyCalculator(
+                band, StimProtocol(1000.0, 90.0, 130.0, 1.0),
+                counter_electrode=band, counter_separation_um=spacing,
+            )
+
+
+class TestADriftCautionHeaderSaysCaution:
+    """Ledger 132 (Phase 3 review H6). C3.0 fixed the FAIL case; a drift that reaches the
+    edge after the train is a CAUTION, and the detail header led with "PASS"."""
+
+    def test_the_header_is_caution(self):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(10.0, 50.0, 130.0, 1.0, charge_recovery_ratio=0.99),
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Water window")
+        assert check.status.value == "CAUTION"  # the premise
+        header = check.detail.splitlines()[0]
+        assert "-> CAUTION (peak within window; drift reaches the edge after the train)" in header
+        assert "PASS" not in header

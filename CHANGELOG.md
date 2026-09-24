@@ -56,6 +56,14 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### Two small guards
+
+- A counter electrode closer than the two electrodes' half-extents is refused. For a band
+  that means half its length, not its equal-area sphere, so two 1500 µm bands on one shaft
+  are refused below a 1500 µm spacing instead of returning a resistance.
+- A Water window check that CAUTIONs on a drift reaching the edge after the train now says
+  "CAUTION" in its detail header, not "PASS".
+
 ### Each phase of the voltage budget polarises at its own polarity
 
 The package derives each material's interfacial capacitance per polarity. For Pt it is
