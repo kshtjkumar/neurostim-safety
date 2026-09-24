@@ -5,8 +5,8 @@ The field model gave every electrode but the hemisphere a full-space point sourc
 Newman's *half*-space disc. The same disc was therefore half-space in the compliance budget
 and full-space in the field, so its far field was exactly half the true value (ledger 17).
 Immersed geometries -- the clinical band and the microwire -- took the half-space disc
-formula for a body with tissue on every side, high by a factor that the FD solve below
-measures at 40-70 % (ledger 20).
+formula for a body with tissue on every side, high by a factor that the FV solve below
+measures at 58-92 % (ledger 20; ledger 127 corrected an earlier, unconverged 40-70 %).
 
 Expected values here come from ``tests.oracles``: the exact half-space disc solution
 ``V(r) = (2/pi) I R arcsin(a/r)`` with Newman's ``R = 1/(4 sigma a)`` derived inside the
@@ -97,29 +97,35 @@ class TestPinBSurfaceIdentityAtThePhysicalRadius:
 
 
 class TestPinCImmersedGeometriesUseTheEqualAreaSphere:
-    """The band against a converged FD Laplace solve (``tests/oracles/fd_band``)."""
+    """The band against a converged FV Laplace solve (``tests/oracles/fd_band``).
 
-    @pytest.mark.parametrize("aspect", [0.39, 0.5, 1.0, 1.181, 2.0])
-    def test_within_five_per_cent_over_the_clinical_range(self, aspect):
+    Re-pinned at ledger 127. The first table was unconverged and certified "within 5 %"
+    from aspect 0.39 to 2.0; against the converged table the sphere is +10.2 % at 0.39. The
+    pins now state the accuracy the package documents, band by band, and that the sphere
+    errs *high* -- toward a larger compliance requirement -- at every aspect solved.
+    """
+
+    @pytest.mark.parametrize(
+        ("aspect", "bound"),
+        [
+            (1.0, 0.015), (1.181, 0.015), (2.0, 0.015),
+            (0.39, 0.11), (0.5, 0.11), (4.0, 0.05),
+            (0.2, 0.25), (10.0, 0.25),
+        ],
+    )
+    def test_high_and_within_the_documented_bound(self, aspect, bound):
         import oracles
 
         band = CylindricalBandElectrode(1270.0, 1270.0 * aspect, "PtIr")
         fd = oracles.FD_BAND_REFERENCE[aspect]
-        assert abs(band.access_resistance_ohm(0.35) / fd - 1.0) < 0.05
-
-    @pytest.mark.parametrize("aspect", [4.0, 10.0])
-    def test_within_twenty_per_cent_to_aspect_ten(self, aspect):
-        import oracles
-
-        band = CylindricalBandElectrode(1270.0, 1270.0 * aspect, "PtIr")
-        fd = oracles.FD_BAND_REFERENCE[aspect]
-        assert abs(band.access_resistance_ohm(0.35) / fd - 1.0) < 0.20
+        excess = band.access_resistance_ohm(0.35) / fd - 1.0
+        assert 0.0 < excess < bound, (aspect, excess)
 
     def test_the_clinical_contact_is_the_equal_area_sphere(self):
         """``1/(4 pi sigma a)`` with ``4 pi a^2 = A``: 329.5 ohm, against 517.5 before.
 
         Not tautological: the expected value is the sphere formula written out here on the
-        band's lateral area, and the FD solve puts the truth at 335.1 ohm.
+        band's lateral area, and the converged solve puts the truth at 327.6 ohm (+0.6 %).
         """
         band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
         area_m2 = math.pi * 1270e-6 * 1500e-6

@@ -92,14 +92,17 @@ class Electrode(ABC):
         ``4 pi a^2 = A``. Subclasses with an exact solution override this.
 
         **Why the sphere, not the disc, for an immersed body** (ledger 20). The disc is a
-        half-space result; tissue on every side roughly halves the resistance again. A
-        converged finite-difference solve of a band on an insulating shaft
-        (``tests/oracles/fd_band``) puts the clinical DBS contact at 335.1 ohm. The
-        equal-area sphere gives 329.5 (-1.7 %) and the half-space disc 517.5 (+54 %). The
-        sphere stays within 2 % from aspect 0.39 to 2.0 and degrades to +17 % at aspect 10.
-        The immersed-cylinder ``ln(2L/r)`` form proposed instead is negative below aspect
-        0.25 and worse than the sphere everywhere measured (ledger 80), so it is not used.
-        No exact band formula exists here, which is ledger 16, documented rather than fixed.
+        half-space result, and tissue on every side lowers the resistance a long way below
+        it. A converged finite-volume solve of a band on an insulating shaft
+        (``tests/oracles/fd_band``) puts the clinical DBS contact at 327.6 ohm. The
+        equal-area sphere gives 329.5 (+0.6 %) and the half-space disc 517.5 (+58 %). The
+        sphere is **high at every aspect solved**, so it errs toward a larger compliance
+        requirement: +0.3 to +1.2 % from aspect 1 to 2, +7 to +10 % at aspect 0.39-0.5,
+        and +17 to +23 % at aspects 10 and 0.2 (ledger 127 corrected an earlier,
+        unconverged "within 2 %"). The immersed-cylinder ``ln(2L/r)`` form proposed instead
+        is negative below aspect 0.25, non-monotone, and 21.5 % low (anti-conservative) at
+        aspect 0.39 (ledger 80), so it is not used. No exact band formula exists here,
+        which is ledger 16, documented rather than fixed.
 
         The default tissue conductivity of 0.35 S/m is the homogeneous grey-matter value
         used by Elwassif et al. (2006).

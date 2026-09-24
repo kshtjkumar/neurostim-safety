@@ -1084,13 +1084,17 @@ class TestPlanarBounds:
         assert "neurostim" not in text.split('"""', 2)[2]
 
 class TestFdBandReference:
-    """Oracle (d): the converged Laplace solve for a band on an insulating shaft."""
+    """Oracle (d): the converged Laplace solve for a band on an insulating shaft.
 
-    def test_the_clinical_contact_is_three_hundred_and_thirty_five_ohms(self) -> None:
-        assert fd_band.FD_BAND_REFERENCE[fd_band.CLINICAL_DBS_ASPECT] == 335.1
+    Regenerated at ledger 127. The first table was under-resolved at the band edge and read
+    335.1 ohm at the clinical aspect; these pins now carry the converged values.
+    """
 
-    def test_the_equal_area_sphere_is_within_two_percent_at_the_clinical_aspect(self) -> None:
-        """329.5 ohm, computed here from the geometry rather than quoted."""
+    def test_the_clinical_contact_is_three_hundred_and_twenty_eight_ohms(self) -> None:
+        assert fd_band.FD_BAND_REFERENCE[fd_band.CLINICAL_DBS_ASPECT] == 327.6
+
+    def test_the_equal_area_sphere_is_just_above_it_at_the_clinical_aspect(self) -> None:
+        """329.5 ohm, computed here from the geometry: +0.6 %, high, not -1.7 %."""
         diameter_cm = fd_band.SHAFT_DIAMETER_UM * 1e-4
         height_cm = fd_band.CLINICAL_DBS_ASPECT * diameter_cm
         area_cm2 = math.pi * diameter_cm * height_cm
@@ -1099,9 +1103,9 @@ class TestFdBandReference:
 
         assert sphere_ohm == pytest.approx(329.5, abs=0.05)
         reference = fd_band.FD_BAND_REFERENCE[fd_band.CLINICAL_DBS_ASPECT]
-        assert (sphere_ohm - reference) / reference == pytest.approx(-0.017, abs=5e-4)
+        assert (sphere_ohm - reference) / reference == pytest.approx(0.006, abs=5e-4)
 
-    def test_the_equal_area_disc_the_package_uses_is_high_by_half(self) -> None:
+    def test_the_equal_area_disc_used_before_c3_1_is_high_by_more_than_half(self) -> None:
         diameter_cm = fd_band.SHAFT_DIAMETER_UM * 1e-4
         height_cm = fd_band.CLINICAL_DBS_ASPECT * diameter_cm
         area_cm2 = math.pi * diameter_cm * height_cm
@@ -1110,7 +1114,7 @@ class TestFdBandReference:
 
         assert disc_ohm == pytest.approx(517.5, abs=0.05)
         reference = fd_band.FD_BAND_REFERENCE[fd_band.CLINICAL_DBS_ASPECT]
-        assert disc_ohm / reference == pytest.approx(1.545, abs=5e-3)
+        assert disc_ohm / reference == pytest.approx(1.580, abs=5e-3)
 
     def test_resistance_falls_monotonically_with_band_height(self) -> None:
         values = [fd_band.FD_BAND_REFERENCE[a] for a in sorted(fd_band.FD_BAND_REFERENCE)]
@@ -1125,15 +1129,21 @@ class TestFdBandReference:
         )
         assert log_form < 0.0
         assert log_form == pytest.approx(-399.5, abs=0.5)
-        assert fd_band.FD_BAND_REFERENCE[0.200] == 739.9
+        assert fd_band.FD_BAND_REFERENCE[0.200] == 653.4
 
-    def test_the_generator_reproduces_the_table(self) -> None:
-        """A frozen table nothing can re-derive is a magic number.
+    def test_the_table_agrees_with_an_independent_solve(self) -> None:
+        """The Phase 3 reviewer's separately written axisymmetric FV solver (review_p3.md,
+        H1), validated to 0.05 % on Newman's disc: 653.7, 520.6, 473.9, 353.9, 327.8,
+        252.5, 171.9 and 96.7 ohm. Agreement within 0.3 % at every aspect."""
+        independent = {
+            0.200: 653.7, 0.390: 520.6, 0.500: 473.9, 1.000: 353.9,
+            1.181: 327.8, 2.000: 252.5, 4.000: 171.9, 10.000: 96.7,
+        }
+        for aspect, value in independent.items():
+            assert fd_band.FD_BAND_REFERENCE[aspect] == pytest.approx(value, rel=3e-3), aspect
 
-        Coarse settings so this costs a second or so; the committed table is from a
-        500x500 grid at 2000x the shaft radius, and the clinical value moves by 0.45 %
-        across every refinement tried.
-        """
+    @staticmethod
+    def _generator():
         import importlib.util
         import sys
         from pathlib import Path
@@ -1144,14 +1154,31 @@ class TestFdBandReference:
         generator = importlib.util.module_from_spec(spec)
         sys.modules["fd_band_reference"] = generator
         spec.loader.exec_module(generator)
+        return generator
 
-        resolved = generator.solve_band_resistance_ohm(
-            generator.SHAFT_DIAMETER_M / 2.0,
-            fd_band.CLINICAL_DBS_ASPECT * generator.SHAFT_DIAMETER_M,
-            nr=200,
-            nz=200,
-            domain_factor=500.0,
+    def test_the_generator_reproduces_newmans_disc(self) -> None:
+        """The same solver on a flush disc, whose resistance is exact: within 0.05 % after
+        extrapolation. This is what licenses trusting it on the band."""
+        generator = self._generator()
+        result = generator.converge(
+            lambda **kw: generator.disc_resistance_ohm(250e-6, **kw)
         )
-        assert resolved == pytest.approx(
-            fd_band.FD_BAND_REFERENCE[fd_band.CLINICAL_DBS_ASPECT], rel=0.02
+        exact = 1.0 / (4.0 * generator.SIGMA_S_PER_M * 250e-6)
+        assert result.richardson_ohm == pytest.approx(exact, rel=5e-4)
+
+    def test_the_generator_reproduces_the_table(self) -> None:
+        """A frozen table nothing can re-derive is a magic number. The full convergence at
+        the clinical aspect: within 0.05 % of the table, with an observed order between
+        1 and 2, as expected at a re-entrant edge."""
+        generator = self._generator()
+        height = fd_band.CLINICAL_DBS_ASPECT * generator.SHAFT_DIAMETER_M
+        result = generator.converge(
+            lambda **kw: generator.band_resistance_ohm(
+                generator.SHAFT_DIAMETER_M / 2.0, height, **kw
+            )
         )
+        assert result.richardson_ohm == pytest.approx(
+            fd_band.FD_BAND_REFERENCE[fd_band.CLINICAL_DBS_ASPECT], rel=5e-4
+        )
+        assert 1.0 < result.order < 2.0
+        assert result.uncertainty_ohm <= fd_band.CONVERGENCE_SPREAD_OHM

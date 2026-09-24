@@ -53,10 +53,11 @@ class CylindricalBandElectrode(Electrode):
         """Equal-area sphere substitution; see :meth:`Electrode.access_resistance_ohm`.
 
         No compact exact solution exists for a band on an insulating cylinder. Against a
-        converged finite-difference solve the sphere is within 2 % from aspect 0.39 to 2.0
-        -- the clinical 3389 contact reads 329.5 ohm against 335.1 -- and high by 17 % at
-        aspect 10. It replaced the half-space equal-area disc, which is 40-70 % high
-        throughout because it assumes tissue on one side only (ledger 20).
+        converged finite-volume solve the sphere is high at every aspect: the clinical 3389
+        contact reads 329.5 ohm against 327.6 (+0.6 %), +0.3 to +1.2 % from aspect 1 to 2,
+        +7 to +10 % at 0.39-0.5 and +17 to +23 % at the extremes (ledger 127). It replaced
+        the half-space equal-area disc, which is 58-92 % high because it assumes tissue on
+        one side only (ledger 20).
         """
         return super().access_resistance_ohm(sigma_S_per_m)
 

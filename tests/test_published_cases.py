@@ -49,9 +49,9 @@ class TestKuncelGrill2004:
 
         * 0.0993 A/cm^2 at 3 V over the lateral area implies 508.8 ohm, within 2 % of their
           stated 500;
-        * at their own 0.2 S/m the package's equal-area sphere gives 578.8 ohm, within
-          1.5 % of the FD-converged band at that conductivity (335.1 ohm at 0.35 S/m,
-          scaled by 0.35/0.2 = 586.4 ohm);
+        * at their own 0.2 S/m the package's equal-area sphere gives 578.8 ohm, 1.0 % above
+          the converged band at that conductivity (327.6 ohm at 0.35 S/m, scaled by
+          0.35/0.2 = 573.3 ohm; ledger 127 replaced an unconverged 335.1 / 586.4);
         * so the spreading resistance is about 16 % above their 500 ohm (their figure is
           14 % below it), conservative in the direction they said: a lower assumed
           impedance means a higher assumed current.
@@ -67,10 +67,10 @@ class TestKuncelGrill2004:
         assert implied_ohm == pytest.approx(500.0, rel=0.02)
 
         fd_at_their_sigma = oracles.FD_BAND_REFERENCE[oracles.CLINICAL_DBS_ASPECT] * 0.35 / 0.2
-        assert fd_at_their_sigma == pytest.approx(586.4, abs=0.05)
+        assert fd_at_their_sigma == pytest.approx(573.3, abs=0.05)
         sphere = contact.access_resistance_ohm(0.2)
         assert sphere == pytest.approx(578.8, abs=0.1)
-        assert abs(sphere / fd_at_their_sigma - 1.0) < 0.015
+        assert 0.0 < sphere / fd_at_their_sigma - 1.0 < 0.015
         assert 500.0 / sphere - 1.0 == pytest.approx(-0.136, abs=0.005)
 
     def test_thirty_uC_cm2_limit_derives_from_shannon_at_k_1_75(self):

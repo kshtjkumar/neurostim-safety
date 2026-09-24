@@ -261,8 +261,10 @@ the electrode's own access resistance.
   protocol would report biphasic.
 - **Access resistance of immersed geometries** — there is no exact form for a band on an
   insulating shaft or a microwire. The equal-area sphere is used. Against a converged
-  finite-difference solve it is within 2 % from aspect 0.39 to 2.0 (the clinical 3389
-  contact reads 329.5 Ω against 335.1 Ω) and 17 % high by aspect 10. Ring and rectangle
+  finite-volume solve it is high at every aspect, so it errs toward a larger compliance
+  requirement. It is +0.3 to +1.2 % from aspect 1 to 2 (the clinical 3389 contact reads
+  329.5 Ω against 327.6 Ω), +7 to +10 % at aspect 0.39–0.5, and +17 to +23 % at aspects 10
+  and 0.2. Ring and rectangle
   take Newman's equal-area disc, which *over*estimates them. The disc is the most
   resistive plane shape of its area, so the substitution is an upper bound: 1.34× high
   for a 10:1 strip, 4.3× for a ring 1 % as wide as it is across.

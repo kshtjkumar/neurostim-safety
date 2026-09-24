@@ -138,8 +138,9 @@ into, and the band and microwire used a formula for the wrong one.
   `electrode`, so an imported planar field is compared against the right source.
 - **Immersed access resistance falls by 36 %.** The clinical band and the microwire took
   Newman's half-space disc, although they have tissue on every side. They now take the
-  equal-area sphere, which a converged finite-difference solve puts within 2 % over
-  clinical aspect ratios. The 3389 contact goes from 517.5 Ω to **329.5 Ω** (FD 335.1 Ω).
+  equal-area sphere. A converged finite-volume solve puts it high at every aspect: +0.6 %
+  for the 3389 contact, +0.3 to +1.2 % from aspect 1 to 2, and up to +10 % for short
+  bands. The 3389 contact goes from 517.5 Ω to **329.5 Ω** (converged 327.6 Ω).
   The required compliance voltage falls with it. On the worked example's DBS contact the
   binding limit moves from compliance to Shannon, and the thermal estimate falls from
   5.396 to **3.435 mK** (72.66 → 46.26 µW).

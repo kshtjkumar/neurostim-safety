@@ -15,7 +15,8 @@ package byte-untouched — `git diff 8c57f9a HEAD -- neurostim/` is empty). Afte
 `limiting_current_uA` is still exactly `141.37166941154072` on the worked example.
 `tests/oracles/` exists and is verified: `fail_ceiling_uA` returns exactly 20.0 on the
 worked example, `disc_surface_potential_V` gives `V(a) == I·R` bit-equal and
-`V(100a)/exact == 0.499992`, `FD_BAND_REFERENCE` gives 335.1 Ω at clinical DBS aspect.
+`V(100a)/exact == 0.499992`, `FD_BAND_REFERENCE` gives 335.1 Ω at clinical DBS aspect
+(unconverged; 327.6 Ω after C3.7, ledger 127).
 Executing Phase 0 surfaced four further defects, now ledger entries **84–87**; §1d records
 how each is folded in. Phase 0b closed five oracle MAJORs plus two the builder found
 reviewing its own work: over 1824 configurations, silently-wrong `0.0` answers went from 90
@@ -55,8 +56,8 @@ and most of v1's sequencing survive; v2 adds a Phase 0 commit and reorders three
 | # | v1 | v2 decision | §  |
 |---|---|---|---|
 | P1 | `V(r=a) == I·R_access` as the pin for D4 | **Replaced by two pins that jointly admit exactly one fix**: the exact half-space disc oracle `V(r) = (2/π)·I·R·arcsin(a/r)` evaluated at `r = 100a` (cross-module, external closed form), and the surface identity at the **physical** radius for sphere and hemisphere (exact today; a per-geometry guard against double-correction). Verified: the four (factor × R) combinations give 0.499992 / 0.785385 / 1.570770 / **0.999983** — only (2π, Newman) passes. | §2 D4, §5.3 |
-| P2 | `ln(2L/r)/(2πσL)` override for band and microwire | **Rejected. Equal-area sphere `1/(4πσa)` for both**, flagged inexact, accuracy stated. Re-ran the FD solve: 335.1 Ω at clinical DBS aspect vs sphere 329.5 (−1.7 %), eq-disc 517.5 (+54.5 %), v1's form 470.7 (+40.5 %). v1's form is also **negative** below aspect ≈0.25 (−399.5 Ω at 0.2), returns 496.3681 Ω for aspect 0.5 *and* 1.0, and steps 38.6 % at its own switch. | §2 D4, §5.3 |
-| P3 | `TestKuncelGrill2004` as R2's second pin | **Withdrawn as a pin; the test is rewritten to what it can honestly assert.** Today's 2 % is a coincidence of two errors. At Kuncel & Grill's own stated σ = 0.2 S/m the equal-area sphere gives 578.8 Ω against an FD-true 586.4 Ω (1.3 %) and against their *assumed* 500 Ω (+15.8 %); their own numbers back-solve to 508.8 Ω. The replacement pins are P1's two. | §5.3, §7 R2 |
+| P2 | `ln(2L/r)/(2πσL)` override for band and microwire | **Rejected. Equal-area sphere `1/(4πσa)` for both**, flagged inexact, accuracy stated. Re-ran the FD solve: 335.1 Ω at clinical DBS aspect vs sphere 329.5 (−1.7 %), eq-disc 517.5 (+54.5 %), v1's form 470.7 (+40.5 %). **Corrected at C3.7 (ledger 127):** that solve was unconverged; converged, 327.6 Ω, so sphere +0.6 %, eq-disc +58 %, v1's form +43.7 %. v1's form is also **negative** below aspect ≈0.25 (−399.5 Ω at 0.2), returns 496.3681 Ω for aspect 0.5 *and* 1.0, and steps 38.6 % at its own switch. | §2 D4, §5.3 |
+| P3 | `TestKuncelGrill2004` as R2's second pin | **Withdrawn as a pin; the test is rewritten to what it can honestly assert.** Today's 2 % is a coincidence of two errors. At Kuncel & Grill's own stated σ = 0.2 S/m the equal-area sphere gives 578.8 Ω against an FD-true 586.4 Ω (1.3 %; 573.3 Ω, +1.0 %, after C3.7's converged table, ledger 127) and against their *assumed* 500 Ω (+15.8 %); their own numbers back-solve to 508.8 Ω. The replacement pins are P1's two. | §5.3, §7 R2 |
 | P4 | T4 `mono < bi`; charge-injection and water-window → NOT_EVALUATED | **Monophasic FAILs with a computable drift time.** Charge injection stays NOT_EVALUATED (no source transfers a biphasic CIC); the water window is *evaluated* by DC drift, which yields a **lower** limit. Verified: v1's design produces 110 inversions over 1134 cases; v2's produces **6**, all Ta2O5, the one material with no window on record — closed by a monotonicity cap (`mono ≤ bi` by construction) plus `limits_incomplete`. | §2 D5, §5.2 |
 | P5 | Re-reference the pulse-duty excursion to 0.04 | **Deleted.** Verified `duty_fold ≡ pw_fold × f_fold` (100 µs/200 Hz: duty_fold 1.000 against a product of 16.00; 600 µs/75 Hz: 2.250 both). Reachability of `EnvelopeResult.inside` is restored by the deletion, not by the re-reference: verified `inside` becomes True for the fit protocol with the duty excursion removed. The **train** duty excursion replaces it and is wired into the thermal path. | §2 D5, §5.2 |
 | B1 | `limiting_current_interval_uA` fixed by no commit | **New commit C1.8** widens the interval through the same per-check machinery, scheduled *before* T16. Verified 18/18 failures today. | §5.1 |
@@ -301,6 +302,17 @@ that one property.
 **v2 change (physics B2): no cylinder override.** Band and microwire use the equal-area
 sphere `1/(4πσa_sphere)`, `access_resistance_is_exact = False`, with the measured accuracy
 in the docstring. Re-run FD Laplace solve (converged to 0.1 %, σ = 0.35 S/m, d = 1270 µm):
+
+> **Corrected at C3.7 (ledger 127).** The table below was *not* converged: its radial cells
+> were a fixed fraction of the shaft radius, so the band edge was under-resolved. The
+> regenerated solve (first cell tied to the band height, box- and Richardson-extrapolated,
+> checked against Newman's disc to 0.009 % and against an independent FV solve to 0.3 %)
+> gives FV = 653.4, 520.4, 473.7, 353.8, **327.6**, 252.3, 96.7 Ω for the rows below. So the
+> sphere is +22.5, **+10.2, +6.9**, +1.2, **+0.6**, +0.3 and +17.1 %: high at every aspect,
+> not "within 2 %". The conclusion stands (sphere, not `ln(2L/r)`), but not for accuracy
+> everywhere: at aspect 0.5 the log form is +4.8 % against the sphere's +6.9 %. It is
+> rejected for being negative below 0.25, non-monotone, discontinuous, 21.5 % *low* at
+> 0.39, and 36–48 % high from aspect 1 up. The original table is kept for the record:
 
 | aspect h/d | FD true | eq-sphere | eq-disc (today) | v1's `ln(2L/r)` |
 |---|---|---|---|---|
@@ -637,7 +649,7 @@ the utility C7.3's validation claim rests on (physics m4).
 **`TestKuncelGrill2004` is rewritten in this commit, not cited as a guard** (physics B3).
 It never calls `potential_V` and cannot detect the double-correction. Verified: today's 2 %
 agreement is a coincidence of two errors — at Kuncel & Grill's own stated σ = 0.2 S/m the
-equal-area sphere gives 578.8 Ω against an FD-true 586.4 Ω (1.3 %) and against their
+equal-area sphere gives 578.8 Ω against an FD-true 586.4 Ω (1.3 %; 573.3 Ω, +1.0 %, after C3.7's converged table, ledger 127) and against their
 *conservatively assumed* 500 Ω (+15.8 %); their published 0.0993 A/cm² back-solves to
 508.8 Ω, an assumed clinical impedance, not a FEM spreading resistance. The test asserts
 that, and its docstring stops attributing 0.0993 A/cm² to their finite element model.
@@ -813,6 +825,7 @@ are marked **[!]**; the three added after Phase 0 are marked **[84]**.
 | C3.5 | monopolar compliance **status** | `PASS` → `CAUTION` with the stated assumption: `"...(8 % used); monopolar single-interface budget assumed -- supply counter_electrode for a two-terminal estimate"`. `FAIL` and `NOT_EVALUATED` are unchanged. **The README quick-start transcript is regenerated in this commit** (its Compliance line changes). No number moves | JSON, PDF, GUI, README transcript |
 | C3.5 | `SafetyCalculator` and `compliance.evaluate` API | gain `counter_electrode` and `counter_separation_um`, validated at construction; `ComplianceResult` gains the counter's resistance, the mutual term, its area, capacitance and polarisation, and `counter_modelled`. Reaches the compliance detail, the PDF row (breakdown now adds the counter polarisation, or states the monopolar assumption) and `sensitivity`. Not yet the batch CSV, the GUI, or the `report_to_json`/`audit` settings record (ledger 126: C4.4, C5.5, C5.8) | C4.4 |
 | C3.6 **[12]** | Shannon check **status** and `provisional` for every non-disc geometry (ring, rectangle, band, microwire, sphere, hemisphere, stand-in disc) | an unqualified `PASS` → `CAUTION` ("fit on discs, not this geometry"), with Shannon's diameter sentence in the detail; `provisional` `False` → `True` whatever the status. **The limit's value does not move** (asserted). Over 168 swept configurations (7 geometries × 4 sizes × 3 amplitudes × 2 widths) 42 Shannon checks change, 39 of them PASS → CAUTION and the other 3 already CAUTION (only `provisional` moves), and **no overall verdict and no limit moves**, because the monopolar compliance CAUTION (C3.5) already held each at CAUTION. A real disc is unchanged | JSON `checks[].provisional`, PDF |
+| C3.7 **[127]** | the FD band reference (`tests/oracles/fd_band`) and every documented sphere accuracy | table regenerated converged: clinical **335.1 → 327.6 Ω**, aspect 0.2 739.9 → 653.4, 0.39 559.8 → 520.4, 0.5 502.2 → 473.7, 1.0 363.7 → 353.8, 2.0 255.0 → 252.3, 4.0 172.1 → 171.8, 10 96.3 → 96.7. Documented sphere accuracy "within 2 % (−1.7 % clinical)" → **high at every aspect: +0.6 % clinical, +0.3 to +1.2 % aspect 1–2, +7 to +10 % at 0.39–0.5, +17 to +23 % at the extremes**. **No package number moves**: the package computes the sphere; only the oracle and the prose change | base.py, volumetric.py, compliance.py docstrings, README, CHANGELOG, ledger 16/20 notes, D4 and §8 notes |
 | C4.3 | water-window headroom under an unverified CIC | clean PASS → CAUTION/PROVISIONAL; `C_eff = 103 µF/cm²` gains its provenance | PDF provenance section, JSON, README `:15` and `:205-206` |
 | C4.5 | Pt in-vivo derating range | 2–14× → 3.2–8.7× | `data/cogan2016.py` docstring, any derated limit |
 | C6.3 **[!]** | worked-example thermal rise | **5.3961 → 8.0612 mK (×1.494)**, booked **once**, here, at the post-C3.1 access resistance. **Corrected at C3.1:** C3.1 moves it too (5.396 → 3.435 mK, row above), so the *before* at this commit is 3.435 mK. v1's 24.060 mK is the *unperfused* analytic value at the *old* 517.5 Ω and is wrong twice. Cross-check: the FD-true 335.1 Ω gives 8.3639 mK, 3.6 % away | `examples/worked_example.py` narration, `data/elwassif2006.py` (7.5 mW → 5.639 mW, 325 → 431.6 Ω in four docstrings — these are Elwassif's own quantities and are independent of C3.1), README thermal claim |
@@ -905,10 +918,13 @@ microwire. C3.6 attaches a geometry caveat and returns CAUTION. **v2 amendment (
 m6):** it also sets `Check.provisional`, so a caveated Shannon limit is visible when it
 binds the headline. The limit's value does not change.
 
-**Ledger 16 — no closed form for a band on an insulating shaft. New in v2.** The equal-area
-sphere is within 2 % of a converged FD solve over aspect 0.39–2.0 and degrades to ~18 % by
-aspect 10 (table in §2 D4). No compact exact solution exists; v1's `ln(2L/r)` form is worse
-in every respect measured. Document the accuracy, keep the entry open.
+**Ledger 16 — no closed form for a band on an insulating shaft. New in v2.** Against the
+converged FV solve (C3.7, ledger 127) the equal-area sphere is high at every aspect: +0.3 to
++1.2 % from aspect 1 to 2 (clinical +0.6 %), +7 to +10 % at 0.39–0.5, and +17 to +23 % at
+aspects 10 and 0.2. (It was written here as "within 2 % over 0.39–2.0" from an unconverged
+table.) No compact exact solution exists. v1's `ln(2L/r)` form is rejected for its
+negativity, non-monotonicity and anti-conservative error at 0.39, not for accuracy at every
+aspect. Document the accuracy, keep the entry open.
 
 **Ledger 22 — no array-level safety API. Do not build one.**
 No source here quantifies current sharing between simultaneously-driven sites. Fix: state
