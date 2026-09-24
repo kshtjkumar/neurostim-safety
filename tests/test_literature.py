@@ -1454,3 +1454,86 @@ class TestTheStainlessSteelFiguresCarryTheirOwnSources:
         assert "[ 5 ]" in rw.REVERSIBLE_LIMIT_QUOTE or "[5]" in rw.REVERSIBLE_LIMIT_QUOTE
         note = get_material("SS316LVM").water_window.note
         assert "ref. [5]" in note and "p. 662" in note
+
+
+def _pdf_page_text(relative, page):
+    """Whitespace-free text of one PDF page, or skip when poppler or the library is absent."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if shutil.which("pdftotext") is None:
+        pytest.skip("pdftotext (poppler) not available")
+    pdf = Path(__file__).resolve().parents[1] / relative
+    if not pdf.exists():
+        pytest.skip("paper library not present")
+    text = subprocess.run(
+        ["pdftotext", "-f", str(page), "-l", str(page), str(pdf), "-"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    return "".join(text.split())
+
+
+class TestLedger77ConditionsAndDerivations:
+    """Ledger 77 (literature audit S-6 to S-13), C4.7a: the items whose sources settle them
+    -- S-7, S-11 and S-12. One assertion per item, each against its source sentence."""
+
+    def test_s7_the_airof_derating_quotes_the_right_hu_sentence(self):
+        """Hu et al. (p. 888): "the in vivo value is about 10% of the in vitro ones for both
+        electrodes". Their 3-4 mC/cm^2 sentence (p. 886) compares AIROF with PLATINUM,
+        citing another paper; the evidence string welded the two."""
+        from neurostim.data import cogan2016 as c
+        from neurostim.references import cite
+
+        quote = c.HU_IN_VIVO_QUOTE
+        assert "".join(quote.split()) in _pdf_page_text(
+            "papers_stim_calc_ref/In_Vitro_and_In_Vivo_Charge_Capacity_of_AIROF_Microelectrodes.pdf", 3
+        )
+        d = c.derating_for("AIROF")
+        assert (d.factor_low, d.factor_high) == (10.0, 10.0)  # the number survives
+        for text in (d.evidence, cite("hu2006").note):
+            assert "same films" not in text, text
+            assert "1.69" in text and "1.18" in text, text
+
+    def test_s11_neither_best_reported_capacitor_design_has_a_pulse_width(self):
+        """Rose et al. 1985: the 2.6 and 6.3 uC/mm^2 are Table III's "Highest charge density"
+        (p. 191); its "200 us constant current pulse" belongs to a theoretical last column.
+        The etched-Ti 6.3 was measured on an AC capacitance bridge (Table I, "1570 (AC)",
+        footnote d, p. 187, read from the page image)."""
+        from neurostim.data import ta2o5_capacitor as ta
+
+        assert "200~sconstantcurrentpulse" in _pdf_page_text(
+            "papers_stim_calc_ref/0165-0270%2885%2990001-9.pdf", 11
+        )
+        for label, basis in (("etched Ta, best reported", "slow-charge"),
+                             ("etched Ti, best reported", "capacitance bridge")):
+            design = next(d for d in ta.DESIGNS if label in d.label)
+            assert design.pulse_width_us is None, label
+            assert basis in design.note, label
+            assert "Table III" in design.note, label
+
+    def test_s12_mccreery_2010_carries_its_defining_conditions(self):
+        """Author manuscript p. 3: "cathodic pulses 200 us in duration ... biased to + 0.6
+        volts ... in order to increase their charge capacity"; p. 2: "2,000 +/- 150 um2"."""
+        from neurostim.data import mccreery2010 as m
+
+        page3 = _pdf_page_text("papers_stim_calc_ref/nihms209066.pdf", 3)
+        assert "".join(m.CONDITIONS_QUOTE.split()) in page3
+        assert m.PULSE_WIDTH_US == 200.0
+        assert m.INTERPULSE_BIAS_V == 0.6
+        assert m.ELECTRODE_AREA_UM2 == (2000.0, 150.0)
+        assert m.POLARITY == "cathodic"
+        for duty in (1.0, 0.5):
+            note = m.duty_cycle_note(duty)
+            assert "200 us" in note and "+0.6 V" in note, note
+
+    def test_s12_the_60_um_radius_is_not_the_whole_loss_at_half_duty(self):
+        """p. 1: the insertion injury "was responsible for most of the neuronal loss within
+        150 um of the electrodes pulsed with the 50% duty cycle"."""
+        from neurostim.data import mccreery2010 as m
+
+        assert "".join(m.INSERTION_LOSS_QUOTE.split()) in _pdf_page_text(
+            "papers_stim_calc_ref/nihms209066.pdf", 1
+        )
+        note = m.duty_cycle_note(0.5)
+        assert "insertion" in note and "150 um" in note, note

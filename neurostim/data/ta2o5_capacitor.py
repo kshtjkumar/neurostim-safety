@@ -215,13 +215,16 @@ DESIGNS: tuple[CapacitorElectrode, ...] = (
         preparation="etched Ta wire, best value in their comparison table",
         charge_storage_uC_mm2=2.6,
         geometric_area_mm2=0.057,
-        pulse_width_us=200.0,
+        # No pulse width (ledger 77, S-11): Table III's "Highest charge density" column,
+        # p. 191; its "200 us constant current pulse" belongs to the theoretical last
+        # column, not to how this value was measured.
         reference="rose1985_capacitor",
         note=(
             "260 uC/cm^2, the highest charge density they report for any Ta2O5 "
-            "electrode, and still about half of Cogan's ~0.5 mC/cm^2. Consistent with "
-            "the DC capacitance (0.33 uF/mm^2 x 8 V = 2.64) rather than with the "
-            "pulsed value, so it is a slow-charge figure"
+            "electrode (Table III, p. 191), and still about half of Cogan's ~0.5 "
+            "mC/cm^2. Consistent with the DC capacitance (0.33 uF/mm^2 x 8 V = 2.64) "
+            "rather than with the pulsed value, so it is a slow-charge figure; the "
+            "table's 200 us belongs to its theoretical last column"
         ),
     ),
     CapacitorElectrode(
@@ -230,11 +233,14 @@ DESIGNS: tuple[CapacitorElectrode, ...] = (
         preparation="Ti wire etched at 55 C, DC anodised in 0.015 M H2SO4",
         charge_storage_uC_mm2=6.3,
         geometric_area_mm2=0.27,
-        pulse_width_us=200.0,
+        # No pulse width (S-11): measured on an AC capacitance bridge, Table I, p. 187.
         reference="rose1985_capacitor",
         note=(
-            "The highest density in their Table III comparison of microelectrode "
-            "designs, bought at 0.4 nA/nF leakage. TiO2 buys 5-10x the storage of "
+            "Measured on an AC capacitance bridge, not with pulses: Table I (p. 187) "
+            "lists its capacitance as '1570 (AC)', and footnote d reads 'AC indicates "
+            "measurement made with capacitance bridge'. The highest density in their "
+            "Table III comparison of microelectrode designs (p. 191), bought at 0.4 "
+            "nA/nF leakage. TiO2 buys 5-10x the storage of "
             "Ta2O5 and pays about the same factor in leakage. Only the Guyton & "
             "Hambrecht surface macroelectrode stores more, and it is not intracortical"
         ),

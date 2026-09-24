@@ -62,7 +62,10 @@ DAMAGE_RADIUS_CONTINUOUS_UM = 150.0
 """Neuron loss extended at least this far at 100 % duty cycle."""
 
 DAMAGE_RADIUS_HALF_DUTY_UM = 60.0
-"""At 50 % duty cycle the same stimulus damaged only about this radius."""
+"""At 50 % duty cycle, the radius of the loss the stimulation itself induced.
+
+Not the whole loss: the insertion injury "was responsible for most of the neuronal loss
+within 150 um of the electrodes pulsed with the 50% duty cycle" (p. 1; S-12)."""
 
 DUTY_CYCLE_RADIUS_RATIO = DAMAGE_RADIUS_CONTINUOUS_UM / DAMAGE_RADIUS_HALF_DUTY_UM
 """Halving duty cycle shrank the damage radius by at least this factor."""
@@ -77,6 +80,37 @@ UNPULSED_CONTROLS_ALSO_DAMAGED = True
 
 REFERENCE = "mccreery2010"
 
+# --- the conditions that make 4 nC/phase mean anything (ledger 77, S-12) ----------------
+# Quoted from the author manuscript (PMC), pages as numbered there.
+
+PULSE_WIDTH_US = 200.0
+INTERPULSE_BIAS_V = 0.6
+"""Anodic bias of the activated iridium, applied "in order to increase their charge
+capacity" -- so the 4 nC/phase is not a charge an unbiased electrode could carry."""
+ELECTRODE_AREA_UM2 = (2000.0, 150.0)
+"""Geometric area, mean and spread: "2,000 +/- 150 um2" (p. 2)."""
+POLARITY = "cathodic"
+
+CONDITIONS_QUOTE = (
+    "Each electrode was pulsed at 50 pps with cathodic pulses 200 μs in duration and "
+    "10 or 20 μA in amplitude (2 or 4 nC/phase). The activated iridium "
+    "microelectrodes were biased to + 0.6 volts with respect to the platinum "
+    "indifferent electrode, in order to increase their charge capacity."
+)
+"""Author manuscript p. 3."""
+
+INSERTION_LOSS_QUOTE = (
+    "this was responsible for most of the neuronal loss within 150 μm of the "
+    "electrodes pulsed with the 50% duty cycle."
+)
+"""Author manuscript p. 1 (abstract): the implant's own injury, not the stimulation,
+accounts for most of the loss within 150 um at 50 % duty."""
+
+_CONDITIONS = (
+    "cathodic 200 us pulses at 50 Hz, +0.6 V interpulse bias, 2000 um^2 activated "
+    "iridium"
+)
+
 
 def duty_cycle_note(duty_cycle: float) -> str:
     """A sourced statement about duty cycle, without inventing a scaling law.
@@ -88,18 +122,22 @@ def duty_cycle_note(duty_cycle: float) -> str:
         return (
             f"Duty cycle {duty_cycle * 100:.0f} %: at 100 % duty McCreery et al. (2010) "
             f"found neuron loss to a radius of at least "
-            f"{DAMAGE_RADIUS_CONTINUOUS_UM:g} um at 4 nC/phase, against about "
-            f"{DAMAGE_RADIUS_HALF_DUTY_UM:g} um for the same stimulus at 50 % duty."
+            f"{DAMAGE_RADIUS_CONTINUOUS_UM:g} um at 4 nC/phase ({_CONDITIONS}), against "
+            f"stimulation-induced loss within about {DAMAGE_RADIUS_HALF_DUTY_UM:g} um "
+            f"for the same stimulus at 50 % duty."
         )
     if duty_cycle <= 0.55:
         return (
-            f"Duty cycle {duty_cycle * 100:.0f} %: reducing duty cycle to 50 % shrank "
-            f"the damage radius from at least {DAMAGE_RADIUS_CONTINUOUS_UM:g} um to "
-            f"about {DAMAGE_RADIUS_HALF_DUTY_UM:g} um at identical charge per phase."
+            f"Duty cycle {duty_cycle * 100:.0f} %: at 50 % duty the stimulation-induced "
+            f"loss reached about {DAMAGE_RADIUS_HALF_DUTY_UM:g} um, against at least "
+            f"{DAMAGE_RADIUS_CONTINUOUS_UM:g} um continuously, at identical charge per "
+            f"phase ({_CONDITIONS}); the insertion injury accounted for most of the "
+            f"loss within 150 um at 50 % duty."
         )
     return (
         f"Duty cycle {duty_cycle * 100:.0f} %: only 50 % and 100 % were tested "
-        f"(damage radius about {DAMAGE_RADIUS_HALF_DUTY_UM:g} um and at least "
-        f"{DAMAGE_RADIUS_CONTINUOUS_UM:g} um respectively); intermediate values were "
-        f"not measured and are not interpolated here."
+        f"(stimulation-induced loss within about {DAMAGE_RADIUS_HALF_DUTY_UM:g} um and "
+        f"loss to at least {DAMAGE_RADIUS_CONTINUOUS_UM:g} um respectively, "
+        f"{_CONDITIONS}); intermediate values were not measured and are not "
+        f"interpolated here."
     )

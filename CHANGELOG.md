@@ -240,6 +240,22 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### Three more conditions restored to their numbers
+
+- AIROF's in-vivo derating (10×) now cites Hu et al.'s own sentence, "the in vivo value
+  is about 10% of the in vitro ones" (p. 888). The evidence had welded it to their
+  separate comparison of AIROF with platinum.
+- Rose et al.'s two best-reported capacitor electrodes no longer carry a 200 µs pulse
+  width. That figure belongs to a theoretical column of their Table III. The etched-Ti
+  value was measured on an AC capacitance bridge (Table I).
+- McCreery et al. 2010's 4 nC/phase now carries its defining conditions (cathodic 200 µs
+  pulses, +0.6 V interpulse bias applied to raise charge capacity, 2000 ± 150 µm²
+  activated iridium). The 60 µm radius at 50 % duty is described as the
+  stimulation-induced loss: the insertion injury accounted for most of the loss within
+  150 µm.
+
+No number moves.
+
 ### 316LVM's figures are attributed to where they came from
 
 The stainless-steel record called 20 µC/cm² Riedy & Walter's own year-long conclusion. It

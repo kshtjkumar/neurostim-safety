@@ -119,6 +119,13 @@ PDF's Greek mu). The derating factors are theirs, each in vitro value over the m
 vivo value at the same pulse width (ledger 71)."""
 
 
+HU_IN_VIVO_QUOTE = (
+    "For the chosen compliance limit, the in vivo value is about 10% of the in vitro "
+    "ones for both electrodes."
+)
+"""Hu et al. (Proc. IEEE EMBS 2006:886-889), p. 888: the AIROF derating's source (S-7)."""
+
+
 IN_VIVO_DERATING: dict[str, Derating] = {
     # Leung et al.'s own pulse-width-matched factors (ledger 71, C4.5). The range was 2-14x,
     # the best in-vitro value divided by the worst in-vivo one across different pulse
@@ -132,11 +139,15 @@ IN_VIVO_DERATING: dict[str, Derating] = {
         "34-54 uC/cm^2; in vivo 3.84-16.6 acute, 6.99-15.8 chronic)",
     ),
     "PtIr": Derating(3.2, 8.7, "assumed to follow platinum; not measured separately"),
+    # Hu et al.'s own in vivo sentence (ledger 77, S-7). The evidence used to say their
+    # "3-4 mC/cm^2 is about ten times what the same films deliver in vivo", welding the
+    # in vivo result to a different sentence of theirs, which compares AIROF with platinum.
     "AIROF": Derating(
         10.0,
         10.0,
-        "Hu et al. 2006: in vitro 3-4 mC/cm^2 is about ten times what the same films "
-        "deliver in vivo",
+        "Hu et al. 2006, p. 888: 'the in vivo value is about 10% of the in vitro ones for "
+        "both electrodes' (their in vitro 1.69 and 1.18 mC/cm^2 in PBS; in the bird brain "
+        "0.14 and 0.15)",
     ),
     "SIROF": Derating(
         2.0,

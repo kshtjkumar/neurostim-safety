@@ -334,8 +334,9 @@ REFERENCES: dict[str, Reference] = {
         doi="10.1109/IEMBS.2006.259747",
         source_type="conference",
         note=(
-            "AIROF in vitro charge density of 3-4 mC/cm^2 is about ten times larger "
-            "than what the same films deliver in vivo."
+            "AIROF in vivo charge delivery about 10 % of in vitro for both electrodes "
+            "(p. 888; in vitro 1.69 and 1.18 mC/cm^2 in PBS). Their 3-4 mC/cm^2 figure "
+            "compares AIROF with Pt microelectrodes, citing another paper (p. 886)."
         ),
     ),
     "kane2013": _ref(
