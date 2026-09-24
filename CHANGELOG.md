@@ -87,18 +87,25 @@ exposures is documented.
 - A Water window check that CAUTIONs on a drift reaching the edge after the train now says
   "CAUTION" in its detail header, not "PASS".
 
-### Each phase of the voltage budget polarises at its own polarity
+### The return phase polarises only past rest
 
-The package derives each material's interfacial capacitance per polarity. For Pt it is
-250 µF/cm² cathodic and 125 µF/cm² anodic. The compliance budget used the leading phase's
-value for the return phase as well, on both electrodes. Now the return phase polarises the
-active electrode at the opposite polarity and the counter at the leading one. For
-cathodic-first Pt, PtIr, AIROF, PEDOT, SIROF and TIROF protocols the requirement moves.
-Over a 144-configuration sweep it moved in half of them, by a factor of 0.87 to 1.42. It
-rose where the return polarity has the smaller capacitance and fell where it has the
-larger. The worked example's requirement rises from 0.83 V to 1.06 V, and its compliance
-ceiling falls from 965.3 µA to 758.2 µA. A measured `capacitance_uF_cm2` still applies to
-both phases.
+The compliance budget treated the return phase as a full excursion of its own, starting
+from rest. Under the package's capacitor model that is not what happens. A return phase
+that recovers no more than the leading charge only discharges the interface back along
+the leading polarity's branch, and needs no more than `I_ret R` from the stimulator. Only
+charge recovered beyond rest, `(r_a − 1)·Q`, polarises, at the opposite polarity's
+capacitance. That now holds on both electrodes. It is checked against a pulse-by-pulse
+integration of the same circuit.
+
+A balanced symmetric pulse is unchanged: the worked example stays at 0.83 V and
+965.3 µA. The requirement falls wherever the return phase used to bind: short return
+phases (`return_phase_ratio < 1`) and over-recovery. It fell in 288 of 432 swept
+configurations, by up to 44 %, and never rose. The clinical band at
+`return_phase_ratio = 0.2` goes from 1.653 V to 1.647 V.
+
+(An intermediate change in this release gave the return phase the opposite polarity's
+capacitance throughout, which raised the worked example to 1.06 V. It was a wrong
+mechanism and is reversed here.)
 
 ### Shannon says it was fit on discs
 

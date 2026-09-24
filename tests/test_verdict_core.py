@@ -2612,7 +2612,7 @@ class TestLimitsIncompleteAndByKind:
         "tissue": 20.0,
         "electrode-acute": 141.37166941154072,
         "electrode-chronic": 70.68583470577036,
-        "instrument": 758.2607804027908,
+        "instrument": 965.3764143567779,
     }
     """The worked example's four per-kind ceilings, written out rather than recomputed.
 
@@ -2620,9 +2620,9 @@ class TestLimitsIncompleteAndByKind:
     ``assess().failed``, which reads one bit per probe and no package-computed number: 20.0
     is Cogan's 4 nC/phase over a 200 us pulse, 141.37 is platinum's charge-injection limit
     over this area, 70.69 its 20 uC/cm^2 dissolution threshold, 758.26 the compliance
-    ceiling at 10 V. (965.38 until C3.9, ledger 131: the anodic return phase now polarises
-    at Pt's anodic C_eff, 125 against 250 uF/cm^2, and binds. Re-pinned against
-    ``check_fail_ceiling_uA``, which gives 758.2607804027908.)
+    ceiling at 10 V. (C3.9, ledger 131, moved it to 758.2607804027908 by giving the return
+    phase's fictitious excursion Pt's anodic C_eff; C3.12, ledger 135, restored it. Re-pinned
+    against ``check_fail_ceiling_uA``.)
     """
 
     def test_the_headline_is_the_minimum_of_the_per_kind_limits(self):

@@ -295,12 +295,12 @@ class TestSymmetricProtocolsDoNotMove:
     Not tautological: these are *pre-change* outputs, pasted in. Nothing in the commit
     under test can produce them; it can only fail to disturb them.
 
-    ``required_compliance_V`` was re-measured at C3.9 (ledger 131), which gives each phase
-    its own polarity's C_eff. For a cathodic-first pulse the anodic return phase now
-    polarises at the anodic value, and binds wherever that is the smaller C: ring
-    0.8286922987786409 -> 1.0550459956204477, Pt disc 1.957730451487647 ->
-    2.7726037601181512, SIROF disc 1.4300993160251108 -> 1.4306086118430048. The other
-    keys are the aaf3c85 values, unchanged.
+    ``required_compliance_V`` was moved by C3.9 (ledger 131: ring 0.8286922987786409 ->
+    1.0550459956204477, Pt disc 1.957730451487647 -> 2.7726037601181512, SIROF disc
+    1.4300993160251108 -> 1.4306086118430048), and C3.12 restored it (ledger 135). C3.9 gave
+    the return phase's fictitious full excursion the opposite polarity's C_eff; a balanced
+    return phase only discharges the leading branch and never needs more than ``I_ret R``.
+    All keys are the aaf3c85 values again.
     """
 
     GOLDEN = {
@@ -309,7 +309,7 @@ class TestSymmetricProtocolsDoNotMove:
             StimProtocol(80.0, 200.0, 130.0, 1.0),
             {
                 "limiting_current_uA": 20.0,
-                "required_compliance_V": 1.0550459956204477,
+                "required_compliance_V": 0.8286922987786409,
                 "peak_electrode_potential_V": -0.22635369684180667,
                 "net_dc_current_uA": 0.0,
                 "duty_cycle": 0.052,
@@ -320,7 +320,7 @@ class TestSymmetricProtocolsDoNotMove:
             StimProtocol(80.0, 200.0, 130.0, 1.0),
             {
                 "limiting_current_uA": 19.634954084936204,
-                "required_compliance_V": 2.7726037601181512,
+                "required_compliance_V": 1.957730451487647,
                 "peak_electrode_potential_V": -0.8148733086305042,
                 "net_dc_current_uA": 0.0,
                 "duty_cycle": 0.052,
@@ -331,7 +331,7 @@ class TestSymmetricProtocolsDoNotMove:
             StimProtocol(500.0, 50.0, 130.0, 1.0),
             {
                 "limiting_current_uA": 998.0887516949169,
-                "required_compliance_V": 1.4306086118430048,
+                "required_compliance_V": 1.4300993160251108,
                 "peak_electrode_potential_V": -0.0015278874536821948,
                 "net_dc_current_uA": 0.0,
                 "duty_cycle": 0.013,
@@ -507,11 +507,15 @@ class TestTheReturnPhaseIsEvaluated:
     def test_the_return_phase_enters_the_voltage_budget(self) -> None:
         """Ledger 4's own case: 5000 uA through the same access resistance.
 
-        Not tautological: the expected requirement is Ohm's law plus the capacitive
-        excursion, written here for the *return* phase's own amplitude and width --
-        ``I_ret * R + (I_ret * W_ret / A) / C`` -- a quantity the package computed nowhere.
+        Not tautological: the expected requirement is Ohm's law for the *return* phase's
+        own amplitude, ``I_ret * R``, a quantity the package computed nowhere before C2.2.
         ``R`` is read from the result rather than written as a literal because it is the
         geometry's answer, not the compliance model's, and C3.1 moves it.
+
+        C2.2 wrote the expectation as ``I_ret R + (I_ret W_ret / A) / C``: the return phase's
+        own full excursion from rest. C3.12 (ledger 135) removed that term. A return phase
+        recovering no more than the leading charge only discharges the leading branch, and
+        its interface voltage opposes the drive.
         """
         from neurostim import CylindricalBandElectrode
 
@@ -531,13 +535,15 @@ class TestTheReturnPhaseIsEvaluated:
         assert symmetric.required_V == self.BAND_SYMMETRIC_REQUIRED_V
 
         resistance = asymmetric.total_resistance_ohm
-        expected = 5000e-6 * resistance + (5000.0 * 18.0 * 1e-6 / area) / 250.0
+        expected = 5000e-6 * resistance
         assert asymmetric.required_V == pytest.approx(expected, rel=1e-12)
-        # 2.59 V and a ratio of 4.954 at the half-space disc's 517.5 ohm (C2.2); the
-        # equal-area sphere's 329.5 ohm (C3.1) gives 1.653 V and 4.928.
-        assert asymmetric.required_V == pytest.approx(1.653, rel=1e-3)
+        assert area > 0.0
+        # 2.59 V / 4.954x at the half-space disc's 517.5 ohm (C2.2); 1.653 V / 4.928x at the
+        # sphere's 329.5 ohm (C3.1); 1.647 V / 4.910x without the fictitious return
+        # excursion (C3.12).
+        assert asymmetric.required_V == pytest.approx(1.6473, rel=1e-4)
         assert asymmetric.required_V / symmetric.required_V == pytest.approx(
-            4.928, rel=1e-3
+            4.910, rel=1e-3
         )
 
     def test_the_compliance_limit_falls_and_still_passes_its_own_check(self) -> None:

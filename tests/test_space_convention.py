@@ -679,12 +679,21 @@ class TestShannonSaysItWasFitOnDiscs:
         assert check.ceiling_uA == shannon.shannon_max_current_uA(ring.area_cm2, 400.0)
 
 
-class TestEachPhasePolarisesAtItsOwnPolarity:
-    """Ledger 131 (Phase 3 review H5). The package derives an electrode's C_eff per polarity
-    (from its polarity-specific CIC and half-window). The return phase reused the leading
-    phase's value on both electrodes, although during the return phase the active electrode
-    carries the opposite polarity and the counter carries the leading one. For cathodic-first
-    AIROF that under-stated the counter's return-phase polarisation 1.575x."""
+class TestTheReturnPhaseOnlyPolarisesPastRest:
+    """Ledger 135 (Phase 3b review J1), which replaces C3.9's H5 tests.
+
+    Under the package's capacitor model a return phase that does not overshoot rest only
+    discharges the leading phase's polarity branch, so the stimulator never needs more than
+    ``I_ret R`` for it. Only an overshoot, ``(r_a - 1) Q``, reaches the opposite branch and
+    polarises at the opposite polarity's C_eff. That holds on both electrodes: the counter
+    was charged on its opposite branch by the leading phase, and overshoots onto the leading
+    polarity's branch.
+
+    C3.9 (ledger 131, H5, retracted by the reviewer) gave the whole return charge the
+    opposite polarity's C_eff. Its tests asserted that, and are replaced here. The expected
+    values come from ``oracles.peak_stimulator_voltage_V``, which steps the same circuit
+    through both phases with polarity-branched capacitors and evaluates no closed form.
+    """
 
     @staticmethod
     def _c(material, anodic):
@@ -692,65 +701,92 @@ class TestEachPhasePolarisesAtItsOwnPolarity:
 
         return effective_capacitance_uF_cm2(material, anodic_first=anodic)
 
-    def test_the_return_phase_uses_the_opposite_polarity_on_both_electrodes(self):
-        """Not tautological: the expected return-phase requirement is written out here from
-        Ohm's law and two polarisation terms, each at the capacitance of the polarity that
-        electrode carries during the return phase."""
+    @pytest.mark.parametrize("material", ["Pt", "TiN"])
+    @pytest.mark.parametrize("recovery", [0.8, 1.0, 1.3])
+    @pytest.mark.parametrize("ratio", [1.0, 0.25])
+    @pytest.mark.parametrize("anodic_first", [False, True])
+    @pytest.mark.parametrize("with_counter", [False, True])
+    def test_the_requirement_is_the_stepped_circuits_peak(
+        self, material, recovery, ratio, anodic_first, with_counter
+    ):
+        """Not tautological: Pt's two branches differ (250 against 125 uF/cm^2) and TiN's
+        agree, and the oracle integrates the circuit rather than evaluating the package's
+        per-phase expression."""
+        import oracles
+
         from neurostim import SafetyCalculator, StimProtocol
 
-        active = CylindricalBandElectrode(1270.0, 1500.0, "AIROF")
-        # A counter of a different size, so that swapping the two capacitances between the
-        # electrodes -- the old behaviour, for identical ones -- changes the answer.
-        counter = CylindricalBandElectrode(1270.0, 6000.0, "AIROF")
-        protocol = StimProtocol(1000.0, 90.0, 130.0, 1.0, return_phase_ratio=0.25)
-        result = SafetyCalculator(
-            active, protocol, compliance_V=10.0,
-            # Clear of the 6 mm counter's half-length (C3.10's overlap guard).
-            counter_electrode=counter, counter_separation_um=5000.0,
-        ).assess().compliance
-
-        c_cath, c_anod = self._c("AIROF", False), self._c("AIROF", True)
-        assert c_anod / c_cath == pytest.approx(1.575)  # the premise
-        i_ret = 4000.0
-        q_ret = i_ret * 1e-6 * 22.5e-6 * 1e6  # uC
-        area = active.area_cm2
-        expected = (
-            i_ret * 1e-6 * result.total_resistance_ohm
-            + (q_ret / area) / c_anod  # active carries the anodic return phase
-            + (q_ret / counter.area_cm2) / c_cath  # the counter carries the cathodic one
+        active = DiscElectrode(500.0, material)
+        counter = DiscElectrode(900.0, material)
+        kwargs = (
+            {"counter_electrode": counter, "counter_separation_um": 20000.0}
+            if with_counter else {}
         )
-        assert result.return_required_V == pytest.approx(expected, rel=1e-12)
+        protocol = StimProtocol(
+            300.0, 200.0, 130.0, 1.0, anodic_first=anodic_first,
+            return_phase_ratio=ratio, charge_recovery_ratio=recovery,
+        )
+        result = SafetyCalculator(active, protocol, compliance_V=10.0, **kwargs).assess().compliance
+        expected = oracles.peak_stimulator_voltage_V(
+            current_uA=300.0, pulse_width_us=200.0, return_phase_ratio=ratio,
+            recovered_fraction=recovery, anodic_first=anodic_first,
+            resistance_ohm=result.total_resistance_ohm, area_cm2=active.area_cm2,
+            c_cathodic_uF_cm2=self._c(material, False), c_anodic_uF_cm2=self._c(material, True),
+            **(
+                {
+                    "counter_area_cm2": counter.area_cm2,
+                    "counter_c_cathodic_uF_cm2": self._c(material, False),
+                    "counter_c_anodic_uF_cm2": self._c(material, True),
+                }
+                if with_counter else {}
+            ),
+        )
+        if recovery >= 1.0:
+            assert result.required_V == pytest.approx(expected, rel=1e-9)
+        else:
+            # Under-recovery ends the return phase with a residual (1 - r_a) of the leading
+            # excursion still stored on the leading branch, opposing the drive, so the
+            # stepped peak can sit below I_ret R by up to that residual. The package keeps
+            # I_ret R there, as the review specified: an upper bound, conservative by at most
+            # the residual.
+            residual = (1.0 - recovery) * result.polarisation_V
+            if with_counter:
+                residual += (1.0 - recovery) * result.counter_polarisation_V
+            assert expected * (1.0 - 1e-12) <= result.required_V <= expected + residual * (
+                1.0 + 1e-9
+            )
 
-    def test_a_symmetric_pt_pulse_is_bound_by_its_anodic_return(self):
-        """Pt's anodic C_eff is half its cathodic, so for a cathodic-first symmetric pulse the
-        anodic return phase polarises twice as much as the leading phase, and the
-        requirement is the return phase's."""
+    def test_the_worked_example_is_restored_exactly(self):
+        """0.8286922987786409 V and 965.3764143567779 uA, the values before C3.9: a symmetric
+        balanced pulse is bound by its leading phase."""
+        from oracles.fail_ceiling import check_fail_ceiling_uA
+
+        from neurostim import SafetyCalculator, StimProtocol
+
+        calc = SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        )
+        result = calc.assess().compliance
+        assert result.required_V == 0.8286922987786409
+        assert result.max_current_uA == 965.3764143567779
+        assert check_fail_ceiling_uA(calc, "Compliance voltage") == pytest.approx(
+            965.3764143567779, rel=1e-9
+        )
+
+    def test_a_measured_capacitance_still_applies_to_an_overshoot(self):
+        """A measured capacitance_uF_cm2 is one value for the active interface, used for
+        the overshoot as for the leading phase."""
         from neurostim import SafetyCalculator, StimProtocol
 
         disc = DiscElectrode(500.0, "Pt")
         result = SafetyCalculator(
-            disc, StimProtocol(200.0, 200.0, 130.0, 1.0), compliance_V=10.0
+            disc, StimProtocol(200.0, 200.0, 130.0, 1.0, charge_recovery_ratio=1.5),
+            compliance_V=10.0, capacitance_uF_cm2=300.0,
         ).assess().compliance
-        density = 200e-6 * 200e-6 * 1e6 / disc.area_cm2
-        leading = 200e-6 * result.total_resistance_ohm + density / self._c("Pt", False)
-        returning = 200e-6 * result.total_resistance_ohm + density / self._c("Pt", True)
-        assert returning > leading
-        assert result.required_V == pytest.approx(returning, rel=1e-12)
-
-    def test_a_measured_capacitance_applies_to_both_phases(self):
-        """The user's capacitance_uF_cm2 is one measured value for the active interface; it
-        is not split by polarity."""
-        from neurostim import SafetyCalculator, StimProtocol
-
-        disc = DiscElectrode(500.0, "Pt")
-        result = SafetyCalculator(
-            disc, StimProtocol(200.0, 200.0, 130.0, 1.0), compliance_V=10.0,
-            capacitance_uF_cm2=300.0,
-        ).assess().compliance
-        assert result.return_required_V == pytest.approx(result.required_V_at(200.0))
+        overshoot = 0.5 * 200e-6 * 200e-6 * 1e6 / disc.area_cm2
         assert result.return_required_V == pytest.approx(
-            200e-6 * result.total_resistance_ohm + (200e-6 * 200e-6 * 1e6 / disc.area_cm2) / 300.0,
-            rel=1e-12,
+            300e-6 * result.total_resistance_ohm + overshoot / 300.0, rel=1e-12
         )
 
 

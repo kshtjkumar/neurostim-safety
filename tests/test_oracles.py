@@ -1085,6 +1085,43 @@ class TestPlanarBounds:
         text = Path(planar_bounds.__file__ or "").read_text(encoding="utf-8")
         assert "neurostim" not in text.split('"""', 2)[2]
 
+class TestPeakStimulatorVoltage:
+    """Oracle (f): the stepped two-phase circuit (ledger 135), pinned by hand.
+
+    100 uA for 100 us is 0.01 uC; over 0.01 cm^2 that is 1 uC/cm^2. With a 1000 ohm load the
+    ohmic drop is 0.1 V. The branches are 100 uF/cm^2 cathodic and 50 anodic.
+    """
+
+    KW = {
+        "current_uA": 100.0, "pulse_width_us": 100.0, "anodic_first": False,
+        "resistance_ohm": 1000.0, "area_cm2": 0.01,
+        "c_cathodic_uF_cm2": 100.0, "c_anodic_uF_cm2": 50.0, "steps": 1000,
+    }
+
+    def test_a_balanced_pulse_peaks_at_the_end_of_the_leading_phase(self) -> None:
+        """0.1 V ohmic + 1/100 V cathodic polarisation = 0.11 V. The return phase needs
+        only its 0.1 V ohmic drop, because the interface discharges back to rest."""
+        from oracles import pulse_voltage
+
+        assert pulse_voltage.peak_stimulator_voltage_V(
+            **self.KW, return_phase_ratio=1.0, recovered_fraction=1.0
+        ) == pytest.approx(0.11, rel=1e-9)
+
+    def test_an_overshoot_polarises_on_the_opposite_branch(self) -> None:
+        """Recovering 200 %: a 200 uA return drops 0.2 V, and the extra 0.01 uC past rest
+        sits on the anodic branch at 50 uF/cm^2, adding 0.02 V: 0.22 V."""
+        from oracles import pulse_voltage
+
+        assert pulse_voltage.peak_stimulator_voltage_V(
+            **self.KW, return_phase_ratio=1.0, recovered_fraction=2.0
+        ) == pytest.approx(0.22, rel=1e-9)
+
+    def test_the_oracle_imports_nothing_from_the_package(self) -> None:
+        from oracles import pulse_voltage
+
+        text = Path(pulse_voltage.__file__ or "").read_text(encoding="utf-8")
+        assert "import neurostim" not in text and "from neurostim" not in text
+
 class TestFdBandReference:
     """Oracle (d): the converged Laplace solve for a band on an insulating shaft.
 

@@ -62,6 +62,7 @@ from .fail_ceiling import (
 )
 from .fd_band import CLINICAL_DBS_ASPECT, FD_BAND_REFERENCE
 from .fd_microwire import FD_MICROWIRE_REFERENCE
+from .pulse_voltage import peak_stimulator_voltage_V
 
 __all__ = [
     "CLINICAL_DBS_ASPECT",
@@ -78,4 +79,5 @@ __all__ = [
     "fail_ceiling_uA",
     "no_check_fails",
     "partial_recovery_exit_time_s",
+    "peak_stimulator_voltage_V",
 ]

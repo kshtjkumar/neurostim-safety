@@ -30,12 +30,19 @@ and a two-terminal pair has two interfaces and two spreading resistances. Supply
 
     V = I\\,(R_a + R_c - 2/(G \\sigma d) + R_{lead}) + \\Delta V_a + \\Delta V_c
 
-**Each phase at its own polarity** (ledger 131). ``C_eff`` is polarity-specific -- Pt is
-250 uF/cm^2 cathodic and 125 anodic -- so the return phase polarises the active electrode
-at the opposite polarity's value and the counter at the leading polarity's. For a
-cathodic-first Pt pulse the anodic return phase therefore polarises twice as much as the
-leading phase and is the one that binds. A measured ``capacitance_uF_cm2`` is one value and
-applies to both phases.
+**The return phase** (ledgers 4, 135). The return phase has its own ohmic term,
+``I_ret (R ...)``, at its own amplitude. Its polarisation is only the **overshoot** past
+rest. A return phase recovering no more than the leading charge just discharges the
+interface back along the leading polarity's branch: the stored voltage opposes the drive,
+and the stimulator needs no more than ``I_ret R``. For under-recovery that is an upper
+bound, conservative by at most the residual ``(1 - r_a)`` of the leading excursion. Charge
+recovered beyond rest, ``(r_a - 1) Q``, reaches the opposite branch and polarises at that
+branch's ``C_eff``, which is polarity-specific (Pt: 250 uF/cm^2 cathodic, 125 anodic): the
+active electrode's opposite polarity and the counter's leading one. A measured
+``capacitance_uF_cm2`` is one value and applies to the overshoot too. This is pinned
+against a pulse-by-pulse integration of the same circuit (``tests/oracles/pulse_voltage``).
+C3.9 gave the whole return charge the opposite polarity's ``C_eff``. That is not the
+physics, and the reviewer who asked for it retracted the request.
 
 with each electrode's own access resistance, ``G = 4 pi`` in a full space or ``2 pi`` for
 two electrodes flush on one insulating plane (the convention of
@@ -114,6 +121,49 @@ def required_voltage_V(
     return required
 
 
+def return_required_voltage_V(
+    current_uA: float,
+    *,
+    return_current_factor: float,
+    total_resistance_ohm: float,
+    pulse_width_us: float,
+    overshoot_fraction: float,
+    area_cm2: float,
+    capacitance_uF_cm2: float,
+    counter_area_cm2: float = 0.0,
+    counter_capacitance_uF_cm2: float = 0.0,
+) -> float:
+    """Voltage the return phase needs, at a leading amplitude ``current_uA`` (ledger 135).
+
+    ``I_ret R`` plus the polarisation of the **overshoot** only. Under the capacitor model
+    the leading phase leaves the interface charged on its own polarity's branch, and a
+    return phase recovering no more than that charge only discharges it back toward rest.
+    The interface voltage then opposes the drive, so the stimulator never needs more than
+    ``I_ret R``. Only charge recovered beyond rest, ``(r_a - 1) Q``, reaches the opposite
+    branch, and it polarises at that branch's C_eff: ``capacitance_uF_cm2`` here is the
+    active electrode's opposite-polarity value, and ``counter_capacitance_uF_cm2`` the
+    counter's leading-polarity one.
+
+    Before C2.2 the return phase was invisible. From C2.2 it was budgeted as a full
+    excursion from rest, a conservative double count that equalled the leading term for a
+    symmetric pulse. C3.9 then gave that fictitious excursion the opposite polarity's C_eff,
+    which made the return phase bind every symmetric Pt pulse: the worked example went from
+    0.8287 to 1.0550 V. The reviewer retracted the finding that prompted it.
+    """
+    ohmic = (current_uA * return_current_factor * 1e-6) * total_resistance_ohm
+    overshoot = charge_uC(current_uA, pulse_width_us) * overshoot_fraction
+    if overshoot <= 0.0:
+        return ohmic
+    required = ohmic + polarisation_V(
+        charge_density_uC_cm2(overshoot, area_cm2), capacitance_uF_cm2
+    )
+    if counter_area_cm2 > 0.0:
+        required += polarisation_V(
+            charge_density_uC_cm2(overshoot, counter_area_cm2), counter_capacitance_uF_cm2
+        )
+    return required
+
+
 @dataclass(frozen=True)
 class ComplianceResult:
     """Voltage budget for one pulse."""
@@ -153,13 +203,15 @@ class ComplianceResult:
     counter_polarisation_V: float = 0.0
     """The counter interface's excursion at the configured amplitude, leading phase."""
     return_capacitance_uF_cm2: float = 0.0
-    """The active interface's C_eff during the return phase, at the opposite polarity.
+    """The active interface's C_eff for an overshoot past rest, at the opposite polarity.
 
     0.0 means "the same as :attr:`capacitance_uF_cm2`", which is also what a measured
     ``capacitance_uF_cm2`` gives: one measurement, not split by polarity.
     """
     counter_return_capacitance_uF_cm2: float = 0.0
-    """The counter's C_eff during the return phase, when it carries the leading polarity."""
+    """The counter's C_eff for an overshoot past rest, at the leading polarity."""
+    overshoot_fraction: float = 0.0
+    """``max(0, r_a - 1)``: the share of the leading charge the return phase carries past rest."""
 
     @property
     def counter_modelled(self) -> bool:
@@ -198,13 +250,12 @@ class ComplianceResult:
         )
         if not self.has_return_phase:
             return leading
-        # Each phase at its own polarity, on both electrodes (ledger 131): during the return
-        # phase the active electrode carries the opposite polarity and the counter the
-        # leading one, and C_eff is polarity-specific.
-        returning = required_voltage_V(
-            current_uA * self.return_current_factor,
+        returning = return_required_voltage_V(
+            current_uA,
+            return_current_factor=self.return_current_factor,
             total_resistance_ohm=self.total_resistance_ohm,
-            pulse_width_us=self.return_phase_width_us,
+            pulse_width_us=self.pulse_width_us,
+            overshoot_fraction=self.overshoot_fraction,
             area_cm2=self.area_cm2,
             capacitance_uF_cm2=self.return_capacitance_uF_cm2 or self.capacitance_uF_cm2,
             counter_area_cm2=self.counter_area_cm2,
@@ -431,12 +482,15 @@ def evaluate(
         counter_area_cm2=counter_area,
         counter_capacitance_uF_cm2=counter_capacitance,
     )
+    overshoot_fraction = max(0.0, protocol.recovered_fraction - 1.0)
     return_required = 0.0
     if return_factor > 0.0 and protocol.return_phase_width_us > 0.0:
-        return_required = required_voltage_V(
-            protocol.return_phase_current_uA,
+        return_required = return_required_voltage_V(
+            protocol.current_uA,
+            return_current_factor=return_factor,
             total_resistance_ohm=total_r,
-            pulse_width_us=protocol.return_phase_width_us,
+            pulse_width_us=protocol.pulse_width_us,
+            overshoot_fraction=overshoot_fraction,
             area_cm2=electrode.area_cm2,
             capacitance_uF_cm2=return_capacitance,
             counter_area_cm2=counter_area,
@@ -477,6 +531,7 @@ def evaluate(
         counter_polarisation_V=counter_polar,
         return_capacitance_uF_cm2=return_capacitance,
         counter_return_capacitance_uF_cm2=counter_return_capacitance,
+        overshoot_fraction=overshoot_fraction,
     )
 
 
