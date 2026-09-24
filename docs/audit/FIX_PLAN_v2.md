@@ -1007,13 +1007,13 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 21 | MED | OK | C3.1 | **FIXED** `a010103` |
 | 22 | MED | DOC | — | §8 |
 | 23 | MED | DOC | C6.6 | `square()`/`__pow__` only |
-| 24 | MED | OK | C4.1 | |
+| 24 | MED | OK | C4.1 | **FIXED** `53a0713` |
 | 25 | MED | OK | C4.1 | |
 | 26 | LOW | OK | C6.6 | |
 | 27 | LOW | OK | C6.6 | |
 | 28 | LOW | LISTED-ONLY | C3.4 | **FIXED** `d5136df`; own commit |
 | 29 | LOW | LISTED-ONLY | C3.4 | **FIXED** `d5136df`; own commit |
-| 30 | LOW | LISTED-ONLY | C4.1 | `verified` field + provenance rollup named |
+| 30 | LOW | LISTED-ONLY | C4.1 | **FIXED** `53a0713`; `verified` field + provenance rollup named |
 | 31 | LOW | OK | C6.6 | |
 | 32 | HIGH | TEST-WEAK | C6.3 | pinned to Elwassif 0.8200 K, not to itself; booked once |
 | 33 | HIGH | OK | C6.1 | |
