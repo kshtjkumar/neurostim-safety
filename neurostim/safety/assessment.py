@@ -985,12 +985,18 @@ def _water_window_search(
     # accepts: 4487 of 70831 edge-clustered configurations, every one of them here.
     # Converting one ulp of the sum back through the predicate's own chain gives the
     # climb the resolution the check actually has.
+    # The excursion itself is in the max too (ledger 142): with the rest on the far side
+    # of the leading edge the interface travels |edge - rest|, which can sit in a coarser
+    # binade than either edge -- 1.1 V from -0.2 V to TiN's +0.9 V -- and the plateau was
+    # then declared at half the check's true resolution.
     plateau_uA = (
         math.ulp(
             max(
                 abs(result.resting_potential_V),
                 abs(window.cathodic_V),
                 abs(window.anodic_V),
+                abs(window.cathodic_V - result.resting_potential_V),
+                abs(window.anodic_V - result.resting_potential_V),
             )
         )
         * result.capacitance_uF_cm2

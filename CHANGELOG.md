@@ -79,7 +79,7 @@ upper bound. A 50 µm wire goes from 18 189 Ω to 28 571 Ω (×π/2). The solver
 are committed (`scripts/fd_microwire_reference.py`), and the sphere's error for other
 exposures is documented.
 
-### Four small guards
+### Five small guards
 
 - A counter electrode closer than the two electrodes' reaches is refused. Each reach is the
   radius of a sphere enclosing the electrode, not its equal-area sphere: half the diagonal
@@ -94,6 +94,10 @@ exposures is documented.
   contains its own point estimate. Its ends were an unrounded closed form, while the point
   is settled onto the exact float boundary of its own check, and the two could differ by
   1–3 ulps. No limit moves.
+- A resting potential on the far side of the leading edge no longer crashes the
+  water-window back-solve. For TiN at ±0.2 V, the interface travels 1.1 V to the edge.
+  The check's declared resolution missed that distance, and about 1 configuration in
+  7000 raised `LimitDidNotSettle` from `assess()`. No returned value changes.
 
 ### The return phase polarises only past rest
 

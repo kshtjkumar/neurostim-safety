@@ -600,6 +600,77 @@ class TestTheClimbIsBoundedByThePredicatesOwnResolution:
             _limits.floor_to_pass(0.5, passes, name="synthetic", plateau=plateau)
 
 
+class TestTheFarSideRestIsInsideThePlateau:
+    """Ledger 142 (Phase 3c review K1). The declared plateau was
+    ``ulp(max(|rest|, |edges|))``, the resolution of the sum ``rest + excursion`` if the
+    excursion were no larger than an edge. With the rest on the far side of the leading
+    edge the excursion is the whole distance, ``|edge - rest|``: from -0.2 V to TiN's
+    +0.9 V it is 1.1 V, in the [1, 2) binade, twice as coarse as ulp(0.9). The seed then
+    landed 5.76 plateaus above the boundary, past ``PLATEAU_ALLOWANCE`` = 4, and
+    ``LimitDidNotSettle`` escaped ``assess()`` on accepted input.
+    """
+
+    CASES = [
+        # (diameter_um, pulse_width_us, frequency_hz, anodic_first, resting_potential_V)
+        (570.7046435217787, 200.0, 20.0, True, -0.2),  # the reviewer's reproduction
+        # Found by a far-side sweep of 40 000 configurations at 889347b; every raise was TiN.
+        (142.2980635364921, 97.50337320632897, 20.0, True, -0.2),
+        (557.2734540603839, 764.7121332921921, 20.0, False, 0.2),
+        (2170.178123945868, 696.7177447241401, 20.0, False, 0.2),
+        (93.8295038138174, 198.64232830892698, 20.0, True, -0.2),
+        (1449.969655000671, 21.750301102043398, 20.0, False, 0.2),
+        (31.894023097276772, 622.4544530114323, 20.0, False, 0.2),
+    ]
+
+    @pytest.mark.parametrize("case", CASES)
+    def test_the_raising_cases_assess(self, case):
+        """Not tautological: each of these raised; the outcome is that a ceiling exists,
+        and it is the boundary of the check's own predicate."""
+        from neurostim.safety import assessment as assessment_mod
+
+        diameter, width, frequency, anodic_first, rest = case
+        calc = SafetyCalculator(
+            DiscElectrode(diameter, "TiN"),
+            StimProtocol(10.0, width, frequency, 1.0, anodic_first=anodic_first),
+            resting_potential_V=rest,
+        )
+        assessment = calc.assess()
+        ceiling = next(c for c in assessment.checks if c.name == "Water window").ceiling_uA
+        assert 0.0 < ceiling < math.inf
+        search = assessment_mod._water_window_search(
+            assessment.water_window, calc.p, calc.e.area_cm2
+        )
+        assert search.passes(ceiling)
+        assert not search.passes(math.nextafter(ceiling, math.inf))
+
+    def test_a_far_side_sweep_never_raises(self):
+        """Every material with a window, both polarities, the rest on the far side of the
+        leading edge at 0.2, 0.35 and 0.5 V, random sizes and pulse widths."""
+        import random
+
+        from neurostim.materials import MATERIALS, get_material
+
+        rng = random.Random(142)
+        materials = sorted(m for m in MATERIALS if get_material(m).water_window is not None)
+        assessed = 0
+        for _ in range(4000):
+            material = rng.choice(materials)
+            window = get_material(material).water_window
+            anodic_first = rng.random() < 0.5
+            rest = rng.choice((0.2, 0.35, 0.5)) * (-1.0 if anodic_first else 1.0)
+            if not window.cathodic_V < rest < window.anodic_V:
+                continue
+            SafetyCalculator(
+                DiscElectrode(10.0 ** rng.uniform(1.3, 3.5), material),
+                StimProtocol(
+                    10.0, 10.0 ** rng.uniform(1.3, 3.0), 20.0, 1.0, anodic_first=anodic_first
+                ),
+                resting_potential_V=rest,
+            ).assess()
+            assessed += 1
+        assert assessed > 3000, assessed
+
+
 class TestTheWaterWindowSeedInvertsItsOwnPredicate:
     """The seed and the check it seeds must stay one change (review B3 / F6).
 
