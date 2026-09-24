@@ -1134,10 +1134,15 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
 | 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | **FIXED** `f072907`; flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
 | 130 | LOW | — (found in Phase 3 review, H4) | **C3.10** | **FIXED** `982b65b`; separation guard on the largest half-dimension for elongated geometries |
-| 131 | MED | — (found in Phase 3 review, H5) | **C3.9** | **FIXED** `248a6f5`; each phase uses its own polarity's C_eff for the counter and for the active electrode's return-phase term |
+| 131 | MED | — (found in Phase 3 review, H5) | **C3.9** | **FIXED** `248a6f5`, then **RETRACTED by the reviewer (ledger 135)** and corrected at C3.12; each phase uses its own polarity's C_eff for the counter and for the active electrode's return-phase term |
 | 132 | LOW | — (found in Phase 3 review, H6) | **C3.10** | **FIXED** `982b65b`; the drift-CAUTION water-window header reads '-> CAUTION (...)' |
 | 133 | MED | — (found in Phase 3 review, H7) | **C3.11** | **FIXED** `b355890`; counter electrode not assessed: a design choice proposed to the user first; the out-of-scope statement lands in the README and compliance docstring regardless |
 | 134 | LOW | — (found in Phase 3 review addendum, H8) | **P3b docs commit** | ledger 8's note reworded: the 2x comes from the polarity-specific CIC and half-window together, and the re-check moves to ledger 7's boolean branches |
+| 135 | HIGH | — (found in Phase 3b review, J1) | **C3.12** | the return phase polarises only by the overshoot beyond rest, (r_a - 1)*Q at the opposite polarity's C_eff; exactly I_ret*R otherwise; for the active electrode and the counter. Restores the symmetric-pulse numbers; pulse-by-pulse oracle. Review condition before release |
+| 136 | LOW | — (found in Phase 3b review, J2) | **C3.15** | floor the interval ends through the same predicate as the point estimate; random-sweep containment test including counters |
+| 137 | LOW | — (found in Phase 3b review, J3) | **C3.13** | the caveats lookup raises on an unknown key, as CEILING_INTERVALS does |
+| 138 | LOW | — (found in Phase 3b review, J4) | **C3.14** | correct the 0.1755 citation to the reviewer's converged ~0.1731; state the generator's dependency on the band solver's node helper |
+| 139 | LOW | — (found in Phase 3b review, J5) | **C3.16** | the separation guard uses a rectangle's half-diagonal; check other geometries for the same reach error |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
