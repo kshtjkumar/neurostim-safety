@@ -234,6 +234,14 @@ class WaterWindow:
     "vs Ag|AgCl" would misstate them.
     """
     note: str = ""
+    inherited_from: str = ""
+    """The material this value was published for, when it is carried onto a user material.
+
+    Set by :func:`with_measured_cic` on the constants it keeps (ledger 25): the value and
+    its reference are the base material's, and every render says so rather than
+    presenting them as the user material's own. Empty for a value published for this
+    material.
+    """
 
     def __post_init__(self) -> None:
         if self.cathodic_V >= self.anodic_V:
@@ -254,9 +262,11 @@ class WaterWindow:
 
     def describe(self) -> str:
         """Human-readable window with provenance flag."""
-        text = (
-            f"{self.cathodic_V:+g} to {self.anodic_V:+g} V {self.scale} "
-            f"({self.reference})"
+        text = f"{self.cathodic_V:+g} to {self.anodic_V:+g} V {self.scale}"
+        text += (
+            f", {inherited_label(self.inherited_from, self.reference)}"
+            if self.inherited_from
+            else f" ({self.reference})"
         )
         if not self.verified:
             text += " PROVISIONAL"
@@ -285,6 +295,14 @@ class ChronicThreshold:
     Rolls into :attr:`Material.verified` beside the CIC's and the water window's flags;
     it had no flag at all, so an unconfirmed threshold could not say so.
     """
+    inherited_from: str = ""
+    """The material this value was published for, when it is carried onto a user material.
+
+    Set by :func:`with_measured_cic` on the constants it keeps (ledger 25): the value and
+    its reference are the base material's, and every render says so rather than
+    presenting them as the user material's own. Empty for a value published for this
+    material.
+    """
 
     def __post_init__(self) -> None:
         _check_bounds(
@@ -300,7 +318,12 @@ class ChronicThreshold:
             if self.high_uC_cm2 > self.low_uC_cm2
             else f"{self.low_uC_cm2:g}"
         )
-        text = f"{body} uC/cm^2 ({self.mechanism}, {self.reference})"
+        text = (
+            f"{body} uC/cm^2 ({self.mechanism}), "
+            f"{inherited_label(self.inherited_from, self.reference)}"
+            if self.inherited_from
+            else f"{body} uC/cm^2 ({self.mechanism}, {self.reference})"
+        )
         if not self.verified:
             text += " PROVISIONAL"
         if self.note:
@@ -320,6 +343,12 @@ class Material:
     chronic_threshold: ChronicThreshold | None = None
     aliases: tuple[str, ...] = ()
     note: str = ""
+    dropped: tuple[str, ...] = ()
+    """Published constants the user dropped from a :func:`with_measured_cic` material.
+
+    ``"water window"`` or ``"chronic threshold"``. The check that needed the constant does
+    not run, and says why, as does the assessment's incomplete-limits note (ledger 25).
+    """
 
     @property
     def verified(self) -> bool:
@@ -786,6 +815,22 @@ def list_materials() -> list[Material]:
     return list(_MATERIAL_LIST)
 
 
+def inherited_label(material_name: str, reference: str) -> str:
+    """How an inherited constant is attributed on every surface (ledger 25)."""
+    return f"published for {material_name} ({reference}), not measured on this electrode"
+
+
+class _Inherit:
+    """Sentinel: keep the base material's constant, labelled as inherited."""
+
+    def __repr__(self) -> str:
+        return "INHERIT"
+
+
+INHERIT = _Inherit()
+"""The default for :func:`with_measured_cic`'s ``water_window`` and ``chronic_threshold``."""
+
+
 def with_measured_cic(
     material: Material,
     low_uC_cm2: float,
@@ -793,6 +838,8 @@ def with_measured_cic(
     *,
     pulse_width_us: float | None = None,
     note: str = "",
+    water_window: WaterWindow | tuple[float, float] | _Inherit | None = INHERIT,
+    chronic_threshold: ChronicThreshold | tuple[float, float] | _Inherit | None = INHERIT,
 ) -> Material:
     """Return a copy of ``material`` with a locally measured charge-injection limit.
 
@@ -801,6 +848,19 @@ def with_measured_cic(
     displaying a published reference next to a number that did not come from that paper
     would misattribute your measurement, which is the exact failure this package exists
     to prevent.
+
+    **The other constants** (ledger 25). The water window and the chronic threshold were
+    carried over untouched and presented as the user material's own. Dropping them would
+    remove limits -- the platinum dissolution threshold among them -- which is the less
+    conservative direction. So by default (``INHERIT``) each is kept, with its published
+    value and reference, marked ``inherited_from`` the base material, and every render
+    says "published for <base> (<reference>), not measured on this electrode". Pass:
+
+    - a ``(cathodic_V, anodic_V)`` or ``(low_uC_cm2, high_uC_cm2)`` pair to use your own
+      value, cited as ``user_measurement`` and unverified; or a ``WaterWindow`` /
+      ``ChronicThreshold`` you built;
+    - ``None`` to drop it. The check that needed it does not run, says why, and the
+      assessment's incomplete-limits note names the drop.
     """
     if not math.isfinite(low_uC_cm2) or low_uC_cm2 <= 0:
         raise ValueError(f"low_uC_cm2 must be finite and > 0, got {low_uC_cm2!r}")
@@ -817,4 +877,60 @@ def with_measured_cic(
         area_basis="geometric",
         note=note or "User-supplied measurement, not from published literature.",
     )
-    return replace(material, cic=measured)
+    dropped: list[str] = []
+    window = material.water_window
+    if isinstance(water_window, _Inherit):
+        if window is not None:
+            window = replace(window, inherited_from=material.name)
+    elif water_window is None:
+        window = None
+        dropped.append("water window")
+    elif isinstance(water_window, tuple):
+        window = WaterWindow(
+            water_window[0], water_window[1], reference="user_measurement", verified=False,
+            note="User-supplied potential limits, not from published literature.",
+        )
+    else:
+        window = water_window
+    threshold = material.chronic_threshold
+    if isinstance(chronic_threshold, _Inherit):
+        if threshold is not None:
+            threshold = replace(threshold, inherited_from=material.name)
+    elif chronic_threshold is None:
+        threshold = None
+        dropped.append("chronic threshold")
+    elif isinstance(chronic_threshold, tuple):
+        threshold = ChronicThreshold(
+            chronic_threshold[0], chronic_threshold[1],
+            mechanism=(
+                material.chronic_threshold.mechanism
+                if material.chronic_threshold is not None
+                else "user-supplied degradation"
+            ),
+            reference="user_measurement", verified=False,
+            note="User-supplied threshold, not from published literature.",
+        )
+    else:
+        threshold = chronic_threshold
+    kept = []
+    if window is not None and window.inherited_from:
+        kept.append("water window")
+    if threshold is not None and threshold.inherited_from:
+        kept.append("chronic threshold")
+    reworded = f"User-measured charge-injection limit on {material.name}."
+    if kept:
+        reworded += (
+            f" Its {' and '.join(kept)} {'are' if len(kept) > 1 else 'is'} "
+            f"{material.name}'s published value{'s' if len(kept) > 1 else ''}, marked "
+            f"inherited, not measured on this electrode."
+        )
+    if material.note:
+        reworded += f" {material.name}'s published note: {material.note}"
+    return replace(
+        material,
+        cic=measured,
+        water_window=window,
+        chronic_threshold=threshold,
+        note=reworded,
+        dropped=tuple(dropped),
+    )

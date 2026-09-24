@@ -31,7 +31,7 @@ from typing import Literal, NamedTuple
 
 from ..data import cogan2016
 from ..geometry.base import Electrode
-from ..materials import Material, Policy, get_material
+from ..materials import Material, Policy, get_material, inherited_label
 from ..protocol import StimProtocol
 from ..uncertainty import Interval, most_restrictive
 from ..units import charge_uC
@@ -580,10 +580,13 @@ class SafetyAssessment:
         if not missing:
             return ""
         noun = "check" if len(missing) == 1 else "checks"
-        return (
+        note = (
             f"INCOMPLETE: {len(missing)} limit-bearing {noun} did not run "
             f"({', '.join(missing)}), so the true limit may be lower"
         )
+        for constant in self.material.dropped:
+            note += f"; the {constant} was dropped from the user-measured material"
+        return note
 
     @property
     def limiting_current_by_kind(self) -> dict[str, float]:
@@ -898,12 +901,18 @@ def _water_window_seed_uA(
     the protocol carries no DC per microamp -- raises. It used to become ``nan``, and
     ``min()`` silently discarded it (ledger 103).
     """
-    seed_density = ww_mod.max_charge_density_in_window_uC_cm2(
-        result.material_key,
-        anodic_first=protocol.anodic_first,
-        resting_potential_V=result.resting_potential_V,
-        capacitance_uF_cm2=result.capacitance_uF_cm2,
+    # From the window this result was evaluated against, not the material looked up by
+    # key: a Material instance with its own window was seeded from the shipped one and
+    # the settle raised (ledger 150).
+    window = result.window
+    if window is None:  # pragma: no cover - the caller returns inf before reaching here
+        raise ValueError(f"{result.material_key} has no water window on record")
+    available_V = (
+        window.anodic_V - result.resting_potential_V
+        if protocol.anodic_first
+        else result.resting_potential_V - window.cathodic_V
     )
+    seed_density = max(available_V, 0.0) * result.capacitance_uF_cm2
     pulse_width_s = protocol.pulse_width_us * 1e-6
     terms = [seed_density * area_cm2 / pulse_width_s]  # peak excursion of one pulse
 
@@ -1401,7 +1410,9 @@ def _charge_check(result: charge_mod.ChargeResult, waveform: str) -> Check:
     )
 
 
-def _water_window_check(result: ww_mod.WaterWindowResult) -> Check:
+def _water_window_check(
+    result: ww_mod.WaterWindowResult, dropped: tuple[str, ...] = ()
+) -> Check:
     """Two clauses: what one pulse does, and what the train leaves behind.
 
     The second is ledger 2. Every per-pulse limit in this package -- the charge-injection
@@ -1420,7 +1431,11 @@ def _water_window_check(result: ww_mod.WaterWindowResult) -> Check:
         return Check(
             name="Water window",
             status=Status.NOT_EVALUATED,
-            summary=f"no potential limits on record for {result.material_key}",
+            summary=(
+                _dropped_sentence("water window")
+                if "water window" in dropped
+                else f"no potential limits on record for {result.material_key}"
+            ),
             detail=result.describe(),
         )
     if not result.passes:
@@ -1638,6 +1653,15 @@ def _regime_check(electrode: Electrode, protocol: StimProtocol) -> Check:
     )
 
 
+def _dropped_sentence(constant: str) -> str:
+    """Why a check did not run when the user dropped its constant (ledger 25)."""
+    keyword = constant.replace(" ", "_")
+    return (
+        f"the {constant} was dropped from this user-measured material "
+        f"(with_measured_cic(..., {keyword}=None)), so its limit is not applied"
+    )
+
+
 def _chronic_check(material: Material, charge_density_uC_cm2: float) -> Check:
     """Degradation thresholds that sit below the charge-injection limit."""
     threshold = material.chronic_threshold
@@ -1645,15 +1669,25 @@ def _chronic_check(material: Material, charge_density_uC_cm2: float) -> Check:
         return Check(
             name="Chronic degradation",
             status=Status.NOT_EVALUATED,
-            summary=f"no degradation threshold on record for {material.key}",
+            summary=(
+                _dropped_sentence("chronic threshold")
+                if "chronic threshold" in material.dropped
+                else f"no degradation threshold on record for {material.key}"
+            ),
         )
+    # Never presented as the user material's own (ledger 25).
+    origin = (
+        f" ({inherited_label(threshold.inherited_from, threshold.reference)})"
+        if threshold.inherited_from
+        else ""
+    )
     if charge_density_uC_cm2 > threshold.high_uC_cm2:
         return Check(
             name="Chronic degradation",
             status=Status.FAIL,
             summary=(
                 f"{charge_density_uC_cm2:.4g} uC/cm^2 exceeds the "
-                f"{threshold.high_uC_cm2:g} uC/cm^2 {threshold.mechanism} threshold"
+                f"{threshold.high_uC_cm2:g} uC/cm^2 {threshold.mechanism} threshold{origin}"
             ),
             detail=(
                 f"{threshold.describe()}\n"
@@ -1669,7 +1703,7 @@ def _chronic_check(material: Material, charge_density_uC_cm2: float) -> Check:
             summary=(
                 f"{charge_density_uC_cm2:.4g} uC/cm^2 is inside the "
                 f"{threshold.low_uC_cm2:g}-{threshold.high_uC_cm2:g} uC/cm^2 "
-                f"{threshold.mechanism} band"
+                f"{threshold.mechanism} band{origin}"
             ),
             detail=threshold.describe(),
         )
@@ -1678,7 +1712,7 @@ def _chronic_check(material: Material, charge_density_uC_cm2: float) -> Check:
         status=Status.PASS,
         summary=(
             f"{charge_density_uC_cm2:.4g} uC/cm^2 is below the "
-            f"{threshold.low_uC_cm2:g} uC/cm^2 {threshold.mechanism} threshold"
+            f"{threshold.low_uC_cm2:g} uC/cm^2 {threshold.mechanism} threshold{origin}"
         ),
         detail=threshold.describe(),
     )
@@ -2042,7 +2076,7 @@ class SafetyCalculator:
                 geometry_note=shannon_mod.geometry_caveat(self.e),
             ),
             _charge_check(charge_result, self.p.waveform),
-            _water_window_check(ww_result),
+            _water_window_check(ww_result, self.material.dropped),
             _envelope_check(envelope_result),
             _current_density_check(jd_result),
             _regime_check(self.e, self.p),

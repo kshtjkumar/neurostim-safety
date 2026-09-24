@@ -210,6 +210,16 @@ The batch and sweep frames hold `None`, not `NaN`, in `limiting_current_uA` and
   verified flag, and the material's roll-up.
 - The PDF's provenance section gains a "Chronic degradation threshold" row. The threshold
   used to be applied without one.
+- `with_measured_cic` no longer presents the base material's other constants as yours.
+  The water window and chronic threshold stay in force, marked `inherited_from` the base
+  material. Every render reads "published for Platinum (rose_robblee1990), not measured
+  on this electrode", and the material note says which constants are inherited. The
+  `water_window=` and `chronic_threshold=` keywords take your own value, cited as
+  `user_measurement`, or `None` to drop it, which is recorded in the incomplete-limits
+  note.
+- A material with its own water window no longer crashes the water-window back-solve.
+  The seed was read from the shipped material with the same key, so
+  `replace(Pt, water_window=...)` raised `LimitDidNotSettle`.
 
 ### Shannon says it was fit on discs
 

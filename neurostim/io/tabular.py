@@ -323,10 +323,17 @@ def _provenance(material: Any) -> dict[str, Any]:
     def entry(constant: Any) -> dict[str, Any] | None:
         if constant is None:
             return None
-        return {"reference": constant.reference, "verified": constant.verified}
+        return {
+            "reference": constant.reference,
+            "verified": constant.verified,
+            # The material the value was published for, when a user material carries it
+            # over; null for a value published for this material (ledger 25).
+            "inherited_from": getattr(constant, "inherited_from", "") or None,
+        }
 
     return {
         "material_verified": material.verified,
+        "dropped": list(material.dropped),
         "cic": entry(material.cic),
         "water_window": entry(material.water_window),
         "chronic_threshold": entry(material.chronic_threshold),

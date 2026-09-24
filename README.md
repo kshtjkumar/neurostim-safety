@@ -225,6 +225,14 @@ calc = SafetyCalculator(electrode, protocol, material=my_pt)
 The result is marked unverified against the literature and carries your note, which is
 the honest state of affairs: it is your measurement, not a published one.
 
+Only the charge-injection limit is yours. The base material's water window and chronic
+threshold stay in force by default, because dropping them would remove limits. Every
+report says they are "published for Platinum (<reference>), not measured on this
+electrode". To replace one with your own value, pass
+`water_window=(cathodic_V, anodic_V)` or `chronic_threshold=(low_uC_cm2, high_uC_cm2)`,
+which is then cited as your measurement. To drop one, pass `None`: that check then does
+not run, and the incomplete-limits note says you dropped it.
+
 ## Tests
 
 ```bash
