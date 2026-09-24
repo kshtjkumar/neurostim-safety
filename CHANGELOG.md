@@ -192,6 +192,11 @@ Now:
 Finite requirements render exactly as before, and apart from the two new keys the JSON is
 unchanged.
 
+A saved report reads back: `protocol_from_report(payload)` restores a continuous train's
+`null` duration to `math.inf`. `protocol_from_dict` refuses a bare `null` duration by name.
+The batch and sweep frames hold `None`, not `NaN`, in `limiting_current_uA` and
+`required_compliance_V`, in every row. The CSV files are byte-identical.
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,

@@ -68,6 +68,12 @@ JSON (no `Infinity`), and a `null` that stands for an unbounded quantity is expl
 - `protocol.train_duration_s` is `null` for continuous stimulation;
 - `results.required_compliance_V` is `null` when no finite voltage suffices.
 
+`protocol_from_report(payload)` reads the protocol back, with a continuous train restored
+to `math.inf`. `protocol_from_dict` refuses a bare `null` duration by name rather than
+guessing that it means a continuous train. In `assess_batch` and `current_sweep` frames,
+`limiting_current_uA` and `required_compliance_V` hold a float or `None` in every row
+(object dtype), as `report()` does.
+
 ## Desktop application
 
 ```bash

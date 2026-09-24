@@ -83,8 +83,25 @@ def electrode_from_dict(spec: Mapping[str, Any]) -> Electrode:
     return cls(**data)
 
 
-def protocol_from_dict(spec: Mapping[str, Any]) -> StimProtocol:
-    """Build a :class:`~neurostim.protocol.StimProtocol` from a plain mapping."""
+def protocol_from_dict(
+    spec: Mapping[str, Any], *, null_reasons: Mapping[str, str] | None = None
+) -> StimProtocol:
+    """Build a :class:`~neurostim.protocol.StimProtocol` from a plain mapping.
+
+    A ``null`` ``train_duration_s`` is how :func:`report_to_json` writes a continuous train
+    (ledger 143). It is read back as ``math.inf`` only when ``null_reasons`` says so, as the
+    report's own ``null_reasons`` does: a bare null is refused by name rather than taken to
+    mean continuous stimulation, the most severe train there is (ledger 146). Other empty
+    fields fall back to their defaults, as before.
+    """
+    if "train_duration_s" in spec and spec["train_duration_s"] is None:
+        if not null_reasons or "protocol.train_duration_s" not in null_reasons:
+            raise ValueError(
+                "train_duration_s is null: a continuous train is math.inf, and a report "
+                "written by report_to_json says so in its null_reasons -- read it with "
+                "protocol_from_report, or give the duration"
+            )
+        spec = {**spec, "train_duration_s": math.inf}
     data = {str(k).strip(): v for k, v in spec.items() if v is not None and v != ""}
     allowed = set(StimProtocol.__dataclass_fields__)
     unknown = set(data) - allowed
@@ -94,6 +111,11 @@ def protocol_from_dict(spec: Mapping[str, Any]) -> StimProtocol:
             f"{sorted(allowed)}"
         )
     return StimProtocol(**data)
+
+
+def protocol_from_report(payload: Mapping[str, Any]) -> StimProtocol:
+    """The protocol a :func:`report_to_json` payload was assessed with (ledger 146)."""
+    return protocol_from_dict(payload["protocol"], null_reasons=payload.get("null_reasons"))
 
 
 def electrode_to_dict(electrode: Electrode) -> dict[str, Any]:
@@ -163,7 +185,29 @@ def assess_batch(
             record = {"label": label, "status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
         results.append(record)
 
-    return pd.DataFrame(results)
+    return _frame(results)
+
+
+NULLABLE_COLUMNS = ("limiting_current_uA", "required_compliance_V")
+"""Result columns that are ``None`` where no number exists (ledgers 84, 143, 147)."""
+
+
+def _frame(records: list[dict[str, Any]]) -> pd.DataFrame:
+    """A results frame whose nullable columns hold ``None``, never ``NaN``.
+
+    pandas turns ``None`` into ``NaN`` in a column that also holds numbers, and keeps it as
+    ``None`` in one that does not, so the same row read differently depending on the rest
+    of the batch (ledger 147). ``report()`` and the JSON say ``None``, so the frame does too:
+    those columns are object dtype, a float or ``None`` in every row. On disk both are an
+    empty CSV cell, as before.
+    """
+    frame = pd.DataFrame(records)
+    for column in NULLABLE_COLUMNS:
+        if column in frame:
+            frame[column] = pd.Series(
+                [record.get(column) for record in records], index=frame.index, dtype=object
+            )
+    return frame
 
 
 def read_batch_csv(path: str | Path, **kwargs: Any) -> pd.DataFrame:
@@ -287,4 +331,4 @@ def current_sweep(
         protocol = replace(base_protocol, current_uA=float(current))
         calc = SafetyCalculator(electrode, protocol, **calculator_kwargs)
         rows.append({"current_uA": float(current), **calc.report()})
-    return pd.DataFrame(rows)
+    return _frame(rows)

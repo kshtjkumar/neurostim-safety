@@ -1298,6 +1298,84 @@ class TestAnUnboundedRequirementIsRefusedInWords:
         assert result.unbounded_reason == ""
 
 
+class TestAStrictReportReadsBack:
+    """Ledger 146 (Phase 3d review L1), a regression from C3.20. The strict JSON writes a
+    continuous train's duration as ``null`` with its reason in ``null_reasons``, and
+    ``protocol_from_dict`` dropped the null, so reading a saved continuous assessment back
+    raised ``TypeError: missing 1 required positional argument: 'train_duration_s'``."""
+
+    PROTOCOLS = [
+        ((80.0, 200.0, 130.0, 1.0), {}),
+        ((80.0, 200.0, 130.0, math.inf), {}),
+        ((80.0, 200.0, 130.0, math.inf),
+         {"charge_recovery_ratio": 0.9, "train_duty_cycle": 0.5, "anodic_first": True}),
+        ((80.0, 90.0, 50.0, 0.25), {"waveform": "monophasic"}),
+    ]
+
+    @pytest.mark.parametrize("spec", PROTOCOLS, ids=lambda s: f"T={s[0][3]}-{sorted(s[1])}")
+    def test_report_to_json_then_back_gives_the_same_protocol(self, spec):
+        import json
+
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.io.tabular import protocol_from_report, report_to_json
+
+        protocol = StimProtocol(*spec[0], **spec[1])
+        calc = SafetyCalculator(DiscElectrode(500.0, "Pt"), protocol, compliance_V=10.0)
+        payload = json.loads(report_to_json(calc))
+        assert protocol_from_report(payload) == protocol
+
+    def test_a_null_duration_without_its_reason_is_refused_by_name(self):
+        """A bare null is not taken to mean "continuous": that is the most severe train, and
+        an absent value must not become it silently."""
+        from neurostim.io.tabular import protocol_from_dict
+
+        spec = {"current_uA": 80.0, "pulse_width_us": 200.0, "frequency_hz": 130.0,
+                "train_duration_s": None}
+        with pytest.raises(ValueError, match="train_duration_s"):
+            protocol_from_dict(spec)
+        rebuilt = protocol_from_dict(
+            spec, null_reasons={"protocol.train_duration_s": "continuous stimulation"}
+        )
+        assert rebuilt.train_duration_s == math.inf
+
+
+class TestTheBatchFrameKeepsNone:
+    """Ledger 147 (Phase 3d review L2). pandas coerced ``None`` to ``NaN`` in a column that
+    also held numbers, and kept ``None`` in one that did not, so a nullable result column's
+    representation depended on the other rows in the batch. ``report()`` and the JSON use
+    ``None``; the frame now does too, in every row, for both nullable columns."""
+
+    ROW = {"shape": "disc", "diameter_um": 500.0, "material": "Pt", "current_uA": 80.0,
+           "pulse_width_us": 200.0, "frequency_hz": 130.0, "compliance_V": 10.0}
+
+    def test_an_unbounded_row_beside_a_bounded_one_is_none(self):
+        from neurostim.io.tabular import assess_batch
+
+        rows = [
+            {**self.ROW, "train_duration_s": 1.0},
+            {**self.ROW, "material": "Ta2O5", "train_duration_s": math.inf,
+             "charge_recovery_ratio": 0.9},
+            {**self.ROW, "train_duration_s": 1.0, "waveform": "monophasic"},
+        ]
+        frame = assess_batch(rows)
+        assert list(frame["error"]) == ["", "", ""]  # the premise: every row assessed
+        assert isinstance(frame.loc[0, "required_compliance_V"], float)
+        assert frame.loc[1, "required_compliance_V"] is None
+        assert isinstance(frame.loc[0, "limiting_current_uA"], float)
+        assert frame.loc[1, "limiting_current_uA"] is None
+        assert frame.loc[2, "limiting_current_uA"] is None
+
+    def test_the_sweep_frame_too(self):
+        from neurostim import StimProtocol
+        from neurostim.io.tabular import current_sweep
+
+        frame = current_sweep(
+            DiscElectrode(500.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0),
+            [10.0, 80.0], compliance_V=10.0,
+        )
+        assert all(isinstance(v, float) for v in frame["limiting_current_uA"])
+
+
 class TestTheSeparationGuardSeesTheWholeElectrode:
     """Ledger 130 (Phase 3 review H4). The guard used equal-area sphere radii, 690 um for a
     3389 contact. Two 1500 um bands on one shaft were accepted at centre spacings of
