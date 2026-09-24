@@ -595,9 +595,10 @@ class TestInVivoDerating:
         in_vivo = SafetyCalculator(
             electrode, protocol, medium="in_vivo"
         ).assess().charge
-        # Leung et al. 2014 measured 34-54 uC/cm^2 in vitro against 3.84-16.6 in vivo.
-        assert in_vivo.derating_applied == pytest.approx(14.0)
-        assert in_vivo.cic_limit_uC_cm2 == pytest.approx(saline.cic_limit_uC_cm2 / 14)
+        # G12 (C4.5, ledger 71): Leung et al.'s matched-pulse-width worst case, 8.7x (their
+        # p. 852), not the mismatched 14x.
+        assert in_vivo.derating_applied == pytest.approx(8.7)
+        assert in_vivo.cic_limit_uC_cm2 == pytest.approx(saline.cic_limit_uC_cm2 / 8.7)
         # The derated limit should land inside Leung's measured in vivo range.
         assert 3.5 <= in_vivo.cic_limit_uC_cm2 <= 17.0
 
@@ -618,7 +619,8 @@ class TestInVivoDerating:
         result = SafetyCalculator(
             DiscElectrode(500.0, "Pt"), StimProtocol(10, 200, 50, 1), medium="in_vivo"
         ).assess().charge
-        assert result.limit_interval_uC_cm2.high == pytest.approx(150.0 / 14.0)
+        # G12 (C4.5, ledger 71): Leung's 8.7x.
+        assert result.limit_interval_uC_cm2.high == pytest.approx(150.0 / 8.7)
 
     def test_invalid_medium_rejected(self):
         with pytest.raises(ValueError, match="medium must be"):

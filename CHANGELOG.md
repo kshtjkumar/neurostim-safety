@@ -240,6 +240,18 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### Platinum's in-vivo derating is Leung's own, 3.2-8.7x
+
+With `medium="in_vivo"`, platinum and platinum-iridium CICs were divided by up to 14.
+That figure came from the best in-vitro value over the worst in-vivo value, taken at
+different pulse widths. That is the comparison Leung et al. avoid; they publish their own
+factors at matched pulse widths (IEEE TBME 62(3), p. 852): "between 8.7 times less
+(200 μs pulsewidth) and 3.2 times less (3200-μs pulsewidth)". The range is now 3.2-8.7x.
+
+In-vivo Pt and PtIr charge-injection limits rise by 14/8.7 = 1.609x (in a 864-configuration
+sweep: 216 limits up, 14 verdicts FAIL → CAUTION). Saline limits and the other materials
+are unchanged.
+
 ### Reports carry every setting, their own version, and their provenance
 
 - The PDF gains "Settings" (all 11 calculator settings, the counter electrode included)

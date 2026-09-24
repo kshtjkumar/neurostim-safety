@@ -688,7 +688,7 @@ class TestCogan2016:
         """Saline CIC overstates in vivo capacity by up to 10x for Pt and AIROF."""
         from neurostim.data import cogan2016 as c
 
-        assert c.derating_for("Pt").worst == pytest.approx(14.0)
+        assert c.derating_for("Pt").worst == pytest.approx(8.7)  # G12, C4.5: Leung's matched
         assert c.derating_for("AIROF").worst == pytest.approx(10.0)
         assert c.derating_for("SIROF").worst == pytest.approx(4.0)
         assert c.derating_for("TiN") is None
@@ -1225,8 +1225,9 @@ class TestInVivoDeratingSources:
 
         d = c.derating_for("Pt")
         assert "Leung" in d.evidence
-        assert d.factor_low == pytest.approx(2.0)
-        assert d.factor_high == pytest.approx(14.0)
+        # G12 (C4.5, ledger 71): Leung's own matched-pulse-width factors, p. 852.
+        assert d.factor_low == pytest.approx(3.2)
+        assert d.factor_high == pytest.approx(8.7)
 
     def test_airof_from_hu(self):
         from neurostim.data import cogan2016 as c
@@ -1348,3 +1349,43 @@ class TestDormantFieldsNowUsed:
         assert not warm.measured_below_body_temperature
         assert not unknown.measured_below_body_temperature
         assert "below body temperature" in cold.describe()
+
+
+class TestLeungsPulseWidthMatchedDerating:
+    """Ledger 71 (literature audit S-1), C4.5. The platinum in-vivo derating was 2-14x, from
+    the best in-vitro value over the worst in-vivo one across MISMATCHED pulse widths --
+    the division Leung et al. pre-empt with their own, matched ones. Pinned against their
+    sentence, quoted from the PDF with its page."""
+
+    PDF = "papers_stim_calc_ref/In_Vivo_and_In_Vitro_Comparison_of_the_Charge_Injection_Capacity_of_Platinum_Macroelectrodes.pdf"
+
+    def test_the_factors_are_the_sentences(self):
+        from neurostim.data import cogan2016 as c
+
+        quote = c.LEUNG_MATCHED_PULSE_WIDTH_QUOTE
+        assert "8.7 times less (200" in quote and "3.2 times less (3200" in quote
+        for key in ("Pt", "PtIr"):
+            d = c.derating_for(key)
+            assert (d.factor_low, d.factor_high) == (3.2, 8.7), key
+        assert "p. 852" in c.derating_for("Pt").evidence
+
+    def test_the_quote_is_on_page_852_of_the_pdf(self):
+        import shutil
+        import subprocess
+        from pathlib import Path
+
+        from neurostim.data import cogan2016 as c
+
+        if shutil.which("pdftotext") is None:
+            pytest.skip("pdftotext (poppler) not available")
+        pdf = Path(__file__).resolve().parents[1] / self.PDF
+        if not pdf.exists():
+            pytest.skip("paper library not present")
+        # PDF page 4 is journal page 852 (the article runs 849-857).
+        text = subprocess.run(
+            ["pdftotext", "-f", "4", "-l", "4", str(pdf), "-"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        normalised = " ".join(text.split())
+        assert "852" in normalised.split()[:3]
+        assert " ".join(c.LEUNG_MATCHED_PULSE_WIDTH_QUOTE.split()) in normalised

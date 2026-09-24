@@ -108,14 +108,30 @@ class Derating:
         return f"{body} lower in vivo than in saline ({self.evidence})"
 
 
+LEUNG_MATCHED_PULSE_WIDTH_QUOTE = (
+    "suprachoroidal Qinj in vivo was between 8.7 times less (200μs pulsewidth) and "
+    "3.2 times less (3200-μs pulsewidth) than that measured in vitro. These factors "
+    "were determined by dividing the in vitro Qinj by the mean in vivo Qinj at the "
+    "respective pulsewidths."
+)
+"""Leung et al. (IEEE TBME 62(3):849-857), p. 852, as printed (the micro sign is the
+PDF's Greek mu). The derating factors are theirs, each in vitro value over the mean in
+vivo value at the same pulse width (ledger 71)."""
+
+
 IN_VIVO_DERATING: dict[str, Derating] = {
+    # Leung et al.'s own pulse-width-matched factors (ledger 71, C4.5). The range was 2-14x,
+    # the best in-vitro value divided by the worst in-vivo one across different pulse
+    # widths: the low end more permissive than the source's 3.2, and the high end above
+    # even Cogan 2016's "as much as a factor of 10".
     "Pt": Derating(
-        2.0,
-        14.0,
-        "Leung et al. 2014: in vitro 34-54 uC/cm^2 against 3.84-16.6 in vivo "
-        "(acute) and 6.99-15.8 (chronic), matched pulse widths 100-3200 us",
+        3.2,
+        8.7,
+        "Leung et al. 2014, p. 852: suprachoroidal Qinj in vivo 8.7 times less at 200 us "
+        "and 3.2 times less at 3200 us than in vitro, at matched pulse widths (in vitro "
+        "34-54 uC/cm^2; in vivo 3.84-16.6 acute, 6.99-15.8 chronic)",
     ),
-    "PtIr": Derating(2.0, 14.0, "assumed to follow platinum; not measured separately"),
+    "PtIr": Derating(3.2, 8.7, "assumed to follow platinum; not measured separately"),
     "AIROF": Derating(
         10.0,
         10.0,

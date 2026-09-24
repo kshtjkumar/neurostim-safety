@@ -1633,51 +1633,62 @@ class TestALimitFloorsWhateverItsUnit:
     """
 
     def test_the_derated_charge_injection_limit_floors_on_every_surface(self):
-        """Pt's 50 uC/cm^2 over Cogan's conservative in vivo derating is 7.142857142857143.
+        """Pt's cathodic-first nominal 125 uC/cm^2 over Leung's in vivo 8.7x is
+        14.367816091954024.
 
-        Not tautological: 50.0 and the 7x derating are published constants, the quotient is
-        written out here, "7.143" is what ``:.4g`` prints and is asserted absent on each
-        surface, and "7.142" is the hand-floored four-digit form. The FAIL and the CAUTION
-        branches render the limit through different f-strings and are both asserted.
+        Not tautological: 125 and 8.7 are published constants, the quotient is written out
+        here, "14.37" is what ``:.4g`` prints and is asserted absent on each surface, and
+        "14.36" is the hand-floored four-digit form. The FAIL and the CAUTION branches
+        render the limit through different f-strings and are both asserted.
+
+        G12 (C4.5, ledger 71): this pinned 100/14 = 7.142857142857143 ("7.143" against
+        "7.142"). With Leung's matched 8.7x the conservative end is 100/8.7 = 11.494...,
+        where ``:.4g`` already rounds down and the test could not fail; the nominal end
+        keeps a value that ``:.4g`` rounds up.
         """
         failing = SafetyCalculator(
             DiscElectrode(100.0, "Pt"),
             StimProtocol(80.0, 200.0, 130.0, 1.0),
-            medium="in_vivo",
+            medium="in_vivo", policy="nominal",
         ).assess()
         cautioning = SafetyCalculator(
             DiscElectrode(100.0, "Pt"),
-            StimProtocol(2.0, 200.0, 130.0, 1.0),
-            medium="in_vivo",
+            StimProtocol(5.0, 200.0, 130.0, 1.0),
+            medium="in_vivo", policy="nominal",
         ).assess()
 
         assert failing.charge.cic_limit_uC_cm2 == pytest.approx(
-            7.142857142857143, rel=1e-15
+            14.367816091954024, rel=1e-15
         )
+        assert [
+            next(c for c in a.checks if c.name == "Charge injection limit").status.value
+            for a in (failing, cautioning)
+        ] == ["FAIL", "CAUTION"]  # the premise: both branches
         for assessment in (failing, cautioning):
             check = next(
                 c for c in assessment.checks if c.name == "Charge injection limit"
             )
-            assert "7.142" in check.summary, check.summary
-            assert "7.143" not in check.summary, check.summary
-            assert "7.142" in assessment.charge.describe()
-            assert "7.143" not in assessment.charge.describe()
+            assert "14.36" in check.summary, check.summary
+            assert "14.37" not in check.summary, check.summary
+            assert "14.36" in assessment.charge.describe()
+            assert "14.37" not in assessment.charge.describe()
 
     def test_the_pdf_charge_injection_row_floors(self, tmp_path):
         """The sixth surface, and the one a reader takes away from the room.
 
         Not tautological: the PDF is rendered and its extracted text searched for the two
-        literal forms, neither of which the renderer is asked about.
+        literal forms, neither of which the renderer is asked about. G12 (C4.5): the
+        nominal policy, for the reason above.
         """
         calc = SafetyCalculator(
             DiscElectrode(100.0, "Pt"),
             StimProtocol(80.0, 200.0, 130.0, 1.0),
-            medium="in_vivo",
+            medium="in_vivo", policy="nominal",
         )
         text = pdf_text(calc, tmp_path / "derated.pdf")
 
-        assert "7.142" in text
-        assert "7.143" not in text
+        assert "14.36" in text
+        assert "14.37" not in text
 
     def test_the_electroporation_threshold_floors(self):
         """Butterwick's threshold is a power law, so it is round only by accident: 32 of 56
@@ -1877,25 +1888,30 @@ class TestTheDerivedChargeLimitsFloor:
         assert checked == 9 * 2 * 3 * 2, checked
 
     def test_the_derated_platinum_limit_does_not_round_up(self):
-        """The review's own values. Pt's unpolarised range is 50-150 uC/cm^2 and Cogan's
-        worst in vivo reduction for it is 14x, so nominal is 100/14 = 7.142857142857143
-        and optimistic 150/14 = 10.714285714285714 -- printed "7.14286" and "10.7143" by
-        ``:g``, each above the limit it names. The floored forms are "7.142" and "10.71".
+        """The review's defect, on today's values. Pt's unpolarised range is 50-150 uC/cm^2
+        and its worst in vivo reduction is Leung's 8.7x, so nominal is 100/8.7 =
+        11.49425287356322 and optimistic 150/8.7 = 17.24137931034483 -- printed "11.4943"
+        and "17.2414" by ``:g``, each above the limit it names. The floored forms are
+        "11.49" and "17.24".
+
+        G12 (C4.5, ledger 71): the review's values were 100/14 and 150/14, with "7.14286"
+        and "10.7143"; the derating is now Leung's matched-pulse-width 8.7x, and the defect
+        this pins -- :g rounding a maximum up -- shows the same way at the new values.
         """
         from neurostim.data import cogan2016
 
-        assert cogan2016.derating_for("Pt").worst == 14.0  # the fixture's premise
-        assert float("7.14286") > 100.0 / 14.0  # the defect's direction, written out
-        assert float("10.7143") > 150.0 / 14.0
+        assert cogan2016.derating_for("Pt").worst == 8.7  # the fixture's premise
+        assert float("11.4943") > 100.0 / 8.7  # the defect's direction, written out
+        assert float("17.2414") > 150.0 / 8.7
         seen = {}
         for key, policy, anodic_first, medium, result, _ in self._warnings():
             if key == "Pt" and medium == "in_vivo" and anodic_first is None:
                 seen[policy] = result.policy_warning
         assert set(seen) == {"nominal", "optimistic"}
-        assert "applies 7.142 uC/cm^2" in seen["nominal"], seen["nominal"]
-        assert "applies 10.71 uC/cm^2" in seen["optimistic"], seen["optimistic"]
+        assert "applies 11.49 uC/cm^2" in seen["nominal"], seen["nominal"]
+        assert "applies 17.24 uC/cm^2" in seen["optimistic"], seen["optimistic"]
         for warning in seen.values():
-            assert "7.14286" not in warning and "10.7143" not in warning, warning
+            assert "11.4943" not in warning and "17.2414" not in warning, warning
 
 
 class TestEveryLimitBearingCheckHasAMargin:
