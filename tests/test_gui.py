@@ -381,8 +381,14 @@ class TestPdfReport:
         losing the area basis -- in the one section of the report whose entire purpose
         is to state measurement conditions.
         """
-        assert "geometric area] (riedy_walter1996)" in report_text
-        assert "capacitor-coupled monophasic" in report_text
+        # G12 (C4.6, ledger 73): the record no longer attaches the corrosion test's
+        # conditions to the limit, so the row that clipped is shorter. The long cell now
+        # is the note; its last words must reach the page.
+        import re
+
+        flat = re.sub(r"\s+", " ", report_text)
+        assert "(riedy_walter1996)" in flat
+        assert "Stainless steel does not appear in Cogan 2008 Table 2." in flat
 
     def test_peak_potential_uses_the_material_scale(self, report_text):
         """316LVM's limits are a polarisation magnitude, not a potential vs Ag|AgCl.
@@ -504,9 +510,15 @@ class TestReportShowsSourceCaveats:
         ).stdout
 
     def test_material_note_reaches_the_page(self, text):
-        """576 characters of caveat were stored and rendered nowhere."""
-        assert "one-hour pulsing study" in text
-        assert "maximum feasible density" in text
+        """576 characters of caveat were stored and rendered nowhere.
+
+        G12 (C4.6, ledgers 72, 73): the caveat now says where each figure came from.
+        """
+        import re
+
+        flat = re.sub(r"\s+", " ", text)
+        assert "their ref. [8] (p. 663)" in flat
+        assert "Those are the corrosion test's conditions" in flat
 
     def test_policy_warning_is_printed(self, text):
         """Whitespace is collapsed first: the sentence wraps across PDF lines."""
@@ -519,8 +531,16 @@ class TestReportShowsSourceCaveats:
         assert "applies 30.00 uC/cm^2" in flat
 
     def test_pulse_width_is_visible_next_to_the_limit(self, text):
-        """The limit is only valid at the width it was measured at; show it."""
-        assert "100 us" in text
+        """The limit is only valid at the width it was measured at; show it.
+
+        G12 (C4.6, ledger 73): 316LVM's figures have no measured pulse width -- the 100 us
+        was the corrosion test's -- so what the page must show is that the width is
+        unknown, beside the limit.
+        """
+        import re
+
+        flat = re.sub(r"\s+", " ", text)
+        assert "carries no stated pulse width" in flat
 
 
 class TestTheProtocolFormCanExpressPhase2Faults:

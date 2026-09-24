@@ -713,34 +713,32 @@ _MATERIAL_LIST: tuple[Material, ...] = (
             high=0.04,
             units="mC/cm2",
             reference="riedy_walter1996",
-            pulse_width_us=100.0,
-            waveform="capacitor-coupled monophasic, 60 pps, either polarity",
-            medium=(
-                "29 mM bicarbonate / 3 mM phosphate / 137 mM NaCl, 5% CO2 / 6% O2, "
-                "pH 7.4, mimicking interstitial fluid"
-            ),
-            measured_area_cm2=1.6e-2,
-            area_basis="geometric",
+            # No measurement conditions: neither figure was measured in this paper
+            # (ledger 73). The conditions that used to sit here are the corrosion test's,
+            # and they are in the note, labelled as such.
             recommended_policy="conservative",
             recommendation_note=(
-                "Riedy & Walter's paper exists to argue the 40 uC/cm^2 figure down. "
-                "They give two reasons: it rests on a one-hour pulsing study, and only "
-                "half of it is available for non-faradaic double-layer transfer. Their "
-                "own year-long experiment at 20 uC/cm^2 concludes that 20 is the maximum "
-                "feasible density for functional stimulation. Applying 40 does not pick "
-                "the permissive end of a measured range; it applies the number the cited "
-                "work was written to dispute"
+                "Riedy & Walter argue the 40 uC/cm^2 figure down as resting on one-hour "
+                "pulsing studies (their ref. [5], p. 662). The 20 uC/cm^2 they endorse is "
+                "not their own measurement: 'Based on this report, 20 uC/cm2 appears to "
+                "be the maximum charge injection density feasible for FNS application', "
+                "the report being a cited tissue-damage figure, their ref. [8] (p. 663). "
+                "Their own year of pulsing at 20 is consistent with it (p. 662). Applying "
+                "40 applies the number the paper disputes"
             ),
             note=(
-                "Read from Riedy & Walter's primary text. 40 uC/cm^2 is the "
-                "long-standing recommendation, but they argue it down: it rests on a "
-                "one-hour pulsing study, and only 20 uC/cm^2 of it is available for "
-                "non-faradaic double-layer transfer. Their own year-long experiment at "
-                "20 uC/cm^2 concludes that this is the maximum feasible density for "
-                "functional stimulation, so the conservative end here is the authors' "
-                "recommendation rather than merely the low end of a range. Corroborated "
-                "by Merrill 2005 Table 2 (40-50 uC/cm^2 geometric). Stainless steel "
-                "does not appear in Cogan 2008 Table 2."
+                "Neither figure is a charge-injection capacity measured by Riedy & Walter "
+                "(ledgers 72, 73). 40 uC/cm^2 'has been reported' (abstract, p. 660); "
+                "20 uC/cm^2 is 'available for nonfaradic charge transfer' (p. 660) and "
+                "is adopted as the FNS maximum from a cited tissue-damage report, their "
+                "ref. [8] (p. 663). Their own work is a corrosion test at 20 uC/cm^2 for "
+                "365 days -- 100 us capacitor-coupled monophasic pulses at 60 pps, either "
+                "polarity, 0.016 cm^2 geometric, in 29 mM bicarbonate / 3 mM phosphate / "
+                "137 mM NaCl at pH 7.4 under 5% CO2 / 6% O2 -- after which biphasic "
+                "pulsing is 'possible provided that the charge injection is kept below 20' "
+                "(p. 662). Those are the corrosion test's conditions, not either figure's. "
+                "Corroborated by Merrill 2005 Table 2 (40-50 uC/cm^2 geometric). Stainless "
+                "steel does not appear in Cogan 2008 Table 2."
             ),
         ),
         water_window=WaterWindow(
@@ -750,7 +748,8 @@ _MATERIAL_LIST: tuple[Material, ...] = (
             scale="of polarisation from rest (measured vs SCE)",
             note=(
                 "Not a water window: this is the reported reversible charge-injection "
-                "limit for 316LVM, 1.2 V of polarisation in either direction, restated "
+                "limit for 316LVM, which Riedy & Walter cite from their ref. [5] (p. 662; "
+                "ledger 151), 1.2 V of polarisation in either direction, restated "
                 "as a symmetric window so the polarisation check can run. It is a "
                 "magnitude relative to the resting potential, not an absolute potential "
                 "versus a reference, so it is only meaningful when resting_potential_V "

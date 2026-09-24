@@ -2,15 +2,22 @@
 
 Why this paper decides the stainless-steel row
 ----------------------------------------------
-The recommended charge density for 316LVM has been 40 uC/cm^2 for decades. Riedy and
-Walter point out that the recommendation rests on **one hour** of pulsing, and that only
-20 uC/cm^2 of it is available for non-faradaic double-layer charge transfer -- so the
-other half is already faradaic before any pulsing starts. They then ran the experiment
-the recommendation was missing: 365 days of continuous pulsing at 20 uC/cm^2.
+Neither stainless-steel figure is Riedy and Walter's own measurement, and the record
+says so (ledgers 72, 73). The 40 uC/cm^2 "has been reported" (abstract, p. 660; their
+ref. [5] and others), and they argue it down as resting on one-hour pulsing studies
+(p. 662). Their 20 uC/cm^2 maximum is adopted, in their words, "Based on this report":
+a tissue-damage figure from a cited source, their ref. [8], "not damaged as long as the
+charge density for biphasic pulses is kept below 0.2 uC/mm^2 (20 uC/cm^2)" (p. 663).
 
-Their conclusion is the one this package uses: **20 uC/cm^2 is the maximum charge
-injection density feasible for functional neuromuscular stimulation**, and 40 uC/cm^2 is
-optimistic.
+What they measured is corrosion: 365 days of capacitor-coupled pulsing at 20 uC/cm^2,
+after which "biphasic pulsing for stainless steel electrodes is possible provided that
+the charge injection is kept below 20 uC/cm^2" (p. 662). So the conservative end the
+package applies is the figure they endorse, from a cited tissue-damage source, and
+consistent with their own year-long corrosion result -- not a charge-injection capacity
+anyone in this paper measured.
+
+The quotations are stored below as the PDF's text layer prints them: its OCR renders
+the micro sign as "p", so "pC/cm2" is uC/cm^2.
 
 Two findings that reverse received wisdom
 -----------------------------------------
@@ -29,7 +36,8 @@ this alloy -- which is worth knowing, because it is the cheaper experiment.
 
 What "exceeding the limit" turned out to mean
 ---------------------------------------------
-The reversible charge injection limit for 316LVM is reported as 1.2 V. Their measured
+The reversible charge injection limit for 316LVM is reported as 1.2 V -- by citation, of
+their ref. [5] (p. 662; ledger 151). Their measured
 polarisation exceeded it for both polarities, for a year, and produced only tarnishing
 that stopped progressing after 15 days. They suggest the tarnish layer passivates the
 surface. So the 1.2 V figure is not a cliff edge; it marks where irreversible faradaic
@@ -52,6 +60,37 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 REFERENCE = "riedy_walter1996"
+
+# --- quoted from the paper (IEEE TBME 43(6):660-663), as its text layer prints them ----
+
+REPORTED_40_QUOTE = (
+    "The safe charge injection density for pulsing of 316LVM electrodes has been "
+    "reported to be 40 pC/cm2. However, only 20 pC/cm2 is available for nonfaradic "
+    "charge transfer and double layer charge injection."
+)
+"""Abstract, p. 660: the 40 is reported, not measured here."""
+
+OWN_RESULT_QUOTE = (
+    "This result suggests that biphasic pulsing for stainless steel electrodes is "
+    "possible provided that the charge injection is kept below 20 pC/cm2 and is in "
+    "contrast to reports indicating that 40 pC/cm2 is suitable for charge injection "
+    "with 316LVM electrodes [ 5 ] ."
+)
+"""p. 662: what their year-long corrosion test supports."""
+
+REVERSIBLE_LIMIT_QUOTE = (
+    "is referred to as the reversible charge injection limit [8] and is reported to "
+    "be 1.2 V for 316LVM [ 5 ] ."
+)
+"""p. 662: the 1.2 V limit, cited from their ref. [5] (ledger 151)."""
+
+TISSUE_20_QUOTE = (
+    "It has recently been suggested that tissue surrounding the stimulating electrode "
+    "is not damaged as long as the charge density for biphasic pulses is kept below "
+    "0.2 pC/mm2 (20 pC/cm2) [8]. Based on this report, 20 pC/cm2 appears to be the "
+    "maximum charge injection density feasible for FNS application."
+)
+"""p. 663: the 20 uC/cm^2 maximum, adopted from a cited tissue-damage report, ref. [8]."""
 
 # --- protocol ---------------------------------------------------------------------
 

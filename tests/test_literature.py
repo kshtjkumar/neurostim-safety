@@ -74,18 +74,19 @@ class TestCogan2008Table2:
             ("PEDOT", 400.0),
             # Both read from the primary papers rather than from a review summary.
             ("Ta2O5", 100.0),
-            ("SS316LVM", 100.0),
         ],
     )
     def test_measurement_pulse_widths(self, key, pulse_width_us):
         """Charge-injection limits are pulse-width specific; the value must be recorded."""
         assert get_material(key).cic.pulse_width_us == pytest.approx(pulse_width_us)
 
-    @pytest.mark.parametrize("key", ["TIROF"])
+    @pytest.mark.parametrize("key", ["TIROF", "SS316LVM"])
     def test_materials_without_a_stated_pulse_width(self, key):
         """TIROF's source is a conference proceedings not held here; do not invent one.
 
-        Ta2O5 and SS316LVM were in this list until their primary papers were read.
+        Ta2O5 and SS316LVM left this list when their primary papers were read. SS316LVM
+        is back (G12, C4.6, ledger 73): Riedy & Walter measured neither of its figures,
+        and the 100 us was their corrosion test's, not a charge-injection measurement's.
         Closing a gap means moving a key out of it, never inventing a value to fill it.
         """
         assert get_material(key).cic.pulse_width_us is None
@@ -1389,3 +1390,67 @@ class TestLeungsPulseWidthMatchedDerating:
         normalised = " ".join(text.split())
         assert "852" in normalised.split()[:3]
         assert " ".join(c.LEUNG_MATCHED_PULSE_WIDTH_QUOTE.split()) in normalised
+
+
+class TestTheStainlessSteelFiguresCarryTheirOwnSources:
+    """Ledgers 72, 73 and 151 (literature audit S-2, S-3), C4.6. The 316LVM record said 20
+    uC/cm^2 was Riedy & Walter's own year-long conclusion. Their text attributes it to a
+    cited tissue-damage report, their ref. [8]; 40 uC/cm^2 "has been reported"; and neither
+    was measured under the conditions the record attached to them, which are those of
+    their corrosion test. The 1.2 V reversible limit is theirs by citation too ([5]).
+    Quoted from the PDF in the library with pages (its OCR prints the micro sign as "p").
+    """
+
+    PDF = "papers_stim_calc_ref/10.495287.pdf"
+
+    def _page(self, number):
+        import shutil
+        import subprocess
+        from pathlib import Path
+
+        if shutil.which("pdftotext") is None:
+            pytest.skip("pdftotext (poppler) not available")
+        pdf = Path(__file__).resolve().parents[1] / self.PDF
+        if not pdf.exists():
+            pytest.skip("paper library not present")
+        # The article runs 660-663; PDF page n is journal page 659 + n.
+        text = subprocess.run(
+            ["pdftotext", "-f", str(number - 659), "-l", str(number - 659), str(pdf), "-"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        return "".join(text.split())
+
+    @pytest.mark.parametrize(
+        ("name", "page"),
+        [("REPORTED_40_QUOTE", 660), ("OWN_RESULT_QUOTE", 662),
+         ("REVERSIBLE_LIMIT_QUOTE", 662), ("TISSUE_20_QUOTE", 663)],
+    )
+    def test_each_stored_quote_is_on_its_page(self, name, page):
+        from neurostim.data import riedy_walter1996 as rw
+
+        assert "".join(getattr(rw, name).split()) in self._page(page)
+
+    def test_the_20_is_attributed_to_the_cited_tissue_report(self):
+        from neurostim.data import riedy_walter1996 as rw
+
+        assert "[8]" in rw.TISSUE_20_QUOTE and "Based on this report" in rw.TISSUE_20_QUOTE
+        cic = get_material("SS316LVM").cic
+        for text in (cic.recommendation_note, cic.note):
+            assert "[8]" in text and "p. 663" in text, text
+            assert "their own year-long experiment" not in text.lower(), text
+
+    def test_no_measurement_conditions_are_attached_to_figures_nobody_measured(self):
+        """The 100 us / 60 pps / interstitial-fluid / 0.016 cm^2 conditions were those of
+        the corrosion test run at 20 uC/cm^2; they now sit in the note, labelled so."""
+        cic = get_material("SS316LVM").cic
+        assert cic.pulse_width_us is None
+        assert cic.measured_area_cm2 is None
+        assert cic.waveform == "" and cic.medium == ""
+        assert "corrosion test" in cic.note and "100 us" in cic.note
+
+    def test_the_reversible_limit_is_theirs_by_citation(self):
+        from neurostim.data import riedy_walter1996 as rw
+
+        assert "[ 5 ]" in rw.REVERSIBLE_LIMIT_QUOTE or "[5]" in rw.REVERSIBLE_LIMIT_QUOTE
+        note = get_material("SS316LVM").water_window.note
+        assert "ref. [5]" in note and "p. 662" in note

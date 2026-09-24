@@ -240,6 +240,21 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### 316LVM's figures are attributed to where they came from
+
+The stainless-steel record called 20 µC/cm² Riedy & Walter's own year-long conclusion. It
+is not. Their paper (IEEE TBME 43(6), 1996) adopts it "Based on this report", a cited
+tissue-damage figure (their ref. [8], p. 663). The 40 µC/cm² "has been reported"
+(p. 660). Their own work is a corrosion test at 20 µC/cm², which is consistent with the
+lower figure (p. 662). The record now says so, with the sentences stored verbatim.
+
+The record also carried the corrosion test's conditions (100 µs, 60 pps, interstitial
+fluid, 0.016 cm²) as if they were the conditions of a charge-injection measurement that
+nobody made. They now sit in the note, labelled as the corrosion test's. The limit
+therefore has no stated pulse width, and the Charge injection check says so: in a sweep,
+80 SS316LVM checks went PASS → CAUTION with the "no stated pulse width" caveat. No limit
+moved. The 1.2 V reversible limit is theirs by citation too (ref. [5], p. 662).
+
 ### Platinum's in-vivo derating is Leung's own, 3.2-8.7x
 
 With `medium="in_vivo"`, platinum and platinum-iridium CICs were divided by up to 14.
