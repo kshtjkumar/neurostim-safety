@@ -1161,7 +1161,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 145 | LOW | — (found in Phase 3c review, K4) | **C3.22** | **FIXED** `25cc8da`; correct the C3.12 row: numbers, statuses and limits identical; the detail's 'return phase' line moves, with before/after text |
 | 146 | LOW | — (found in Phase 3d review, L1) | **C4.0a** (first Phase 4 commit) | **FIXED** `e255fc9`; protocol_from_dict and every JSON/CSV reader map a null train_duration_s back to math.inf; report_to_json → load → protocol round-trip test for continuous and finite trains |
 | 147 | LOW | — (found in Phase 3d review, L2) | **C4.0a** | **FIXED** `e255fc9`; keep None for an unbounded row in the batch frame (object dtype), or document it; decided and justified in the commit |
-| 148 | LOW | — (found in Phase 3d review, L3) | **C4.0b** | correct the documented maximum deficit to the verified figure, citing the configuration |
+| 148 | LOW | — (found in Phase 3d review, L3) | **C4.0b** | **FIXED** `72df609`; correct the documented maximum deficit to the verified figure, citing the configuration |
 | 149 | LOW | — (found at C4.0a) | **C4.4** | the audit record's JSON strict, with the protocol's null duration explained as report_to_json does, and old records' digests still reproducible |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
