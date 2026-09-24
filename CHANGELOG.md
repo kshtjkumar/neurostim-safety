@@ -240,6 +240,25 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### The DC drift runs over the train's on-time
+
+The water-window drift clause timed the offset against the train's wall-clock duration,
+while the pulse count, the mean and RMS currents and the compliance offset all scaled with
+`train_duty_cycle`. Under the package's leak-free capacitor the offset grows only while
+pulses are delivered, so the clause now asks whether the edge is reached within
+`train_duration_s × train_duty_cycle`. The ceiling is back-solved over the same time, and
+the detail says "(on-time)". A real interface also relaxes during the off-time, so on-time
+is still conservative.
+
+- This relaxes every duty-cycled unbalanced train, by up to 1/duty. In a sweep of 27 648
+  configurations, 10 557 water-window ceilings rose (×1.04 to ×10), 1 139 Water window
+  verdicts went FAIL → CAUTION, and 4 233 limiting currents rose. Nothing at full duty
+  moved.
+- The review's own case, a 3389 band at 3000 µA, 90 µs, 130 Hz, monophasic, 1 s at
+  20 % duty, delivers 7.02 µC against an 8.977 µC budget. It reached the edge at 0.2558 s
+  of a 0.2 s on-time, so it goes from FAIL to CAUTION.
+- The same protocol at full duty (ledger 2) is unchanged: FAIL at 0.2558 s.
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,

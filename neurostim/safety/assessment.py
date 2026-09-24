@@ -930,9 +930,9 @@ def _water_window_seed_uA(
                 f"leading amplitude, so the drift clause has no inverse to seed from."
             )
         riding_per_uA = _riding_charge_uC(drift, protocol, 1.0)
+        # Over the on-time (ledger 109), the same time exits_during_train compares with.
         terms.append(
-            drift.window_charge_uC
-            / (riding_per_uA + dc_per_uA * protocol.train_duration_s)
+            drift.window_charge_uC / (riding_per_uA + dc_per_uA * drift.on_time_s)
         )
     return min(terms)
 
@@ -1458,6 +1458,8 @@ def _water_window_check(
             "a continuous train"
             if math.isinf(drift.train_duration_s)
             else f"the {drift.train_duration_s:g} s train"
+            if drift.train_duty_cycle == 1.0
+            else f"the train ({drift.train_timing()})"
         )
         if drift.exits_during_train:
             return Check(
@@ -1466,7 +1468,7 @@ def _water_window_check(
                 summary=(
                     f"peak {result.peak_potential_V:+.2f} V is inside the window, but "
                     f"{drift.net_dc_current_uA:+.4g} uA of net DC reaches the edge in "
-                    f"{drift.time_to_exit_s:.4g} s -- within {train}"
+                    f"{drift.time_to_exit_s:.4g} s of on-time -- within {train}"
                 ),
                 detail=result.describe(),
             )
@@ -1477,7 +1479,7 @@ def _water_window_check(
                 f"peak {result.peak_potential_V:+.2f} V, "
                 f"{result.headroom_V:.2f} V headroom, but "
                 f"{drift.net_dc_current_uA:+.4g} uA of net DC reaches the edge in "
-                f"{drift.time_to_exit_s:.4g} s -- after {train}"
+                f"{drift.time_to_exit_s:.4g} s of on-time -- after {train}"
             ),
             detail=result.describe(),
         )
@@ -2038,6 +2040,7 @@ class SafetyCalculator:
             area_cm2=self.e.area_cm2,
             train_duration_s=self.p.train_duration_s,
             recovered_charge_uC=self.p.charge_per_phase_uC * self.p.recovered_fraction,
+            train_duty_cycle=self.p.train_duty_cycle,
         )
         compliance_result = compliance_mod.evaluate(
             self.e,

@@ -61,8 +61,9 @@ unchanged.
 The active electrode's offset term is capped at the water-window headroom toward the edge
 it is heading for, from ``resting_potential_V``. Beyond it the interface is at the edge,
 where the charge goes into electrolysis rather than into the voltage, and the Water window
-check FAILs the waveform in its own right: the drift clause counts ``f T`` pulses, at least
-as many as ``N`` here, and at the same branch's ``C_eff`` (ledger 141), so an offset that
+check FAILs the waveform in its own right: the drift clause runs over the same on-time,
+``f T d`` delivered pulses (ledger 109), more than the ``N - 1`` offsets here, and at the
+same branch's ``C_eff`` (ledger 141), so an offset that
 reaches the headroom here has reached it there too. That is pinned by a sweep in both
 directions of drift. Two cases are **not capped**, and a continuous unbalanced train then
 needs an infinite voltage, a compliance ceiling of zero:

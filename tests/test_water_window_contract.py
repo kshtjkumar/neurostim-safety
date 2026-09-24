@@ -150,3 +150,115 @@ def test_every_shipped_material_still_evaluates():
     """The premise for the contract: the packaged path passes all or none."""
     for key in ("Pt", "AIROF", "TiN", "SS316LVM"):
         assert get_material(key) is not None
+
+
+class TestTheDriftRunsOverTheOnTime:
+    """Ledger 109 (Phase 2 review F7), user decision (a). The drift ran over the wall-clock
+    train while the pulse count, the mean and RMS currents and, since C3.17, the compliance
+    offset scale with ``train_duty_cycle``. Under the leak-free capacitor an off-period
+    neither adds nor removes offset, so the drift runs over the on-time: the edge is reached
+    within the train when ``time_to_exit < T * duty``. A real interface also relaxes in the
+    off-time, so on-time is still conservative against it.
+    """
+
+    @staticmethod
+    def _band():
+        from neurostim import CylindricalBandElectrode
+
+        return CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+
+    def test_the_ledger_109_case_is_a_caution_not_a_fail(self):
+        """The band, 3000 uA / 90 us / 130 Hz monophasic, 1 s at 20 % duty: 7.02 uC
+        delivered against an 8.977 uC budget. It used to FAIL, 'reaches the edge in
+        0.2558 s'; 0.2558 s of on-time is past the train's 0.2 s."""
+        calc = SafetyCalculator(
+            self._band(),
+            StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic", train_duty_cycle=0.2),
+        )
+        assessment = calc.assess()
+        drift = assessment.water_window.drift
+        assert drift.time_to_exit_s == pytest.approx(0.2557578634653229, rel=1e-12)
+        assert drift.window_charge_uC == pytest.approx(8.977, abs=5e-4)
+        delivered = calc.p.net_charge_per_pulse_uC * calc.p.n_pulses
+        assert delivered == pytest.approx(7.02, abs=5e-3)
+        assert drift.exits_during_train is False
+        check = next(c for c in assessment.checks if c.name == "Water window")
+        assert check.status.value == "CAUTION"
+        assert "on-time" in check.summary
+
+    def test_the_ledger_2_case_at_full_duty_is_unchanged(self):
+        """At duty 1 the on-time is the wall-clock: still FAIL at 0.2558 s."""
+        assessment = SafetyCalculator(
+            self._band(), StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic")
+        ).assess()
+        assert assessment.water_window.drift.time_to_exit_s == pytest.approx(0.2558, rel=1e-3)
+        check = next(c for c in assessment.checks if c.name == "Water window")
+        assert check.status.value == "FAIL"
+
+    def test_the_verdict_agrees_with_stepping_the_delivered_pulses(self):
+        """Not tautological: the oracle steps the delivered pulses one by one and evaluates
+        no closed form. Disagreement is allowed only within one pulse of the boundary."""
+        import oracles
+
+        compared = 0
+        for duty in (0.1, 0.2, 0.5, 1.0):
+            for recovery in (0.0, 0.5, 0.9, 0.99, 1.2):
+                for current in (50.0, 300.0, 1000.0):
+                    shape = (
+                        {"waveform": "monophasic"} if recovery == 0.0
+                        else {"charge_recovery_ratio": recovery}
+                    )
+                    calc = SafetyCalculator(
+                        DiscElectrode(500.0, "Pt"),
+                        StimProtocol(current, 200.0, 50.0, 2.0, train_duty_cycle=duty, **shape),
+                        capacitance_uF_cm2=250.0,
+                    )
+                    result = calc.assess().water_window
+                    if not result.passes or result.drift is None or not result.drift.drifts:
+                        continue
+                    drift = result.drift
+                    stepped = oracles.exits_within_delivered_pulses(
+                        train_duration_s=2.0, train_duty_cycle=duty, frequency_hz=50.0,
+                        current_uA=current, pulse_width_us=200.0,
+                        recovered_fraction=recovery, area_cm2=calc.e.area_cm2,
+                        capacitance_uF_cm2=250.0, leading_window_V=0.6,
+                        opposite_window_V=0.8,
+                    )
+                    if stepped != drift.exits_during_train:
+                        assert abs(drift.time_to_exit_s - 2.0 * duty) <= 1.0 / 50.0, (
+                            duty, recovery, current,
+                        )
+                    compared += 1
+        assert compared >= 30, compared
+
+    def test_the_ceiling_is_back_solved_over_the_on_time(self):
+        """At the Water window ceiling the drift reaches the edge at the end of the on-time,
+        not of the wall-clock train."""
+        from dataclasses import replace as dc_replace
+
+        protocol = StimProtocol(
+            80.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9, train_duty_cycle=0.25
+        )
+        calc = SafetyCalculator(DiscElectrode(500.0, "Pt"), protocol)
+        check = next(c for c in calc.assess().checks if c.name == "Water window")
+        at_ceiling = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), dc_replace(protocol, current_uA=check.ceiling_uA)
+        ).assess().water_window.drift
+        assert at_ceiling.time_to_exit_s == pytest.approx(0.25, rel=1e-9)
+        full = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), dc_replace(protocol, train_duty_cycle=1.0)
+        )
+        full_ceiling = next(
+            c for c in full.assess().checks if c.name == "Water window"
+        ).ceiling_uA
+        assert check.ceiling_uA > full_ceiling  # the relaxation, in the right direction
+
+    def test_the_detail_says_on_time(self):
+        drift = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9,
+                         train_duty_cycle=0.5),
+        ).assess().water_window.drift
+        text = drift.describe()
+        assert "(on-time)" in text
+        assert "0.5 s of on-time" in text

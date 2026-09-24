@@ -153,3 +153,31 @@ def partial_recovery_exit_time_s(
         if -potential(stored_C) > opposite_window_V:
             return pulse / frequency_hz
     return math.inf
+
+
+def exits_within_delivered_pulses(
+    *,
+    train_duration_s: float,
+    train_duty_cycle: float,
+    frequency_hz: float,
+    **kwargs: float,
+) -> bool:
+    """Whether the interface leaves the window within the pulses the train delivers.
+
+    Ledger 109. The capacitor has no leakage, so an off-period neither adds nor removes
+    offset: only delivered pulses count. A train of ``T`` seconds at duty ``d`` delivers
+    ``ceil(T f d)`` pulses (the count the compliance budget uses, rounded up so a partial
+    burst counts). This steps exactly those pulses through
+    :func:`partial_recovery_exit_time_s` and reports whether any of them leaves the window.
+    A continuous train delivers every pulse.
+    """
+    import math as _math
+
+    if _math.isinf(train_duration_s):
+        pulses = 10_000_000
+    else:
+        pulses = _math.ceil(train_duration_s * frequency_hz * train_duty_cycle)
+    exit_s = partial_recovery_exit_time_s(
+        frequency_hz=frequency_hz, max_pulses=pulses, **kwargs  # type: ignore[arg-type]
+    )
+    return _math.isfinite(exit_s)

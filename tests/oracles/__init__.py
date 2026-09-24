@@ -51,7 +51,12 @@ oracle that silently starts agreeing with the code is itself caught.
 """
 
 from .disc_field import disc_potential_V, disc_surface_potential_V
-from .drift import drift_time_s, drift_time_s_closed_form, partial_recovery_exit_time_s
+from .drift import (
+    drift_time_s,
+    drift_time_s_closed_form,
+    exits_within_delivered_pulses,
+    partial_recovery_exit_time_s,
+)
 from .fail_ceiling import (
     LIMIT_BEARING,
     NonMonotonePredicate,
@@ -76,6 +81,7 @@ __all__ = [
     "disc_surface_potential_V",
     "drift_time_s",
     "drift_time_s_closed_form",
+    "exits_within_delivered_pulses",
     "fail_ceiling_uA",
     "no_check_fails",
     "partial_recovery_exit_time_s",

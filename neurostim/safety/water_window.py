@@ -248,7 +248,10 @@ class DcDrift:
     """``dV * C * A``: the charge budget before the edge is reached."""
 
     train_duration_s: float
-    """How long the offset is applied for. ``inf`` for continuous stimulation."""
+    """The train's wall-clock duration. ``inf`` for continuous stimulation."""
+
+    train_duty_cycle: float = 1.0
+    """Fraction of the wall-clock the train runs (``StimProtocol.train_duty_cycle``)."""
 
     riding_charge_uC: float = 0.0
     """Charge per pulse that peaks on top of the offset before the return phase recovers it.
@@ -257,6 +260,18 @@ class DcDrift:
     for the other one or the pulse is monophasic. Spent from :attr:`window_charge_uC`
     before the offset gets any of it.
     """
+
+    @property
+    def on_time_s(self) -> float:
+        """Seconds of stimulation the train delivers: the time the offset grows (ledger 109).
+
+        The capacitor has no leakage, so an off-period neither adds nor removes offset, and
+        only the on-time counts. A real interface relaxes during the off-time, so this is
+        still conservative against it. ``inf`` for a continuous train.
+        """
+        if math.isinf(self.train_duration_s):
+            return math.inf
+        return self.train_duration_s * self.train_duty_cycle
 
     @property
     def drifts(self) -> bool:
@@ -280,13 +295,17 @@ class DcDrift:
 
     @property
     def exits_during_train(self) -> bool:
-        """Whether the edge is reached before the train ends.
+        """Whether the edge is reached within the train's on-time.
+
+        Over the on-time, not the wall-clock (ledger 109): the offset grows only while
+        pulses are delivered. It ran over the wall-clock, while the pulse count, the mean
+        and RMS currents and the compliance offset all scaled with the duty cycle.
 
         Strict, so a train that ends exactly as the edge is reached is not a failure. A
         continuous train (``train_duration_s = inf``) reaches it for any non-zero offset,
         which is why the drift ceiling for one is ``0.0``.
         """
-        return self.time_to_exit_s < self.train_duration_s
+        return self.time_to_exit_s < self.on_time_s
 
     def describe(self) -> str:
         """One or two lines on the offset and what it costs."""
@@ -300,12 +319,21 @@ class DcDrift:
                 "before the train ends"
                 if self.exits_during_train
                 else "after the train ends"
-            ) + f" ({self.train_duration_s:g} s)"
+            ) + f" ({self.train_timing()})"
         return (
             f"  DC drift      {self.net_dc_current_uA:+.4g} uA net DC against a "
             f"{self.window_charge_uC:.4g} uC window budget\n"
-            f"                reaches the window edge in {self.time_to_exit_s:.4g} s, "
-            f"{exit_note}"
+            f"                reaches the window edge in {self.time_to_exit_s:.4g} s "
+            f"(on-time), {exit_note}"
+        )
+
+    def train_timing(self) -> str:
+        """The train's length as the drift counts it: its on-time, and the schedule."""
+        if self.train_duty_cycle == 1.0:
+            return f"{self.train_duration_s:g} s"
+        return (
+            f"{self.on_time_s:g} s of on-time in a {self.train_duration_s:g} s train at "
+            f"{self.train_duty_cycle * 100:g} % duty"
         )
 
 
@@ -405,6 +433,7 @@ def evaluate(
     area_cm2: float | None = None,
     train_duration_s: float | None = None,
     recovered_charge_uC: float | None = None,
+    train_duty_cycle: float = 1.0,
 ) -> WaterWindowResult:
     """Check whether the leading phase drives the electrode out of the water window.
 
@@ -430,6 +459,9 @@ def evaluate(
         recovers, ``r_a * Q``, ``0.0`` for a monophasic pulse. When the offset heads for
         the leading phase's edge this part of each pulse peaks on top of it, so the drift
         budget spends it first (ledger 105).
+
+        ``train_duty_cycle`` is the train's schedule; the drift runs over the on-time,
+        ``train_duration_s * train_duty_cycle`` (ledger 109).
 
         Gated on charge balance as ``SafetyCalculator.assess`` is: when the unrecovered
         fraction ``1 - recovered / Q`` is within ``CHARGE_BALANCE_REL_TOLERANCE``, the
@@ -507,6 +539,7 @@ def evaluate(
             window_headroom_V=headroom,
             window_charge_uC=window_charge_uC(headroom, drift_capacitance, area_cm2),
             train_duration_s=train_duration_s,
+            train_duty_cycle=train_duty_cycle,
             riding_charge_uC=(
                 recovered_charge_uC if drift_anodic == anodic_first else 0.0
             ),

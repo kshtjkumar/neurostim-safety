@@ -277,9 +277,10 @@ the electrode's own access resistance.
   the offset heads for, which for over-recovery is the one opposite the leading phase. A real interface leaks and can reach a steady
   state (Merrill 2005 §2.4). A continuous train with *any* unrecovered charge therefore
   gets a zero water-window ceiling and the headline refuses a number. That is a bound from
-  the model, not a sourced damage threshold. The drift runs over the wall-clock
-  `train_duration_s` and does not yet scale with `train_duty_cycle`, which is
-  conservative.
+  the model, not a sourced damage threshold. The drift runs over the train's on-time,
+  `train_duration_s × train_duty_cycle`, because the model's offset grows only while
+  pulses are delivered. A real interface also relaxes during the off-time, so this is
+  still conservative.
 - **Monophasic delivery** — no charge-injection limit is applied, because none was
   measured on such a waveform. Charge balance FAILs, so the headline refuses a number. The
   limit-bearing ceiling is still computed, and is capped at what the same electrode and

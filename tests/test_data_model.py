@@ -1946,16 +1946,19 @@ class TestAnOverRecoveryDriftChargesTheOppositeBranch:
         import math
 
         capped = 0
-        for material, anodic_first, recovery, current, train, rest in itertools.product(
+        # The duty cycle joins the sweep at C4.2b (ledger 109): the drift now counts the
+        # on-time, as the compliance offset counts the delivered pulses, and the argument
+        # still needs N - 1 < f T d.
+        for material, anodic_first, recovery, current, train, rest, duty in itertools.product(
             ("Pt", "PtIr", "AIROF", "SIROF", "TIROF", "TiN", "PEDOT", "SS316LVM"),
             (False, True), (0.8, 0.95, 1.05, 1.3, 1.5), (20.0, 300.0),
-            (0.05, 1.0, math.inf), (0.0, -0.2),
+            (0.05, 1.0, math.inf), (0.0, -0.2), (1.0, 0.3),
         ):
             assessment = SafetyCalculator(
                 DiscElectrode(100.0, material),
                 StimProtocol(
                     current, 200.0, 130.0, train, anodic_first=anodic_first,
-                    charge_recovery_ratio=recovery,
+                    charge_recovery_ratio=recovery, train_duty_cycle=duty,
                 ),
                 compliance_V=10.0, resting_potential_V=rest,
             ).assess()
@@ -1965,7 +1968,7 @@ class TestAnOverRecoveryDriftChargesTheOppositeBranch:
             window = next(c for c in assessment.checks if c.name == "Water window")
             assert window.status is Status.FAIL, (material, anodic_first, recovery, current, train)
             capped += 1
-        assert capped >= 300, capped
+        assert capped >= 600, capped
 
 
 class TestTheUnrecoveredChargeIsExactlyLinear:

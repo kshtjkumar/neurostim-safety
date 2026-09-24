@@ -125,8 +125,9 @@ class StimProtocol:
         for every pulsed protocol -- McCreery's own fit protocol reported a duty fold of 25.
 
         Governs what a duty cycle is supposed to govern: the pulse count, the mean current
-        and, through its square root, the RMS current the thermal model integrates. At the
-        ``1.0`` default every one of those is unchanged.
+        and, through its square root, the RMS current the thermal model integrates, the
+        compliance budget's train offset, and the water-window drift, which runs over the
+        on-time (ledger 109). At the ``1.0`` default every one of those is unchanged.
     """
 
     current_uA: float
