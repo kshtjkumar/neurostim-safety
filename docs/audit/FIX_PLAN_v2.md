@@ -1042,12 +1042,12 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 51 | HIGH | OK | C5.5 | row-error contract landed at C1.9 |
 | 52 | HIGH | OK | C1.9 | |
 | 53 | HIGH | OK | C5.7 | |
-| 54 | HIGH | OK | C4.4 | also carries `counter_electrode` |
+| 54 | HIGH | OK | C4.4 | **FIXED** `889b525`; also carries `counter_electrode` |
 | 55 | HIGH | OK | C5.2 | |
 | 56 | HIGH | OK | C5.3 | |
 | 57 | HIGH | OK | C5.8 | |
 | 58 | HIGH | OK | C5.4 | |
-| 59 | HIGH | OK | C4.4 | |
+| 59 | HIGH | OK | C4.4 | **FIXED** `889b525` |
 | 60 | HIGH | OK | C4.3 | **FIXED** `8520d84` |
 | 61/M1 | MED | OK | C1.1 + C5.11 | headline caveat pulled forward ~30 commits |
 | 61/M2 | MED | OK | C5.11 | |
@@ -1145,7 +1145,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 123 | LOW | — (found in Phase 2b review, G5) | **P2b docs commit** | **FIXED** `96ccae5`; scheduling: 108 moved to its own commit before C3.1; 113 closed by narrowing the docstring |
 | 124 | LOW | — (found at C3.1) | C4.8 | obtain Weiland 2002 and McCreery 2010 for papers_stim_calc_ref/ and verify the two presets' geometry and tags against them; C4.8 already verifies citations against the PDFs in the library |
 | 125 | LOW | — (found at C3.2) | C5.11 | condition charge.describe()'s perimeter-peak note on the geometry, using `current_density.primary_distribution` |
-| 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
+| 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | **JSON and audit FIXED** `889b525` (CSV at C5.5, GUI at C5.8); the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
 | 127 | HIGH | — (found in Phase 3 review, H1) | **C3.7** | **FIXED** `f2b6a0a`; regenerate the FD band table with radial resolution tied to band height, show convergence, cross-check against an independent solve, restate the sphere's accuracy everywhere. MUST land before Phase 4 closes (review condition) |
 | 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | **FIXED** `8520d84`; render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
 | 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | **FIXED** `f072907`; flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
@@ -1168,7 +1168,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 146 | LOW | — (found in Phase 3d review, L1) | **C4.0a** (first Phase 4 commit) | **FIXED** `e255fc9`; protocol_from_dict and every JSON/CSV reader map a null train_duration_s back to math.inf; report_to_json → load → protocol round-trip test for continuous and finite trains |
 | 147 | LOW | — (found in Phase 3d review, L2) | **C4.0a** | **FIXED** `e255fc9`; keep None for an unbounded row in the batch frame (object dtype), or document it; decided and justified in the commit |
 | 148 | LOW | — (found in Phase 3d review, L3) | **C4.0b** | **FIXED** `72df609`; correct the documented maximum deficit to the verified figure, citing the configuration |
-| 149 | LOW | — (found at C4.0a) | **C4.4** | the audit record's JSON strict, with the protocol's null duration explained as report_to_json does, and old records' digests still reproducible |
+| 149 | LOW | — (found at C4.0a) | **C4.4** | **FIXED** `889b525`; the audit record's JSON strict, with the protocol's null duration explained as report_to_json does, and old records' digests still reproducible |
 | 150 | HIGH | — (found at C4.1b) | **C4.1b** | **FIXED** `55afec4`; the water-window seed reads the result's own window, not the material looked up by key |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
