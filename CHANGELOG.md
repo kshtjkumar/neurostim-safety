@@ -56,6 +56,19 @@ the red rule, the shaded region and the number are replaced by the sentence nami
 check — the figure was the fifth render surface, and the only one the refusal could not
 reach while `viz` computed its own minimum.
 
+### Each phase of the voltage budget polarises at its own polarity
+
+The package derives each material's interfacial capacitance per polarity. For Pt it is
+250 µF/cm² cathodic and 125 µF/cm² anodic. The compliance budget used the leading phase's
+value for the return phase as well, on both electrodes. Now the return phase polarises the
+active electrode at the opposite polarity and the counter at the leading one. For
+cathodic-first Pt, PtIr, AIROF, PEDOT, SIROF and TIROF protocols the requirement moves.
+Over a 144-configuration sweep it moved in half of them, by a factor of 0.87 to 1.42. It
+rose where the return polarity has the smaller capacitance and fell where it has the
+larger. The worked example's requirement rises from 0.83 V to 1.06 V, and its compliance
+ceiling falls from 965.3 µA to 758.2 µA. A measured `capacitance_uF_cm2` still applies to
+both phases.
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,

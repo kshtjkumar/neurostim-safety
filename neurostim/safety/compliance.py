@@ -30,6 +30,13 @@ and a two-terminal pair has two interfaces and two spreading resistances. Supply
 
     V = I\\,(R_a + R_c - 2/(G \\sigma d) + R_{lead}) + \\Delta V_a + \\Delta V_c
 
+**Each phase at its own polarity** (ledger 131). ``C_eff`` is polarity-specific -- Pt is
+250 uF/cm^2 cathodic and 125 anodic -- so the return phase polarises the active electrode
+at the opposite polarity's value and the counter at the leading polarity's. For a
+cathodic-first Pt pulse the anodic return phase therefore polarises twice as much as the
+leading phase and is the one that binds. A measured ``capacitance_uF_cm2`` is one value and
+applies to both phases.
+
 with each electrode's own access resistance, ``G = 4 pi`` in a full space or ``2 pi`` for
 two electrodes flush on one insulating plane (the convention of
 :attr:`~neurostim.geometry.base.Electrode.environment`), and each interface's own
@@ -138,6 +145,14 @@ class ComplianceResult:
     counter_capacitance_uF_cm2: float = 0.0
     counter_polarisation_V: float = 0.0
     """The counter interface's excursion at the configured amplitude, leading phase."""
+    return_capacitance_uF_cm2: float = 0.0
+    """The active interface's C_eff during the return phase, at the opposite polarity.
+
+    0.0 means "the same as :attr:`capacitance_uF_cm2`", which is also what a measured
+    ``capacitance_uF_cm2`` gives: one measurement, not split by polarity.
+    """
+    counter_return_capacitance_uF_cm2: float = 0.0
+    """The counter's C_eff during the return phase, when it carries the leading polarity."""
 
     @property
     def counter_modelled(self) -> bool:
@@ -176,14 +191,19 @@ class ComplianceResult:
         )
         if not self.has_return_phase:
             return leading
+        # Each phase at its own polarity, on both electrodes (ledger 131): during the return
+        # phase the active electrode carries the opposite polarity and the counter the
+        # leading one, and C_eff is polarity-specific.
         returning = required_voltage_V(
             current_uA * self.return_current_factor,
             total_resistance_ohm=self.total_resistance_ohm,
             pulse_width_us=self.return_phase_width_us,
             area_cm2=self.area_cm2,
-            capacitance_uF_cm2=self.capacitance_uF_cm2,
+            capacitance_uF_cm2=self.return_capacitance_uF_cm2 or self.capacitance_uF_cm2,
             counter_area_cm2=self.counter_area_cm2,
-            counter_capacitance_uF_cm2=self.counter_capacitance_uF_cm2,
+            counter_capacitance_uF_cm2=(
+                self.counter_return_capacitance_uF_cm2 or self.counter_capacitance_uF_cm2
+            ),
         )
         return max(leading, returning)
 
@@ -347,15 +367,20 @@ def evaluate(
     mutual_r = 0.0
     counter_area = 0.0
     counter_capacitance = 0.0
+    counter_return_capacitance = 0.0
     if counter_electrode is not None and counter_separation_um is not None:
         counter_r = counter_electrode.access_resistance_ohm(tissue_conductivity_S_per_m)
         factor = 2.0 * math.pi if electrode.environment == "half_space" else 4.0 * math.pi
         mutual_r = 2.0 / (factor * tissue_conductivity_S_per_m * counter_separation_um * 1e-6)
         counter_area = counter_electrode.area_cm2
-        # The counter carries the opposite phase, so it sees the other polarity.
+        # The counter carries the opposite phase, so it sees the other polarity -- in the
+        # leading phase the opposite of the protocol's, in the return phase the same.
+        counter_mat = get_material(counter_electrode.material)
         counter_capacitance = effective_capacitance_uF_cm2(
-            get_material(counter_electrode.material),
-            anodic_first=not protocol.anodic_first,
+            counter_mat, anodic_first=not protocol.anodic_first
+        )
+        counter_return_capacitance = effective_capacitance_uF_cm2(
+            counter_mat, anodic_first=protocol.anodic_first
         )
 
     total_r = access_r + counter_r - mutual_r + lead_resistance_ohm
@@ -375,6 +400,14 @@ def evaluate(
         capacitance_uF_cm2 = effective_capacitance_uF_cm2(
             mat, anodic_first=protocol.anodic_first
         )
+        # The return phase is the other polarity, whose C_eff differs for most materials
+        # (Pt 250 cathodic against 125 anodic). A measured capacitance is one value and is
+        # used for both phases.
+        return_capacitance = effective_capacitance_uF_cm2(
+            mat, anodic_first=not protocol.anodic_first
+        )
+    else:
+        return_capacitance = capacitance_uF_cm2
     polar = polarisation_V(density, capacitance_uF_cm2)
 
     # The return phase's own budget. Its amplitude is a fixed multiple of the leading
@@ -398,9 +431,9 @@ def evaluate(
             total_resistance_ohm=total_r,
             pulse_width_us=protocol.return_phase_width_us,
             area_cm2=electrode.area_cm2,
-            capacitance_uF_cm2=capacitance_uF_cm2,
+            capacitance_uF_cm2=return_capacitance,
             counter_area_cm2=counter_area,
-            counter_capacitance_uF_cm2=counter_capacitance,
+            counter_capacitance_uF_cm2=counter_return_capacitance,
         )
     counter_polar = (
         polarisation_V(
@@ -435,6 +468,8 @@ def evaluate(
         counter_area_cm2=counter_area,
         counter_capacitance_uF_cm2=counter_capacitance,
         counter_polarisation_V=counter_polar,
+        return_capacitance_uF_cm2=return_capacitance,
+        counter_return_capacitance_uF_cm2=counter_return_capacitance,
     )
 
 

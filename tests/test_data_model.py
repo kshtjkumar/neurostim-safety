@@ -294,6 +294,13 @@ class TestSymmetricProtocolsDoNotMove:
 
     Not tautological: these are *pre-change* outputs, pasted in. Nothing in the commit
     under test can produce them; it can only fail to disturb them.
+
+    ``required_compliance_V`` was re-measured at C3.9 (ledger 131), which gives each phase
+    its own polarity's C_eff. For a cathodic-first pulse the anodic return phase now
+    polarises at the anodic value, and binds wherever that is the smaller C: ring
+    0.8286922987786409 -> 1.0550459956204477, Pt disc 1.957730451487647 ->
+    2.7726037601181512, SIROF disc 1.4300993160251108 -> 1.4306086118430048. The other
+    keys are the aaf3c85 values, unchanged.
     """
 
     GOLDEN = {
@@ -302,7 +309,7 @@ class TestSymmetricProtocolsDoNotMove:
             StimProtocol(80.0, 200.0, 130.0, 1.0),
             {
                 "limiting_current_uA": 20.0,
-                "required_compliance_V": 0.8286922987786409,
+                "required_compliance_V": 1.0550459956204477,
                 "peak_electrode_potential_V": -0.22635369684180667,
                 "net_dc_current_uA": 0.0,
                 "duty_cycle": 0.052,
@@ -313,7 +320,7 @@ class TestSymmetricProtocolsDoNotMove:
             StimProtocol(80.0, 200.0, 130.0, 1.0),
             {
                 "limiting_current_uA": 19.634954084936204,
-                "required_compliance_V": 1.957730451487647,
+                "required_compliance_V": 2.7726037601181512,
                 "peak_electrode_potential_V": -0.8148733086305042,
                 "net_dc_current_uA": 0.0,
                 "duty_cycle": 0.052,
@@ -324,7 +331,7 @@ class TestSymmetricProtocolsDoNotMove:
             StimProtocol(500.0, 50.0, 130.0, 1.0),
             {
                 "limiting_current_uA": 998.0887516949169,
-                "required_compliance_V": 1.4300993160251108,
+                "required_compliance_V": 1.4306086118430048,
                 "peak_electrode_potential_V": -0.0015278874536821948,
                 "net_dc_current_uA": 0.0,
                 "duty_cycle": 0.013,

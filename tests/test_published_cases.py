@@ -445,14 +445,24 @@ class TestComplianceConsistency:
         assert excursion == pytest.approx(abs(material.water_window.cathodic_V))
 
     def test_required_voltage_is_ohmic_plus_polarisation(self):
+        """For each phase, ohmic drop plus that phase's polarisation; the requirement is the
+        larger. Since C3.9 (ledger 131) the return phase polarises at the opposite
+        polarity's C_eff, which for Pt is half the cathodic one, so for this cathodic-first
+        pulse the anodic return phase is the one that binds."""
         from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+        from neurostim.safety.water_window import effective_capacitance_uF_cm2
 
+        disc = DiscElectrode(500.0, "Pt")
         result = SafetyCalculator(
-            DiscElectrode(500.0, "Pt"), StimProtocol(10, 200, 50, 1), compliance_V=10.0
+            disc, StimProtocol(10, 200, 50, 1), compliance_V=10.0
         ).assess().compliance
-        assert result.required_V == pytest.approx(
-            result.ohmic_drop_V + result.polarisation_V
+        density = 10e-6 * 200e-6 * 1e6 / disc.area_cm2
+        leading = result.ohmic_drop_V + result.polarisation_V
+        returning = result.ohmic_drop_V + density / effective_capacitance_uF_cm2(
+            "Pt", anodic_first=True
         )
+        assert returning > leading
+        assert result.required_V == pytest.approx(max(leading, returning))
 
 
 class TestRose1985Ta2O5:

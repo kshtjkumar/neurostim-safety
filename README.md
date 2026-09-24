@@ -41,7 +41,7 @@ print(calc.describe())
 Overall: FAIL (1 check not evaluated: Shannon criterion)
 Limiting current: 20.00 uA (Microelectrode charge/phase)
   across published ranges: 20.00 uA (unchanged: Microelectrode charge/phase has no published range; Shannon k 1.5-2.0 and the material range were propagated and do not bind)
-  by kind: tissue 20.00 uA, electrode-acute 141.3 uA, electrode-chronic 70.68 uA, instrument 965.3 uA
+  by kind: tissue 20.00 uA, electrode-acute 141.3 uA, electrode-chronic 70.68 uA, instrument 758.2 uA
   INCOMPLETE: 1 limit-bearing check did not run (Shannon criterion), so the true limit may be lower
 
 [NOT_EVALUATED] Shannon criterion: not applicable: 0.000283 cm^2 is below the macro/micro boundary (k would read -0.04)
@@ -52,7 +52,7 @@ Limiting current: 20.00 uA (Microelectrode charge/phase)
 [         FAIL] Microelectrode charge/phase: 16 nC/phase exceeds the 4 nC/phase microelectrode damage threshold
 [         FAIL] Chronic degradation: 56.59 uC/cm^2 exceeds the 50 uC/cm^2 platinum dissolution threshold
 [         PASS] Charge balance: biphasic, fully charge-balanced
-[      CAUTION] Compliance voltage: 0.83 V of 10.00 V (8 % used); monopolar single-interface budget assumed -- supply counter_electrode for a two-terminal estimate
+[      CAUTION] Compliance voltage: 1.06 V of 10.00 V (11 % used); monopolar single-interface budget assumed -- supply counter_electrode for a two-terminal estimate
 ```
 
 Each check also prints the conditions its limit was measured under and the
