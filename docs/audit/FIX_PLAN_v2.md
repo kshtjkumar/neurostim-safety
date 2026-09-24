@@ -1144,7 +1144,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 136 | LOW | — (found in Phase 3b review, J2) | **C3.15** | floor the interval ends through the same predicate as the point estimate; random-sweep containment test including counters |
 | 137 | LOW | — (found in Phase 3b review, J3) | **C3.13** | **FIXED** `3595c05`; the caveats lookup raises on an unknown key, as CEILING_INTERVALS does |
 | 138 | LOW | — (found in Phase 3b review, J4) | **C3.14** | **FIXED** `5372f77`; correct the 0.1755 citation to the reviewer's converged ~0.1731; state the generator's dependency on the band solver's node helper |
-| 139 | LOW | — (found in Phase 3b review, J5) | **C3.16** | the separation guard uses a rectangle's half-diagonal; check other geometries for the same reach error |
+| 139 | LOW | — (found in Phase 3b review, J5) | **C3.16** | **FIXED** `bd8297b`; the separation guard uses a rectangle's half-diagonal; check other geometries for the same reach error |
 | 140 | MED | — (found at C3.12) | **unscheduled** — reported to the team lead | add the accumulated DC offset to the leading phase's interface term, or bound it by the water-window headroom, for partially recovered trains; needs a modelling decision (per-pulse maximum over the train, or capped at the headroom) |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
