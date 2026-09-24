@@ -34,7 +34,8 @@ Note on the source
 ------------------
 This is the IEEE EMBS conference paper (Proc. 28th IEEE EMBS, New York, 2006,
 pp. 3580-3583). The authors also published a longer treatment in J. Neural Eng. 3(4).
-The values here are read from the conference paper.
+The values here are read from the conference paper, and ``references.elwassif2006``
+cites it, not the journal article (ledger 75). The conference PDF prints no DOI.
 """
 
 from __future__ import annotations
@@ -45,7 +46,28 @@ BASELINE_C = 37.0
 """Body core temperature; Table I reports absolute peak temperatures against this."""
 
 V_RMS = 1.56
-"""RMS voltage between the energised contacts, from a 10 V, 185 pps, 210 us setting."""
+"""RMS voltage between the energised contacts, as the paper states it (p. 3581).
+
+Transcribed as printed. It does not follow from the setting it is said to come from; see
+:data:`RMS_OF_STATED_SETTING_V` (ledger 45)."""
+
+RMS_QUOTE = (
+    "We modeled a \u2018high\u2019 clinical DBS electrical setting (10 V, 185 pps and 210 μ "
+    "sec) [21] using a constant Vrms of 1.56 Volt between the energized electrodes; "
+    "Vrms was calculated from the root-mean-squared (r.m.s) voltage of the "
+    "stimulation waveform."
+)
+"""p. 3581, as printed."""
+
+RMS_OF_STATED_SETTING_V = 10.0 * (185.0 * 210e-6) ** 0.5
+"""The RMS of the stated setting, 10 V pulses of 210 us at 185 pps: 1.971 V, not 1.56.
+
+Recorded rather than "corrected" (ledger 45). The paper's own arithmetic is not
+reproducible from what it states: a monophasic pulse gives 1.971 V, and a biphasic one
+more. The package keeps 1.56 V, the number the paper's temperatures were computed at."""
+
+IMPLIED_PULSE_WIDTH_US = (V_RMS / 10.0) ** 2 / 185.0 * 1e6
+"""The pulse width at which 10 V and 185 pps would give 1.56 V RMS: about 131.5 us."""
 
 CLINICAL_SETTING = "10 V, 185 pps, 210 us (Medtronic), reduced to 1.56 V RMS"
 

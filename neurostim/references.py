@@ -311,7 +311,9 @@ REFERENCES: dict[str, Reference] = {
             "In vivo and in vitro comparison of the charge injection capacity of "
             "platinum macroelectrodes"
         ),
-        year=2014,
+        # The issue's year (S-19): IEEE TBME 62(3), March 2015, as the PDF prints; the key
+        # keeps 2014, the DOI/epub year, so existing citations resolve.
+        year=2015,
         venue="IEEE Transactions on Biomedical Engineering",
         volume="62(3)",
         pages="849-857",
@@ -704,16 +706,20 @@ REFERENCES: dict[str, Reference] = {
     "elwassif2006": _ref(
         key="elwassif2006",
         authors="Elwassif MM, Kong Q, Vazquez M, Bikson M",
-        title="Bio-heat transfer model of deep brain stimulation-induced temperature changes",
+        title="Bio-heat transfer model of deep brain stimulation induced temperature changes",
         year=2006,
-        venue="Journal of Neural Engineering",
-        volume="3(4)",
-        pages="306-315",
-        doi="10.1088/1741-2560/3/4/008",
-        pmid="17946574",
+        # The paper the values were read from (ledger 75): the conference paper, as its PDF
+        # prints (pages from its footers, ISBN 1-4244-0033-3). This entry used to give the
+        # J Neural Eng 3(4) article's venue, pages, DOI and PMID. The conference PDF prints
+        # no DOI or PMID, so none is given.
+        venue="Proceedings of the 28th IEEE EMBS Annual International Conference, New York",
+        pages="3580-3583",
+        source_type="conference",
         note=(
             "Brain sigma = 0.35 S/m, thermal conductivity 0.527 W/m/K; "
-            "clinical DBS temperature rise up to ~0.8 K."
+            "clinical DBS temperature rise up to ~0.8 K. A longer treatment is in "
+            "J Neural Eng 3(4):306-315 (doi 10.1088/1741-2560/3/4/008), which is not "
+            "where these values were read."
         ),
     ),
     "lapicque1907": _ref(

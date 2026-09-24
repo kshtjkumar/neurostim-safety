@@ -240,6 +240,21 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### Citations that point at the paper the values came from
+
+- `elwassif2006` cited the J Neural Eng article, with its DOI and PMID, but its Table I
+  values are read from the conference paper (Proc. 28th IEEE EMBS, pp. 3580-3583). The
+  reference is now the conference paper. That PDF prints no DOI, so none is given; the
+  journal article is named in the note.
+- The same paper states "a constant Vrms of 1.56 Volt" for 10 V, 185 pps and 210 µs. The
+  RMS of that setting is 1.971 V; 1.56 V implies 131.5 µs. The paper's number is kept,
+  because its temperatures were computed at it, and the discrepancy is recorded beside it.
+- `leung2014` is dated 2015, its issue (IEEE TBME 62(3), March 2015). The key is
+  unchanged.
+- The `mccreery2010_chronic` preset is checked against its paper, which is in the
+  library: 2,000 ± 150 µm² exposed at the tip of a penetrating shaft. Weiland 2002 is
+  still not in the library, and the `weiland_tin` preset says so.
+
 ### Three more conditions restored to their numbers
 
 - AIROF's in-vivo derating (10×) now cites Hu et al.'s own sentence, "the in vivo value

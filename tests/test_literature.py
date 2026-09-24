@@ -1537,3 +1537,66 @@ class TestLedger77ConditionsAndDerivations:
         )
         note = m.duty_cycle_note(0.5)
         assert "insertion" in note and "150 um" in note, note
+
+
+class TestTheElwassifCitationIsThePaperTheValuesCameFrom:
+    """Ledgers 75, 45, 78/S-19 and 124, C4.8. Metadata read from the PDFs in the library."""
+
+    PDF = "papers_stim_calc_ref/elwassif2006.pdf"
+
+    def test_75_the_reference_is_the_conference_paper(self):
+        """The module reads Table I from the Proc. 28th IEEE EMBS paper (pp. 3580-3583, the
+        PDF's own page footers); references.py cited the J Neural Eng article, with that
+        article's DOI, volume, pages and PMID. The conference PDF prints no DOI, so none is
+        invented."""
+        from neurostim.references import cite
+
+        ref = cite("elwassif2006")
+        assert ref.source_type == "conference"
+        assert "28th" in ref.venue and "EMBS" in ref.venue
+        assert ref.pages == "3580-3583"
+        assert ref.doi == "" and ref.pmid == ""
+        first, last = _pdf_page_text(self.PDF, 1), _pdf_page_text(self.PDF, 4)
+        assert "3580" in first and "3583" in last
+        assert "10.1088" not in first + last
+
+    def test_45_the_papers_rms_does_not_follow_from_its_setting(self):
+        """p. 3581: 10 V, 185 pps, 210 us "using a constant Vrms of 1.56 Volt". The RMS of that
+        setting is 10 * sqrt(185 * 210e-6) = 1.971 V; 1.56 V implies 131.5 us. Transcribed
+        faithfully, and the discrepancy recorded rather than "corrected"."""
+        import math
+
+        from neurostim.data import elwassif2006 as e
+
+        assert "".join(e.RMS_QUOTE.split()) in _pdf_page_text(self.PDF, 2)
+        assert e.V_RMS == 1.56  # the paper's number, unchanged
+        assert pytest.approx(10.0 * math.sqrt(185 * 210e-6)) == e.RMS_OF_STATED_SETTING_V
+        assert pytest.approx(1.971, abs=5e-4) == e.RMS_OF_STATED_SETTING_V
+        assert pytest.approx(131.5, abs=0.05) == e.IMPLIED_PULSE_WIDTH_US
+
+    def test_s19_leung_is_dated_by_its_issue(self):
+        from neurostim.references import cite
+
+        assert cite("leung2014").year == 2015
+        assert "MARCH2015" in _pdf_page_text(
+            "papers_stim_calc_ref/In_Vivo_and_In_Vitro_Comparison_of_the_Charge_Injection_Capacity_of_Platinum_Macroelectrodes.pdf",
+            1,
+        )
+
+    def test_124_the_mccreery_preset_is_checked_against_its_paper(self):
+        """McCreery 2010 is in the library (nihms209066.pdf); ledger 124 said it was not.
+        Author manuscript p. 2: the insulation "was laser-ablated from their tips, to yield a
+        geometric surface area of 2,000 +/- 150 um2"; the 50.5 um disc is 2003 um^2."""
+        import math
+
+        from neurostim.electrodes import get_preset
+
+        preset = get_preset("mccreery2010_chronic")
+        assert "not in the package's library" not in preset.note
+        assert "p. 2" in preset.note and "2,000" in preset.note
+        assert math.isclose(preset.electrode.area_um2, 2000.0, rel_tol=0.075)
+        assert "laser-ablatedfromtheirtips" in _pdf_page_text(
+            "papers_stim_calc_ref/nihms209066.pdf", 2
+        )
+        weiland = get_preset("weiland_tin")
+        assert "not in the package's library" in weiland.note  # still true, and said

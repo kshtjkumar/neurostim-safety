@@ -137,9 +137,13 @@ _PRESETS: tuple[ElectrodePreset, ...] = (
         context="implanted 450-1282 days in cat sensorimotor cortex, pulsed 240 h",
         note=(
             "Safe at 2 nC/phase; 4 nC/phase caused neuron loss to at least 150 um at "
-            "100 % duty cycle and about 60 um at 50 %. Tagged full-space as a penetrating "
-            "microelectrode; geometry not verified against the source, because the paper "
-            "is not in the package's library"
+            "100 % duty cycle and stimulation-induced loss within about 60 um at 50 %. "
+            "Geometry checked against the paper (ledger 124): the parylene insulation 'was "
+            "laser-ablated from their tips, to yield a geometric surface area of 2,000 +/- "
+            "150 um2' (author manuscript p. 2), a penetrating tip in cortex, so full-space. "
+            "The paper does not give the exposed tip's shape, so the equal-area disc "
+            "stands in for it. The context's 450-1282 days is the abstract's; the paper "
+            "also gives 348 to 1,282 days (p. 8)"
         ),
     ),
     # --- electrochemical characterisation ---
@@ -181,8 +185,9 @@ _PRESETS: tuple[ElectrodePreset, ...] = (
         context="in vitro measurement giving 0.9 mC/cm^2 at 0.5 ms",
         note=(
             "Geometry not verified against the source; the paper is not in the package's "
-            "library, so whether this was a planar thin-film site or an immersed wire "
-            "cannot be checked. Left half-space by default and marked approximate"
+            "library (checked again at C4.8, ledger 124), so whether this was a planar "
+            "thin-film site or an immersed wire cannot be checked. Left half-space by "
+            "default and marked approximate"
         ),
     ),
 )
