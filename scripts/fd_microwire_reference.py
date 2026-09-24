@@ -21,8 +21,9 @@ spacing helper this reuses).
 and growing for long exposures. At ``l = 0``, the flat end face alone, it is about 8 %
 *low*, which is anti-conservative. That case converges slowly: the tip edge is a 270 degree
 re-entrant corner, and the order observed there is about 0.7. The tabulated value is
-therefore uncertain by a couple of per cent, and an independent solve by the Phase 3
-reviewer gives 0.1755 against the 0.1726 here. Either way the sphere's 0.1592 is low, which
+therefore uncertain by a couple of per cent. An independent solve by the Phase 3 reviewer,
+refined, extrapolates to about 0.1731 against the 0.1726 here (its unconverged 0.1755 was
+cited before ledger 138). Either way the sphere's 0.1592 is low, which
 is why the package uses Newman's half-space disc, 0.25, a bound from above, for that one
 case.
 
