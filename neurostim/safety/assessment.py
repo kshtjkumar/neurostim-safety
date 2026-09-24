@@ -135,10 +135,14 @@ def _shannon_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Int
 
 def _charge_ceiling_interval(assessment: SafetyAssessment, check: Check) -> Interval:
     """The charge-injection ceiling over the material's full published CIC range."""
-    if assessment.charge.max_current_interval_uA is not None:
-        return assessment.charge.max_current_interval_uA
-    # pragma: no cover - only if a caller builds ChargeResult by hand
-    return Interval.exact(assessment.charge.max_current_uA)
+    if assessment.charge.max_current_interval_uA is None:
+        # Raise rather than collapse to the point: a silent Interval.exact would narrow a
+        # published band, the fall-through ledger 97 removed elsewhere (ledger 117).
+        raise ValueError(
+            "a Charge injection limit check exists but its charge result carries no "
+            "current interval"
+        )
+    return assessment.charge.max_current_interval_uA
 
 
 def _counter_charge_ceiling_interval(

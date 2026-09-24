@@ -61,6 +61,7 @@ import math
 from dataclasses import dataclass
 
 from ..materials import Material, WaterWindow, get_material
+from ..protocol import CHARGE_BALANCE_REL_TOLERANCE
 
 DOUBLE_LAYER_CAPACITANCE_uF_cm2 = 20.0
 """Canonical smooth-metal double-layer capacitance (Merrill et al. 2005, footnote 2)."""
@@ -81,21 +82,27 @@ def effective_capacitance_uF_cm2(
     mat = material if isinstance(material, Material) else get_material(material)
     if mat.water_window is None:
         return DOUBLE_LAYER_CAPACITANCE_uF_cm2
+    if anodic_first is None:
+        # Polarity unknown: the smaller of the two capacitances, which gives the larger
+        # excursion (ledger 8). The narrower half-window used to be taken, and it sits in
+        # the denominator of C = limit / available_V, so it enlarged C and understated the
+        # excursion. Where the CIC is not resolved by polarity this is the wider
+        # half-window; for Pt it is the anodic-first 100 uC/cm^2 over 0.8 V.
+        return min(
+            effective_capacitance_uF_cm2(mat, anodic_first=True),
+            effective_capacitance_uF_cm2(mat, anodic_first=False),
+        )
     # The CIC is the charge that just reaches the window edge, so the widest measured
     # value defines the excursion per coulomb.
     limit = mat.cic_uC_cm2("optimistic", anodic_first)
     # Use the half-window the leading phase actually swings toward. An anodic-first
     # pulse drives the electrode positive and is bounded by the anodic limit; a
     # cathodic-first pulse by the cathodic one. Windows are not symmetric, so this
-    # matters. With polarity unknown, take the narrower half.
-    if anodic_first is True:
+    # matters.
+    if anodic_first:
         available_V = abs(mat.water_window.anodic_V)
-    elif anodic_first is False:
-        available_V = abs(mat.water_window.cathodic_V)
     else:
-        available_V = min(
-            abs(mat.water_window.cathodic_V), abs(mat.water_window.anodic_V)
-        )
+        available_V = abs(mat.water_window.cathodic_V)
     if available_V <= 0:  # pragma: no cover - windows always straddle zero here
         return DOUBLE_LAYER_CAPACITANCE_uF_cm2
     return limit / available_V
@@ -397,7 +404,7 @@ def evaluate(
     net_dc_current_uA: float | None = None,
     area_cm2: float | None = None,
     train_duration_s: float | None = None,
-    recovered_charge_uC: float = 0.0,
+    recovered_charge_uC: float | None = None,
 ) -> WaterWindowResult:
     """Check whether the leading phase drives the electrode out of the water window.
 
@@ -412,12 +419,47 @@ def evaluate(
 
         Must lie inside the material's own window; a value outside it raises
         ``ValueError``. See :func:`validate_resting_potential_V`.
-    recovered_charge_uC:
-        Charge per pulse the return phase recovers, ``r_a * Q``; ``0.0`` for a monophasic
-        pulse. When the offset heads for the leading phase's edge this part of each pulse
-        peaks on top of it, so the drift budget spends it first (ledger 105). Ignored when
-        the offset heads for the other edge.
+    anodic_first_for_capacitance:
+        The polarity whose ``C_eff`` is used. ``None`` (the default) means
+        ``anodic_first``; a value that disagrees with it raises (ledger 7), because the
+        sign of the excursion and the capacitance that sizes it must describe one pulse.
+    net_dc_current_uA, area_cm2, train_duration_s, recovered_charge_uC:
+        The DC-drift clause's inputs: all four or none (ledgers 117, 119). A partial set
+        used to skip the clause silently, and an omitted ``recovered_charge_uC`` read as a
+        monophasic pulse. ``recovered_charge_uC`` is the charge per pulse the return phase
+        recovers, ``r_a * Q``, ``0.0`` for a monophasic pulse. When the offset heads for
+        the leading phase's edge this part of each pulse peaks on top of it, so the drift
+        budget spends it first (ledger 105).
+
+        Gated on charge balance as ``SafetyCalculator.assess`` is: when the unrecovered
+        fraction ``1 - recovered / Q`` is within ``CHARGE_BALANCE_REL_TOLERANCE``, the
+        waveform is balanced and there is no drift, whatever net DC is passed.
     """
+    if anodic_first_for_capacitance is None:
+        anodic_first_for_capacitance = anodic_first
+    elif anodic_first_for_capacitance != anodic_first:
+        raise ValueError(
+            f"anodic_first_for_capacitance ({anodic_first_for_capacitance}) disagrees with "
+            f"anodic_first ({anodic_first}): the capacitance must be that of the pulse's "
+            f"own leading polarity (ledger 7); omit it"
+        )
+    drift_inputs = {
+        "net_dc_current_uA": net_dc_current_uA,
+        "area_cm2": area_cm2,
+        "train_duration_s": train_duration_s,
+    }
+    given = [name for name, value in drift_inputs.items() if value is not None]
+    if given and len(given) < len(drift_inputs):
+        missing = [name for name in drift_inputs if name not in given]
+        raise ValueError(
+            f"the drift clause needs net_dc_current_uA, area_cm2 and train_duration_s "
+            f"together; missing {missing}"
+        )
+    if given and recovered_charge_uC is None:
+        raise ValueError(
+            "recovered_charge_uC is required with the drift inputs: r_a * Q, or 0.0 for a "
+            "monophasic pulse"
+        )
     mat = material if isinstance(material, Material) else get_material(material)
     validate_resting_potential_V(mat, resting_potential_V)
     measured = capacitance_uF_cm2 is not None
@@ -431,11 +473,22 @@ def evaluate(
     peak = resting_potential_V + sign * excursion
 
     drift = None
+    balanced = False
+    if given:
+        assert area_cm2 is not None and recovered_charge_uC is not None  # checked above
+        leading_uC = charge_density_uC_cm2 * area_cm2
+        balanced = leading_uC > 0.0 and (
+            abs(1.0 - recovered_charge_uC / leading_uC) <= CHARGE_BALANCE_REL_TOLERANCE
+        )
+        if balanced:
+            # What assess() passes for a balanced waveform: a drift clause with no DC.
+            net_dc_current_uA = 0.0
     if (
         mat.water_window is not None
         and net_dc_current_uA is not None
         and area_cm2 is not None
         and train_duration_s is not None
+        and recovered_charge_uC is not None
     ):
         # The net offset drives toward the leading phase's edge when the leading phase
         # dominates, and toward the other one when the return phase over-recovers.
@@ -447,11 +500,7 @@ def evaluate(
         # polarity's for under-recovery, the opposite one's for over-recovery. A measured
         # capacitance is one value, and so is the polarity-blind default (ledger 8).
         drift_capacitance = capacitance_uF_cm2
-        if (
-            not measured
-            and anodic_first_for_capacitance is not None
-            and drift_anodic != anodic_first_for_capacitance
-        ):
+        if not measured and drift_anodic != anodic_first_for_capacitance:
             drift_capacitance = effective_capacitance_uF_cm2(mat, anodic_first=drift_anodic)
         drift = DcDrift(
             net_dc_current_uA=net_dc_current_uA,

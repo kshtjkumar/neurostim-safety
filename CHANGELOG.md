@@ -221,6 +221,25 @@ The batch and sweep frames hold `None`, not `NaN`, in `limiting_current_uA` and
   The seed was read from the shipped material with the same key, so
   `replace(Pt, water_window=...)` raised `LimitDidNotSettle`.
 
+### One polarity convention for the water window, and a strict argument contract
+
+These changes affect direct callers of `water_window.evaluate` and
+`effective_capacitance_uF_cm2`. `SafetyCalculator.assess` already passed consistent
+arguments, so none of its numbers move.
+
+- The capacitance follows the pulse's own polarity by default.
+  `anodic_first_for_capacitance` that disagrees with `anodic_first` raises. AIROF at its
+  own charge-injection limit now lands on the window edge; the default call used to report
+  0.43 V of headroom and PASS.
+- With the polarity unknown (`anodic_first=None`), the capacitance is the smaller of the two
+  polarities' values, which is the conservative choice. The narrower half-window used to be
+  taken, which enlarged C. For Pt it is now 125 µF/cm², against 250 before.
+- The drift inputs (`net_dc_current_uA`, `area_cm2`, `train_duration_s`,
+  `recovered_charge_uC`) come together or not at all; a partial set raises. A waveform that
+  Charge balance calls balanced has no drift, as in `assess()`.
+- A charge result with no current interval now raises rather than collapsing its band to
+  a point.
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,

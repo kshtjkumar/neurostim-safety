@@ -733,6 +733,9 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
             net_dc_current_uA=protocol.net_dc_current_uA,
             area_cm2=electrode.area_cm2,
             train_duration_s=protocol.train_duration_s,
+            # G12 (C4.2, ledgers 117/119): the drift inputs now come as a set of four, and
+            # an omitted recovered charge raises instead of reading as monophasic.
+            recovered_charge_uC=protocol.charge_per_phase_uC * protocol.recovered_fraction,
         )
         return _water_window_search(result, protocol, electrode.area_cm2)
 

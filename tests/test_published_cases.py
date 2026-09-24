@@ -302,8 +302,12 @@ class TestWaterWindowConsistency:
         """20 uF/cm^2 is double-layer only; Pt stores an order of magnitude more."""
         from neurostim.safety import water_window as ww
 
-        c_eff = ww.effective_capacitance_uF_cm2("Pt")
+        # G12 (C4.2, ledger 8): at a stated polarity. The polarity-blind value is now the
+        # smaller of the two, Pt's anodic-first 125 uF/cm^2, which is conservative and
+        # still 6x the double layer; the cathodic-first 250 is the tenfold one.
+        c_eff = ww.effective_capacitance_uF_cm2("Pt", anodic_first=False)
         assert c_eff > 10 * ww.DOUBLE_LAYER_CAPACITANCE_uF_cm2
+        assert ww.effective_capacitance_uF_cm2("Pt") > 5 * ww.DOUBLE_LAYER_CAPACITANCE_uF_cm2
 
     def test_a_protocol_inside_its_cic_no_longer_fails_the_window(self):
         """The false alarm the old model produced."""
@@ -325,13 +329,18 @@ class TestWaterWindowConsistency:
         from neurostim import get_material
         from neurostim.safety import water_window as ww
 
+        # G12 (C4.2, ledger 8): per polarity, each CIC with its own capacitance. The
+        # polarity-blind capacitance is now the smallest one, so pairing it with the union's
+        # optimistic CIC overstates the excursion on purpose: that is the conservative
+        # reading when the polarity is unknown, not the within-CIC relation this pins.
         for key in ("Pt", "AIROF", "SIROF", "TiN"):
             material = get_material(key)
-            excursion = ww.polarisation_V(
-                material.cic_uC_cm2("optimistic"),
-                ww.effective_capacitance_uF_cm2(material),
-            )
-            assert excursion <= material.water_window.width_V
+            for anodic_first in (False, True):
+                excursion = ww.polarisation_V(
+                    material.cic_uC_cm2("optimistic", anodic_first),
+                    ww.effective_capacitance_uF_cm2(material, anodic_first=anodic_first),
+                )
+                assert excursion <= material.water_window.width_V
 
 
 class TestTehovnik2006:
