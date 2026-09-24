@@ -9,6 +9,7 @@ section, which is why the conditions column is not optional here.
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 
@@ -206,6 +207,9 @@ def _required_compliance_text(calc: SafetyCalculator, result: ComplianceResult) 
     the single-interface assumption is stated on the row (ledger 5, C3.5). An unbalanced
     train's DC offset is named on the row, electrode by electrode (ledger 140).
     """
+    if not math.isfinite(result.required_V):
+        # A refusal sentence, not a bare "inf V" (ledger 143).
+        return result.unbounded_reason
     text = (
         f"{result.required_V:.3f} V ({result.ohmic_drop_V:.3f} V ohmic + "
         f"{result.polarisation_V:.3f} V polarisation"

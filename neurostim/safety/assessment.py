@@ -1784,13 +1784,20 @@ def _charge_balance_check(protocol: StimProtocol, area_cm2: float) -> Check:
     )
 
 
+def _required_text(result: compliance_mod.ComplianceResult) -> str:
+    """The requirement as a summary shows it, or the refusal sentence (ledger 143)."""
+    if math.isfinite(result.required_V):
+        return f"{result.required_V:.2f} V"
+    return f"an unbounded voltage ({result.unbounded_reason})"
+
+
 def _compliance_check(result: compliance_mod.ComplianceResult) -> Check:
     if not result.evaluated:
         return Check(
             name="Compliance voltage",
             status=Status.NOT_EVALUATED,
             summary=(
-                f"requires {result.required_V:.2f} V; no stimulator compliance "
+                f"requires {_required_text(result)}; no stimulator compliance "
                 f"specified"
             ),
             detail=result.describe(),
@@ -1800,7 +1807,7 @@ def _compliance_check(result: compliance_mod.ComplianceResult) -> Check:
             name="Compliance voltage",
             status=Status.FAIL,
             summary=(
-                f"needs {result.required_V:.2f} V but only "
+                f"needs {_required_text(result)} but only "
                 f"{result.available_V:.2f} V available"
             ),
             detail=result.describe(),
@@ -2215,7 +2222,14 @@ class SafetyCalculator:
             "cic_limit_uC_cm2": assessment.charge.cic_limit_uC_cm2,
             "max_charge_shannon_uC": self.max_charge_uC,
             "access_resistance_ohm": assessment.compliance.access_resistance_ohm,
-            "required_compliance_V": assessment.compliance.required_V,
+            # None, not inf, when no finite voltage suffices, with the reason beside it: a
+            # batch CSV cell or a JSON number cannot carry infinity (ledger 143).
+            "required_compliance_V": (
+                assessment.compliance.required_V
+                if math.isfinite(assessment.compliance.required_V)
+                else None
+            ),
+            "required_compliance_note": assessment.compliance.unbounded_reason,
             "peak_electrode_potential_V": assessment.water_window.peak_potential_V,
             "duty_cycle": self.p.duty_cycle,
             "net_dc_current_uA": self.p.net_dc_current_uA,

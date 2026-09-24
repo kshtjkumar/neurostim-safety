@@ -169,6 +169,29 @@ recovery:
 The compliance budget's cap on an unbalanced train's offset now always coincides with a
 Water window FAIL, in both drift directions.
 
+### An unbounded requirement is refused in words, and the JSON is strict
+
+A continuous unbalanced train with a counter electrode, or on a material with no water
+window, needs an unbounded compliance voltage. Every surface used to print it as `inf`:
+"needs inf V", "headroom -inf V (inf % used)", "train offset inf V ... after inf
+unbalanced pulses", an `inf` cell in the batch CSV. `report_to_json` wrote `Infinity`,
+which is not JSON, and it did so for every continuous train, through
+`protocol.train_duration_s`.
+
+Now:
+
+- The requirement reads "no finite voltage: a continuous unbalanced train leaves an
+  unbounded DC offset, and ..." with the reason: the counter's water window is not
+  assessed, or the material has none.
+- `report()` gives `required_compliance_V = None` and a new `required_compliance_note`
+  column.
+- The JSON is strict. It writes `null` for the two unbounded fields and gains a
+  `null_reasons` object mapping each one's path to its reason.
+- The drift detail says "during continuous stimulation" instead of "(inf s)".
+
+Finite requirements render exactly as before, and apart from the two new keys the JSON is
+unchanged.
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,

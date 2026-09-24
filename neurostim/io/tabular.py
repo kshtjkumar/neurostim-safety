@@ -8,6 +8,7 @@ materials -- and you want one row of safety results per combination.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -182,11 +183,33 @@ def write_csv(frame: pd.DataFrame, path: str | Path) -> Path:
 def report_to_json(
     calc: SafetyCalculator, path: str | Path | None = None, *, indent: int = 2
 ) -> str:
-    """Serialise a full assessment to JSON, including per-check statuses."""
+    """Serialise a full assessment to JSON, including per-check statuses.
+
+    Strict JSON (RFC 8259): no ``Infinity`` or ``NaN`` is ever emitted (ledger 143). A
+    quantity that is unbounded is written as ``null``, and ``null_reasons`` maps its path
+    to a sentence saying why:
+
+    - ``protocol.train_duration_s`` is ``null`` for continuous stimulation;
+    - ``results.required_compliance_V`` is ``null`` when no finite voltage suffices (a
+      continuous unbalanced train with an uncapped offset), and the same sentence is in
+      ``results.required_compliance_note``.
+
+    A path absent from ``null_reasons`` is a real number wherever it is not ``null`` for
+    the reasons documented beside its key. Serialised with ``allow_nan=False``, so a new
+    non-finite field raises here instead of producing invalid JSON.
+    """
     assessment = calc.assess()
+    protocol = asdict(calc.p)
+    results = calc.report()
+    null_reasons: dict[str, str] = {}
+    if math.isinf(calc.p.train_duration_s):
+        protocol["train_duration_s"] = None
+        null_reasons["protocol.train_duration_s"] = "continuous stimulation: the train has no end"
+    if results["required_compliance_V"] is None:
+        null_reasons["results.required_compliance_V"] = results["required_compliance_note"]
     payload = {
         "electrode": electrode_to_dict(calc.e),
-        "protocol": asdict(calc.p),
+        "protocol": protocol,
         "material": calc.material.key,
         "settings": {
             "shannon_k": calc.k,
@@ -194,7 +217,8 @@ def report_to_json(
             "tissue_conductivity_S_per_m": calc.tissue_conductivity_S_per_m,
             "compliance_V": calc.compliance_V,
         },
-        "results": calc.report(),
+        "results": results,
+        "null_reasons": null_reasons,
         # Top-level rather than inside ``results``: ``results`` is ``calc.report()``,
         # whose keys become the columns of a sweep CSV, and a list is not a CSV cell.
         "not_evaluated": [c.name for c in assessment.not_evaluated],
@@ -237,7 +261,7 @@ def report_to_json(
             "modelled estimates."
         ),
     }
-    text = json.dumps(payload, indent=indent, default=str)
+    text = json.dumps(payload, indent=indent, default=str, allow_nan=False)
     if path is not None:
         out = Path(path)
         out.parent.mkdir(parents=True, exist_ok=True)

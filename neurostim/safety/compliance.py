@@ -123,6 +123,11 @@ from .water_window import (
 )
 
 
+def _volts(value_V: float) -> str:
+    """A voltage for a detail line, or ``"unbounded"`` for an infinite one (ledger 143)."""
+    return f"{value_V:.3f} V" if math.isfinite(value_V) else "unbounded"
+
+
 def train_offset_V(
     current_uA: float,
     *,
@@ -558,32 +563,45 @@ class ComplianceResult:
                 if math.isfinite(self.offset_cap_V)
                 else ", uncapped (no water window)"
             )
+            pulses = (
+                f"after {self.offset_pulses:g} unbalanced pulses"
+                if math.isfinite(self.offset_pulses)
+                else "over a continuous unbalanced train"
+            )
             lines.append(
-                f"  train offset  {self.offset_V:.3f} V on the {phase} phase after "
-                f"{self.offset_pulses:g} unbalanced pulses{cap}"
+                f"  train offset  {_volts(self.offset_V)} on the {phase} phase "
+                f"{pulses}{cap}"
             )
             if self.counter_modelled:
                 lines.append(
-                    f"  counter off.  {self.counter_offset_V:.3f} V (uncapped: the "
+                    f"  counter off.  {_volts(self.counter_offset_V)} (uncapped: the "
                     f"counter's water window is not assessed)"
                 )
         if self.has_return_phase:
             lines.append(
-                f"  return phase  {self.return_required_V:.3f} V "
+                f"  return phase  {_volts(self.return_required_V)} "
                 f"({self.return_phase_current_uA:g} uA x "
                 f"{self.return_phase_width_us:g} us)"
             )
-        lines.append(f"  required      {self.required_V:.3f} V")
+        if math.isfinite(self.required_V):
+            lines.append(f"  required      {self.required_V:.3f} V")
+        else:
+            lines.append(f"  required      {self.unbounded_reason}")
         if self.available_V is None:
             lines.append("  available     not specified -> check NOT EVALUATED")
         else:
             verdict = "PASS" if self.passes else "INSUFFICIENT"
-            lines += [
-                f"  available     {self.available_V:.3f} V -> {verdict}",
-                f"  headroom      {self.headroom_V:+.3f} V "
-                f"({self.utilisation * 100:.1f} % used)",
-            ]
-            if not self.passes:
+            lines.append(f"  available     {self.available_V:.3f} V -> {verdict}")
+            if math.isfinite(self.required_V):
+                lines.append(
+                    f"  headroom      {self.headroom_V:+.3f} V "
+                    f"({self.utilisation * 100:.1f} % used)"
+                )
+            if self.max_current_uA == 0.0:
+                lines.append(
+                    "  no amplitude of this protocol is within the compliance voltage"
+                )
+            elif not self.passes:
                 lines.append(
                     f"  the source will drop out of regulation above "
                     f"{format_limit(self.max_current_uA)} uA; delivered current will "
@@ -591,6 +609,30 @@ class ComplianceResult:
                     f"than commanded"
                 )
         return "\n".join(lines)
+
+    @property
+    def unbounded_reason(self) -> str:
+        """Why no finite voltage suffices, as a sentence; ``""`` when one does (ledger 143).
+
+        The only unbounded term is an uncapped train offset over a continuous train
+        (ledger 140): the counter's, whose water window is not assessed, or the active
+        electrode's on a material with no water window. Every surface that would print the
+        requirement prints this instead, so none shows a bare ``inf``.
+        """
+        if math.isfinite(self.required_V):
+            return ""
+        causes = []
+        if math.isinf(self.offset_cap_V):
+            causes.append("the electrode's material has no water window to cap it")
+        if self.counter_modelled:
+            causes.append(
+                "the counter electrode's water window is not assessed, so its offset is "
+                "not capped"
+            )
+        return (
+            "no finite voltage: a continuous unbalanced train leaves an unbounded DC "
+            "offset, and " + " and ".join(causes)
+        )
 
 
 def evaluate(

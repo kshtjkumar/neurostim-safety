@@ -61,7 +61,12 @@ source it came from; that detail is elided above.
 <!-- END GENERATED: quickstart-transcript -->
 
 The `report()` dictionary from the 0.1.0 prototype still works and returns a superset of
-its original keys.
+its original keys. Its values are finite numbers or `None`. `report_to_json` writes strict
+JSON (no `Infinity`), and a `null` that stands for an unbounded quantity is explained in
+`null_reasons`:
+
+- `protocol.train_duration_s` is `null` for continuous stimulation;
+- `results.required_compliance_V` is `null` when no finite voltage suffices.
 
 ## Desktop application
 

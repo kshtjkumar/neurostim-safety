@@ -1074,6 +1074,144 @@ class TestTheTrainOffsetIsInTheBudget:
                 ), (recovery, compliance_V)
 
 
+class TestAnUnboundedRequirementIsRefusedInWords:
+    """Ledger 143 (Phase 3c review K2). Since C3.17 a continuous unbalanced train with a
+    counter, or on a material with no water window, needs an unbounded voltage. Every
+    surface printed it as a bare ``inf`` ("needs inf V", "train offset inf V ... after inf
+    unbalanced pulses", "headroom -inf V (inf % used)"), the batch column held ``inf``, and
+    ``report_to_json`` emitted ``Infinity``, which is not JSON. The drift detail's
+    "(inf s)" for a continuous train, older, is the same leak.
+    """
+
+    WORD = __import__("re").compile(r"(?<![A-Za-z])(inf|nan|infinity)(?![A-Za-z])", 2)
+
+    @staticmethod
+    def _population():
+        import itertools
+
+        from neurostim import SafetyCalculator, StimProtocol
+
+        for material, recovery, train, compliance_V, counter, rest in itertools.product(
+            ("Pt", "Ta2O5", "TiN"), ("mono", 1.0, 0.9, 1.3), (1.0, math.inf), (None, 10.0),
+            (False, True), (0.0, -0.2),
+        ):
+            shape = (
+                {"waveform": "monophasic"} if recovery == "mono"
+                else {"charge_recovery_ratio": recovery}
+            )
+            kwargs = (
+                {"counter_electrode": DiscElectrode(900.0, material),
+                 "counter_separation_um": 20000.0}
+                if counter else {}
+            )
+            yield SafetyCalculator(
+                DiscElectrode(500.0, material),
+                StimProtocol(80.0, 200.0, 130.0, train, **shape),
+                compliance_V=compliance_V, resting_potential_V=rest, **kwargs,
+            )
+
+    def _leaks(self, text):
+        return [line for line in text.splitlines() if self.WORD.search(line)]
+
+    def test_no_render_prints_a_non_finite_number(self):
+        """describe() (which the GUI shows), every check summary and detail (the GUI and
+        PDF tables), the PDF's compliance row, and report() (the batch CSV's columns)."""
+        from neurostim.io.report import _required_compliance_text
+
+        leaks = []
+        unbounded = 0
+        for calc in self._population():
+            assessment = calc.assess()
+            unbounded += not math.isfinite(assessment.compliance.required_V)
+            leaks += self._leaks(assessment.describe())
+            for check in assessment.checks:
+                leaks += self._leaks(check.summary)
+            leaks += self._leaks(_required_compliance_text(calc, assessment.compliance))
+            for key, value in calc.report().items():
+                if isinstance(value, float) and not math.isfinite(value):
+                    leaks.append(f"report()[{key!r}] = {value!r}")
+        assert unbounded >= 40, unbounded  # the premise: the unbounded case is drawn
+        assert leaks == [], (len(leaks), sorted(set(leaks))[:8])
+
+    def test_the_batch_csv_has_no_inf(self, tmp_path):
+        from neurostim.io.tabular import assess_batch, write_csv
+
+        rows = [
+            {"shape": "disc", "diameter_um": 500.0, "material": "Ta2O5", "current_uA": 80.0,
+             "pulse_width_us": 200.0, "frequency_hz": 130.0, "train_duration_s": math.inf,
+             "charge_recovery_ratio": 0.9, "compliance_V": 10.0},
+        ]
+        frame = assess_batch(rows)
+        assert frame.loc[0, "error"] == ""  # the premise: the row assessed
+        text = write_csv(frame, tmp_path / "batch.csv").read_text()
+        assert self._leaks(text) == []
+        assert "no finite voltage" in frame.loc[0, "required_compliance_note"]
+
+    def test_the_json_is_strict_and_says_why_a_field_is_null(self):
+        """``json.loads`` with every non-finite constant refused, and each null that stands
+        for an unbounded quantity carries its reason in ``null_reasons``."""
+        import json
+
+        from neurostim.io.tabular import report_to_json
+
+        def refuse(constant):
+            raise ValueError(f"non-JSON constant {constant}")
+
+        seen = set()
+        for calc in self._population():
+            payload = json.loads(report_to_json(calc), parse_constant=refuse)
+            reasons = payload["null_reasons"]
+            if math.isinf(calc.p.train_duration_s):
+                assert payload["protocol"]["train_duration_s"] is None
+                assert "continuous" in reasons["protocol.train_duration_s"]
+                seen.add("train")
+            if not math.isfinite(calc.assess().compliance.required_V):
+                assert payload["results"]["required_compliance_V"] is None
+                assert "no finite voltage" in reasons["results.required_compliance_V"]
+                seen.add("required")
+            else:
+                assert "results.required_compliance_V" not in reasons
+        assert seen == {"train", "required"}
+
+    @pytest.mark.parametrize(
+        ("material", "counter", "names"),
+        [
+            ("Ta2O5", False, ("no water window",)),
+            ("Pt", True, ("counter", "not assessed")),
+            ("Ta2O5", True, ("no water window", "counter")),
+        ],
+    )
+    def test_the_refusal_names_why(self, material, counter, names):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        kwargs = (
+            {"counter_electrode": DiscElectrode(900.0, material),
+             "counter_separation_um": 20000.0}
+            if counter else {}
+        )
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, material),
+            StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9),
+            compliance_V=10.0, **kwargs,
+        ).assess()
+        reason = assessment.compliance.unbounded_reason
+        assert reason.startswith("no finite voltage")
+        for name in names:
+            assert name in reason
+        check = next(c for c in assessment.checks if c.name == "Compliance voltage")
+        assert reason in check.summary
+        assert reason in check.detail
+
+    def test_a_finite_requirement_has_no_reason(self):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        result = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0),
+            compliance_V=10.0,
+        ).assess().compliance
+        assert result.unbounded_reason == ""
+
+
 class TestTheSeparationGuardSeesTheWholeElectrode:
     """Ledger 130 (Phase 3 review H4). The guard used equal-area sphere radii, 690 um for a
     3389 contact. Two 1500 um bands on one shaft were accepted at centre spacings of

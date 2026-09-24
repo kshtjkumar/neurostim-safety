@@ -285,16 +285,20 @@ class DcDrift:
         """One or two lines on the offset and what it costs."""
         if not self.drifts:
             return "  DC drift      none: the waveform recovers its charge"
-        exit_note = (
-            "before the train ends"
-            if self.exits_during_train
-            else "after the train ends"
-        )
+        if math.isinf(self.train_duration_s):
+            # A continuous train, said in words rather than "(inf s)" (ledger 143).
+            exit_note = "during continuous stimulation"
+        else:
+            exit_note = (
+                "before the train ends"
+                if self.exits_during_train
+                else "after the train ends"
+            ) + f" ({self.train_duration_s:g} s)"
         return (
             f"  DC drift      {self.net_dc_current_uA:+.4g} uA net DC against a "
             f"{self.window_charge_uC:.4g} uC window budget\n"
             f"                reaches the window edge in {self.time_to_exit_s:.4g} s, "
-            f"{exit_note} ({self.train_duration_s:g} s)"
+            f"{exit_note}"
         )
 
 
