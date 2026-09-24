@@ -1160,6 +1160,45 @@ class TestTheElectrolysisExceptionIsBounded:
         assert below >= 5, below  # the premise: the regime is drawn
 
 
+class TestTheQuotedWorstCaseIsReproduced:
+    """Ledger 148 (Phase 3d review L3). The compliance docstring quotes the largest deficit
+    found under the electrolysis exception. It said 6.7 %, the maximum of one sweep; the
+    review measured 17 %. The figure now quoted is reproduced here from its configuration,
+    and it sits inside the stated bound and a Water window FAIL."""
+
+    def test_the_cited_configuration(self):
+        import oracles
+
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.safety.water_window import effective_capacitance_uF_cm2 as c_eff
+
+        disc = DiscElectrode(100.0, "Pt")
+        calc = SafetyCalculator(
+            disc,
+            StimProtocol(100.0, 200.0, 100.0, 0.01, charge_recovery_ratio=1.05,
+                         return_phase_ratio=0.5),
+            compliance_V=1e6,
+        )
+        assessment = calc.assess()
+        result = assessment.compliance
+        stepped = oracles.peak_stimulator_voltage_V(
+            current_uA=100.0, pulse_width_us=200.0, return_phase_ratio=0.5,
+            recovered_fraction=1.05, anodic_first=False,
+            resistance_ohm=result.total_resistance_ohm, area_cm2=disc.area_cm2,
+            c_cathodic_uF_cm2=c_eff("Pt", anodic_first=False),
+            c_anodic_uF_cm2=c_eff("Pt", anodic_first=True),
+            pulses=1, steps=100, active_window_V=(0.6, 0.8),
+        )
+        assert result.required_V == pytest.approx(3.1018591635788133, rel=1e-12)
+        assert stepped == pytest.approx(3.8, rel=1e-9)
+        assert (stepped - result.required_V) / stepped == pytest.approx(0.1837, abs=5e-5)
+        excess = 100.0 * 200e-6 - 0.6 * c_eff("Pt", anodic_first=False) * disc.area_cm2
+        bound = min(excess / (c_eff("Pt", anodic_first=True) * disc.area_cm2), 0.8)
+        assert stepped - result.required_V <= bound
+        window = next(c for c in assessment.checks if c.name == "Water window")
+        assert window.status.value == "FAIL"
+
+
 class TestAnUnboundedRequirementIsRefusedInWords:
     """Ledger 143 (Phase 3c review K2). Since C3.17 a continuous unbalanced train with a
     counter, or on a material with no water window, needs an unbounded voltage. Every

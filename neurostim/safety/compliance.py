@@ -81,9 +81,13 @@ Modelling it would add a second kink to the back-solve for a regime that never b
 limit, so it is stated instead. ``e > 0`` means the peak clause of the Water window check
 already FAILs at that amplitude, so the limiting current is unaffected. Only this check's
 own figure, and the "instrument" figure in ``limiting_current_by_kind``, can be low
-there. Measured against a clamped whole-train oracle: 42 of 1 500 over-recovery
-configurations were low, by up to 6.7 %, every one inside the bound and a Water window
-FAIL (pinned by a test).
+there. The guarantee is the bound in volts, which never exceeds ``H_opp``. A percentage
+is only a search maximum: the largest found is 18.4 %, for a 100 um Pt disc,
+cathodic-first, r_a = 1.05, return_phase_ratio = 0.5, one pulse of 100 uA x 200 us
+(3.1019 V against the stepped 3.8000 V). The Phase 3d review found 17 % for Pt, r_a 1.1,
+N = 4. Every case found is inside the bound and a Water window FAIL, and both facts are
+pinned by tests (ledger 148 corrected an earlier "up to 6.7 %", which was the maximum of
+one narrower sweep).
 
 with each electrode's own access resistance, ``G = 4 pi`` in a full space or ``2 pi`` for
 two electrodes flush on one insulating plane (the convention of
