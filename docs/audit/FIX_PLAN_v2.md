@@ -1037,7 +1037,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 42 | LOW | OK | C6.4 | |
 | 43 | LOW | OK | C6.6 | |
 | 44 | LOW | OK | C6.6 | |
-| 45 | LOW | DOC | C4.8 | discrepancy recorded |
+| 45 | LOW | DOC | C4.8 | **FIXED** `a91b5d8`; discrepancy recorded |
 | 46 | HIGH | OK | C7.3 | ledger row repaired at C0.5 |
 | 47 | HIGH | OK | C7.2 | |
 | 48 | CRIT | PARTIAL | C5.1 | candidate set rebuilt from the assessment |
@@ -1086,7 +1086,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 72 | HIGH | OK | C4.6 | **FIXED** `a879ef9`; |
 | 73 | HIGH | OK | C4.6 | **FIXED** `a879ef9`; |
 | 74 | HIGH | OK | C0.4, C7.4 | transcript regenerates from C0.4 on every numeric commit |
-| 75 | HIGH | OK | C4.8 | |
+| 75 | HIGH | OK | C4.8 | **FIXED** `a91b5d8`; |
 | 76 | HIGH | OK | C7.4 | exit criterion 6 restated so it no longer conflicts |
 | 77/S-6 | MED | OK | C4.7b (awaiting user decision) | Butterwick exponent −0.48 vs the re-fit −0.4429 |
 | 77/S-7 | MED | OK | C4.7a | **FIXED** `3a31f3a`; AIROF derating evidence string |
@@ -1100,7 +1100,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 78/S-16 | LOW | OK | C4.9 | κ range excludes Elwassif's 0.45 |
 | 78/S-17 | LOW | OK | C4.9 | |
 | 78/S-18 | LOW | OK | C4.9 | |
-| 78/S-19 | LOW | OK | C4.8 | leung2014 is 2015 |
+| 78/S-19 | LOW | OK | C4.8 | **FIXED** `a91b5d8` (C4.8); leung2014 is 2015 |
 | 78/S-20 | LOW | OK | C4.8 | itis2025 is v4.2, 2024 |
 | 78/S-21 | LOW | OK | C4.9 | |
 | 78/S-22 | LOW | OK | C4.9 | |
@@ -1147,7 +1147,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 121 | LOW | — (found in Phase 2b review, G3) | **P2b docs commit** | **FIXED** `96ccae5`; mislabelled fixture in the section 6 C2.2 [106] row; relabelled |
 | 122 | LOW | — (found in Phase 2b review, G4) | **P2b docs commit** | **FIXED** `96ccae5`; the README water-window limitation described a pure double-layer capacitance; rewritten to the CIC-derived `C_eff` |
 | 123 | LOW | — (found in Phase 2b review, G5) | **P2b docs commit** | **FIXED** `96ccae5`; scheduling: 108 moved to its own commit before C3.1; 113 closed by narrowing the docstring |
-| 124 | LOW | — (found at C3.1) | C4.8 | obtain Weiland 2002 and McCreery 2010 for papers_stim_calc_ref/ and verify the two presets' geometry and tags against them; C4.8 already verifies citations against the PDFs in the library |
+| 124 | LOW | — (found at C3.1) | C4.8 | **FIXED** `a91b5d8` (C4.8; McCreery 2010 is in the library, Weiland 2002 still absent); obtain Weiland 2002 and McCreery 2010 for papers_stim_calc_ref/ and verify the two presets' geometry and tags against them; C4.8 already verifies citations against the PDFs in the library |
 | 125 | LOW | — (found at C3.2) | C5.11 | condition charge.describe()'s perimeter-peak note on the geometry, using `current_density.primary_distribution` |
 | 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | **JSON and audit FIXED** `889b525` (CSV at C5.5, GUI at C5.8); the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
 | 127 | HIGH | — (found in Phase 3 review, H1) | **C3.7** | **FIXED** `f2b6a0a`; regenerate the FD band table with radial resolution tied to band height, show convergence, cross-check against an independent solve, restate the sphere's accuracy everywhere. MUST land before Phase 4 closes (review condition) |
