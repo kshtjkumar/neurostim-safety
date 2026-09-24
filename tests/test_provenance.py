@@ -89,8 +89,12 @@ class TestAChronicThresholdCarriesItsOwnVerifiedFlag:
         )
         provenance = payload["provenance"]
         assert provenance["material_verified"] is False
-        assert provenance["chronic_threshold"] == {
+        # C4.4 (ledger 59) added peer_reviewed and note to each entry.
+        assert {k: provenance["chronic_threshold"][k] for k in (
+            "reference", "verified", "inherited_from", "peer_reviewed"
+        )} == {
             "reference": "rose_robblee1990", "verified": False, "inherited_from": None,
+            "peer_reviewed": True,
         }
         assert provenance["cic"]["verified"] is True
         clean = json.loads(
@@ -465,3 +469,169 @@ class TestAProvisionalBindingLimitIsMarkedWhereTheLimitIsShown:
         if mono.monotonicity_capped:
             assert mono.limit_is_provisional == mono.biphasic_provisional
         assert isinstance(mono.biphasic_provisional, bool)
+
+
+SETTINGS_KEYS = {
+    "k": "shannon_k", "policy": "cic_policy", "medium": "medium",
+    "tissue_conductivity_S_per_m": "tissue_conductivity_S_per_m",
+    "lead_resistance_ohm": "lead_resistance_ohm", "compliance_V": "compliance_V",
+    "measured_impedance_ohm": "measured_impedance_ohm",
+    "resting_potential_V": "resting_potential_V", "capacitance_uF_cm2": "capacitance_uF_cm2",
+    "counter_electrode": "counter_electrode", "counter_separation_um": "counter_separation_um",
+}
+
+
+class TestTheReportsCarryEverySettingAndTheirOwnProvenance:
+    """Ledgers 54, 59 and 126. The PDF recorded no package version, no digest and 4 of the
+    11 settings, so two reports that differed only in resting_potential_V (0.0 against
+    0.35) rendered identical settings with different peak potentials. report_to_json kept
+    4 settings, no version, and none of the provenance flags the PDF carries. Neither
+    carried the counter electrode."""
+
+    def _calc(self, **kwargs):
+        return SafetyCalculator(
+            DiscElectrode(200.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0), **kwargs
+        )
+
+    def test_every_calculator_argument_has_a_settings_key(self):
+        """Against the live signature, not a list: a setting added later without a
+        settings key fails here."""
+        import inspect
+
+        parameters = set(inspect.signature(SafetyCalculator.__init__).parameters)
+        recorded_elsewhere = {"self", "electrode", "protocol", "material"}
+        assert parameters - recorded_elsewhere == set(SETTINGS_KEYS)
+
+    def test_the_json_settings_are_complete_and_carry_the_counter(self):
+        import json
+
+        from neurostim.io.tabular import report_to_json
+
+        counter = DiscElectrode(900.0, "Pt")
+        payload = json.loads(report_to_json(self._calc(
+            compliance_V=10.0, resting_potential_V=0.35, lead_resistance_ohm=2000.0,
+            counter_electrode=counter, counter_separation_um=20000.0,
+        )))
+        settings = payload["settings"]
+        assert set(settings) == set(SETTINGS_KEYS.values())
+        assert settings["resting_potential_V"] == 0.35
+        assert settings["lead_resistance_ohm"] == 2000.0
+        assert settings["counter_electrode"]["diameter_um"] == 900.0
+        assert settings["counter_separation_um"] == 20000.0
+        assert json.loads(report_to_json(self._calc()))["settings"]["counter_electrode"] is None
+
+    def test_the_json_carries_the_version_and_every_provenance_flag(self):
+        import json
+
+        from neurostim import __version__
+        from neurostim.io.tabular import report_to_json
+
+        user = with_measured_cic(get_material("Pt"), 62.0, note="EIS batch 2026-03")
+        payload = json.loads(report_to_json(self._calc(material=user)))
+        assert payload["package_version"] == __version__
+        cic = payload["provenance"]["cic"]
+        assert cic == {
+            "reference": "user_measurement", "verified": False, "inherited_from": None,
+            "peer_reviewed": False, "note": "EIS batch 2026-03",
+        }
+        published = json.loads(report_to_json(self._calc()))["provenance"]["cic"]
+        assert published["peer_reviewed"] is True
+        assert published["reference"] == "rose_robblee1990"
+
+    def test_two_pdfs_that_differ_only_in_a_setting_render_different_settings(self):
+        from neurostim.io.report import _reproducibility_rows, _settings_rows
+
+        for field, (a, b) in {
+            "resting_potential_V": (0.0, 0.35),
+            "lead_resistance_ohm": (0.0, 2000.0),
+            "medium": ("saline", "in_vivo"),
+            "measured_impedance_ohm": (None, 5000.0),
+        }.items():
+            first, second = self._calc(**{field: a}), self._calc(**{field: b})
+            assert _settings_rows(first) != _settings_rows(second), field
+            assert dict(_reproducibility_rows(first))["Digest"] != dict(
+                _reproducibility_rows(second)
+            )["Digest"], field
+
+    def test_the_pdf_names_the_version_the_digest_and_the_counter(self):
+        from neurostim import __version__, audit
+        from neurostim.io.report import _reproducibility_rows, _settings_rows
+
+        calc = self._calc(
+            compliance_V=10.0, counter_electrode=DiscElectrode(900.0, "Pt"),
+            counter_separation_um=20000.0,
+        )
+        rows = dict(_reproducibility_rows(calc))
+        assert rows["Package version"] == __version__
+        assert rows["Digest"] == audit.record(calc).digest
+        settings = dict(_settings_rows(calc))
+        assert "900" in settings["Counter electrode"]
+        assert "20000" in settings["Counter electrode"]
+
+
+class TestTheAuditRecordIsStrictJSON:
+    """Ledgers 149 and 126. ``AuditRecord.to_json`` wrote ``Infinity`` for a continuous train,
+    the invalid JSON C3.20 removed from report_to_json, and its settings had no counter.
+    The digest must stay reproducible: a stored record's digest is computed over the same
+    canonical payload as before, and a record with no counter has the same settings keys."""
+
+    @staticmethod
+    def _refuse(constant):
+        raise ValueError(f"non-JSON constant {constant}")
+
+    def _calc(self, train=math.inf, **kwargs):
+        return SafetyCalculator(
+            DiscElectrode(200.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, train), **kwargs
+        )
+
+    def test_a_continuous_record_is_strict_and_loads_back(self):
+        import json
+
+        from neurostim import audit
+
+        record = audit.record(self._calc())
+        text = record.to_json()
+        payload = json.loads(text, parse_constant=self._refuse)
+        assert payload["protocol"]["train_duration_s"] is None
+        assert "continuous" in payload["null_reasons"]["protocol.train_duration_s"]
+        loaded = audit.load(text)
+        assert loaded.protocol["train_duration_s"] == math.inf
+        assert loaded.digest_matches
+        assert loaded.digest == record.digest
+        assert audit.reproduces(loaded, self._calc())[0]
+
+    def test_a_record_written_before_the_change_still_loads_and_matches(self):
+        """The old form wrote Infinity; Python's json reads it back."""
+        import json
+        from dataclasses import asdict
+
+        from neurostim import audit
+
+        record = audit.record(self._calc())
+        old_text = json.dumps(asdict(record), indent=2, default=str)
+        assert "Infinity" in old_text  # the premise: the old form
+        loaded = audit.load(old_text)
+        assert loaded.digest_matches
+        assert audit.reproduces(loaded, self._calc())[0]
+
+    def test_without_a_counter_the_settings_keys_are_unchanged(self):
+        """So a stored no-counter record's digest still reproduces."""
+        from neurostim import audit
+
+        settings = audit.record(self._calc(train=1.0)).settings
+        assert set(settings) == {
+            "shannon_k", "cic_policy", "medium", "tissue_conductivity_S_per_m",
+            "lead_resistance_ohm", "compliance_V", "measured_impedance_ohm",
+            "resting_potential_V", "capacitance_uF_cm2",
+        }
+
+    def test_with_a_counter_the_record_carries_it(self):
+        from neurostim import audit
+
+        with_counter = audit.record(self._calc(
+            train=1.0, counter_electrode=DiscElectrode(900.0, "Pt"),
+            counter_separation_um=20000.0,
+        ))
+        assert with_counter.settings["counter_electrode"]["diameter_um"] == 900.0
+        assert with_counter.settings["counter_separation_um"] == 20000.0
+        assert with_counter.digest != audit.record(self._calc(train=1.0)).digest

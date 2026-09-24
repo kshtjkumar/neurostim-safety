@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import platform
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -72,8 +73,24 @@ class AuditRecord:
         return self.digest == self.compute_digest()
 
     def to_json(self, indent: int = 2) -> str:
-        """Serialise the whole record."""
-        return json.dumps(asdict(self), indent=indent, default=str)
+        """Serialise the whole record as strict JSON (ledger 149).
+
+        A continuous train's duration is written as ``null``, with its reason in
+        ``null_reasons``, as :func:`neurostim.io.tabular.report_to_json` does; it used to be
+        ``Infinity``, which is not JSON. :func:`load` restores it. The digest is untouched:
+        it is computed over the record held in memory, with the duration still ``inf``, so a
+        stored digest reproduces across the change.
+        """
+        body = asdict(self)
+        null_reasons: dict[str, str] = {}
+        duration = body["protocol"].get("train_duration_s")
+        if isinstance(duration, float) and math.isinf(duration):
+            body["protocol"] = {**body["protocol"], "train_duration_s": None}
+            null_reasons["protocol.train_duration_s"] = (
+                "continuous stimulation: the train has no end"
+            )
+        body["null_reasons"] = null_reasons
+        return json.dumps(body, indent=indent, default=str, allow_nan=False)
 
     def describe(self) -> str:
         """Short human-readable header."""
@@ -115,7 +132,7 @@ def record(
     # Imported here rather than at module scope: the package __init__ imports this
     # module, so a top-level import of __version__ would be circular.
     from . import __version__
-    from .io.tabular import electrode_to_dict
+    from .io.tabular import calculator_settings, electrode_to_dict
 
     material = calc.material
     constants: dict[str, Any] = {
@@ -144,17 +161,9 @@ def record(
         python_version=platform.python_version(),
         electrode=electrode_to_dict(calc.e),
         protocol=asdict(calc.p),
-        settings={
-            "shannon_k": calc.k,
-            "cic_policy": calc.policy,
-            "medium": calc.medium,
-            "tissue_conductivity_S_per_m": calc.tissue_conductivity_S_per_m,
-            "lead_resistance_ohm": calc.lead_resistance_ohm,
-            "compliance_V": calc.compliance_V,
-            "measured_impedance_ohm": calc.measured_impedance_ohm,
-            "resting_potential_V": calc.resting_potential_V,
-            "capacitance_uF_cm2": calc.capacitance_uF_cm2,
-        },
+        # The counter enters only when there is one (ledger 126), so a record made
+        # without a counter keeps the settings, and the digest, it always had.
+        settings=calculator_settings(calc, counter_always=False),
         constants=constants,
         results=calc.report(),
         operator=operator,
@@ -165,8 +174,19 @@ def record(
 
 
 def load(text: str) -> AuditRecord:
-    """Rebuild a record from its JSON form."""
-    return AuditRecord(**json.loads(text))
+    """Rebuild a record from its JSON form, strict or written before ledger 149.
+
+    A ``null`` duration explained in ``null_reasons`` is a continuous train and becomes
+    ``inf`` again, so the digest is recomputed over what it was computed over.
+    """
+    body = json.loads(text)
+    null_reasons = body.pop("null_reasons", {}) or {}
+    if (
+        body.get("protocol", {}).get("train_duration_s") is None
+        and "protocol.train_duration_s" in null_reasons
+    ):
+        body["protocol"] = {**body["protocol"], "train_duration_s": math.inf}
+    return AuditRecord(**body)
 
 
 def reproduces(original: AuditRecord, calc: SafetyCalculator) -> tuple[bool, list[str]]:

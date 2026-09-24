@@ -240,6 +240,24 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### Reports carry every setting, their own version, and their provenance
+
+- The PDF gains "Settings" (all 11 calculator settings, the counter electrode included)
+  and "Reproducibility" (package version and the audit digest). It showed 4 settings and
+  no version, so two reports that differed only in the resting potential rendered the
+  same settings beside different peak potentials.
+- The JSON report gains `package_version`. `settings` now holds every setting, with
+  `counter_electrode` and `counter_separation_um` null without a counter. Each
+  `provenance` entry gains `peer_reviewed` and `note`: for a user measurement, your own
+  note and `peer_reviewed: false`.
+- A user measurement no longer claims peer review. Its reference entry defaulted to the
+  journal source type.
+- The audit record's JSON is strict: a continuous train's duration is `null`, explained in
+  `null_reasons`, and `audit.load` restores it. A record written before, with
+  `Infinity`, still loads. Digests are computed exactly as before, and a record made
+  without a counter has the same settings, so stored digests still reproduce. A record
+  with a counter now carries it.
+
 ### A provisional limit says so wherever it is shown
 
 - A limit set by a check flagged provisional is marked on `describe()`, the PDF header,

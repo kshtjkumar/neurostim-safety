@@ -262,6 +262,61 @@ def _headline_html(assessment: SafetyAssessment) -> str:
     )
 
 
+def _settings_rows(calc: SafetyCalculator) -> list[tuple[str, str]]:
+    """Every calculator setting, one row each (ledger 54).
+
+    The PDF rendered 4 of the 11, so two reports that differed only in the resting
+    potential or the lead resistance had identical settings beside different results.
+    Built from the same record the JSON and the audit use.
+    """
+    from .tabular import calculator_settings
+
+    settings = calculator_settings(calc, counter_always=True)
+
+    def text(value: object, unit: str = "", absent: str = "not supplied") -> str:
+        return absent if value is None else f"{value:g}{unit}" if isinstance(
+            value, float
+        ) else str(value)
+
+    counter = (
+        "none (monopolar single-interface budget)"
+        if calc.counter_electrode is None
+        else f"{calc.counter_electrode.describe()} at {calc.counter_separation_um:g} "
+        f"&micro;m"
+    )
+    return [
+        ("Shannon k", text(settings["shannon_k"])),
+        ("CIC policy", str(settings["cic_policy"])),
+        ("Medium", str(settings["medium"])),
+        ("Tissue conductivity", text(settings["tissue_conductivity_S_per_m"], " S/m")),
+        ("Lead resistance", text(settings["lead_resistance_ohm"], " &ohm;")),
+        ("Compliance voltage", text(settings["compliance_V"], " V")),
+        ("Measured impedance", text(settings["measured_impedance_ohm"], " &ohm;")),
+        ("Resting potential", text(settings["resting_potential_V"], " V")),
+        (
+            "Interfacial capacitance",
+            text(settings["capacitance_uF_cm2"], " &micro;F/cm&sup2;",
+                 absent="derived from the material's CIC and window"),
+        ),
+        ("Counter electrode", counter),
+    ]
+
+
+def _reproducibility_rows(calc: SafetyCalculator) -> list[tuple[str, str]]:
+    """The package version and the audit digest over inputs and constants (ledger 54).
+
+    ``neurostim.audit`` already built this record; the PDF never called it, so a printed
+    report could not be reproduced from its own face.
+    """
+    from .. import audit
+
+    record = audit.record(calc)
+    return [
+        ("Package version", record.package_version),
+        ("Digest", record.digest),
+    ]
+
+
 def _computed_rows(
     calc: SafetyCalculator, assessment: SafetyAssessment
 ) -> list[tuple[str, str]]:
@@ -443,6 +498,11 @@ def build_report(
             styles,
         )
     )
+
+    story.append(Paragraph("Settings", styles["h2"]))
+    story.append(_kv_table(_settings_rows(calc), styles))
+    story.append(Paragraph("Reproducibility", styles["h2"]))
+    story.append(_kv_table(_reproducibility_rows(calc), styles))
 
     story.append(Paragraph("Safety checks", styles["h2"]))
     story.append(_checks_table(assessment, styles))

@@ -16,6 +16,7 @@ from typing import Any
 
 import pandas as pd
 
+from .. import __version__
 from ..geometry import (
     CylindricalBandElectrode,
     DiscElectrode,
@@ -27,6 +28,7 @@ from ..geometry import (
     SphericalElectrode,
 )
 from ..protocol import StimProtocol
+from ..references import cite
 from ..safety import SafetyCalculator
 from ..safety.shannon import K_DEFAULT
 
@@ -255,12 +257,11 @@ def report_to_json(
         "electrode": electrode_to_dict(calc.e),
         "protocol": protocol,
         "material": calc.material.key,
-        "settings": {
-            "shannon_k": calc.k,
-            "cic_policy": calc.policy,
-            "tissue_conductivity_S_per_m": calc.tissue_conductivity_S_per_m,
-            "compliance_V": calc.compliance_V,
-        },
+        "package_version": __version__,
+        # Every calculator setting, the counter included (ledgers 59, 126). It used to
+        # carry 4 of 11, so two assessments that differed in, say, the resting potential
+        # serialised the same settings beside different results.
+        "settings": calculator_settings(calc, counter_always=True),
         "results": results,
         "null_reasons": null_reasons,
         "provenance": _provenance(calc.material),
@@ -314,6 +315,36 @@ def report_to_json(
     return text
 
 
+def calculator_settings(calc: SafetyCalculator, *, counter_always: bool) -> dict[str, Any]:
+    """Every setting a :class:`SafetyCalculator` was built with, under its record key.
+
+    One builder for the JSON report, the audit record and the PDF, so the three cannot
+    disagree about what was set. ``counter_always`` writes ``counter_electrode`` and
+    ``counter_separation_um`` as ``None`` when no counter is supplied (the JSON). The audit
+    record leaves them out then, so the digest of a record made without a counter is what
+    it was before the counter keys existed.
+    """
+    settings: dict[str, Any] = {
+        "shannon_k": calc.k,
+        "cic_policy": calc.policy,
+        "medium": calc.medium,
+        "tissue_conductivity_S_per_m": calc.tissue_conductivity_S_per_m,
+        "lead_resistance_ohm": calc.lead_resistance_ohm,
+        "compliance_V": calc.compliance_V,
+        "measured_impedance_ohm": calc.measured_impedance_ohm,
+        "resting_potential_V": calc.resting_potential_V,
+        "capacitance_uF_cm2": calc.capacitance_uF_cm2,
+    }
+    if counter_always or calc.counter_electrode is not None:
+        settings["counter_electrode"] = (
+            electrode_to_dict(calc.counter_electrode)
+            if calc.counter_electrode is not None
+            else None
+        )
+        settings["counter_separation_um"] = calc.counter_separation_um
+    return settings
+
+
 def _provenance(material: Any) -> dict[str, Any]:
     """Each applied constant's reference key and verified flag, and the roll-up (ledger 30).
 
@@ -329,6 +360,11 @@ def _provenance(material: Any) -> dict[str, Any]:
             # The material the value was published for, when a user material carries it
             # over; null for a value published for this material (ledger 25).
             "inherited_from": getattr(constant, "inherited_from", "") or None,
+            # The flags the PDF shows and the JSON did not (ledger 59): whether the source
+            # went through peer review, and the note stored with the value -- for a user
+            # measurement, the user's own.
+            "peer_reviewed": cite(constant.reference).peer_reviewed,
+            "note": constant.note,
         }
 
     return {

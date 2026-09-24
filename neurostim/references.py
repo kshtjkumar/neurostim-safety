@@ -611,6 +611,9 @@ REFERENCES: dict[str, Reference] = {
         authors="(user)",
         title="Locally measured value, not from published literature",
         year=0,
+        # Not peer reviewed, by definition. It defaulted to "journal", so a bench value
+        # reported peer_reviewed=True wherever the flag was read (found at C4.4, ledger 59).
+        source_type="user",
         note=(
             "Placeholder provenance for values supplied by the user's own electrode "
             "characterisation. Never attribute these to a published source."
