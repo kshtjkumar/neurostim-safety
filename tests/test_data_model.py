@@ -1848,6 +1848,126 @@ class TestTheRefusalContractHoldsInBothDirections:
         assert "Compliance voltage" in no_window.assess().no_safe_amplitude_note()
 
 
+class TestAnOverRecoveryDriftChargesTheOppositeBranch:
+    """Ledger 141. An over-recovering waveform drifts toward the edge opposite the leading
+    phase, so its offset is stored on the opposite polarity's branch, whose C_eff differs
+    for most materials (Pt: 125 anodic against 250 cathodic). The drift clause budgeted it
+    at the leading one, so for a cathodic-first Pt pulse the time to the edge was twice the
+    model's. A measured capacitance is one value and is unchanged.
+    """
+
+    @staticmethod
+    def _oracle_time(calc, *, branched=True):
+        import oracles
+
+        from neurostim.materials import get_material
+        from neurostim.safety.water_window import effective_capacitance_uF_cm2
+
+        p = calc.p
+        material = get_material(calc.e.material)
+        window = material.water_window
+        rest = calc.resting_potential_V
+        cathodic, anodic = rest - window.cathodic_V, window.anodic_V - rest
+        lead, opposite = (anodic, cathodic) if p.anodic_first else (cathodic, anodic)
+        return oracles.partial_recovery_exit_time_s(
+            current_uA=p.current_uA,
+            pulse_width_us=p.pulse_width_us,
+            recovered_fraction=p.charge_recovery_ratio,
+            frequency_hz=p.frequency_hz,
+            area_cm2=calc.e.area_cm2,
+            capacitance_uF_cm2=effective_capacitance_uF_cm2(material, anodic_first=p.anodic_first),
+            leading_window_V=lead,
+            opposite_window_V=opposite,
+            opposite_capacitance_uF_cm2=(
+                effective_capacitance_uF_cm2(material, anodic_first=not p.anodic_first)
+                if branched else None
+            ),
+        )
+
+    def _population(self):
+        for material, anodic_first, recovery, current, rest in itertools.product(
+            ("Pt", "TiN", "SIROF"), (False, True), (1.05, 1.2, 1.5),
+            (50.0, 300.0, 1000.0), (0.0, -0.2),
+        ):
+            yield SafetyCalculator(
+                DiscElectrode(500.0, material),
+                StimProtocol(
+                    current, 200.0, 50.0, 1e4, anodic_first=anodic_first,
+                    charge_recovery_ratio=recovery,
+                ),
+                resting_potential_V=rest,
+            )
+
+    def test_the_drift_time_is_the_branched_circuits_to_one_pulse(self) -> None:
+        """Pt cathodic- and anodic-first, TiN (equal branches) and SIROF (the opposite
+        branch larger when cathodic-first). Not tautological: the oracle follows the charge
+        through both phases of every pulse and converts it with whichever branch holds it."""
+        compared = 0
+        for calc in self._population():
+            assessment = calc.assess()
+            drift = assessment.water_window.drift
+            if not assessment.water_window.passes:  # the peak clause, not the drift
+                continue
+            exit_s = self._oracle_time(calc)
+            one_pulse = (1.0 / calc.p.frequency_hz) * (1.0 + 1e-9)
+            assert abs(drift.time_to_exit_s - exit_s) <= one_pulse, (
+                calc.p, calc.e.material, drift.time_to_exit_s, exit_s,
+            )
+            compared += 1
+        assert compared >= 100, compared
+
+    def test_the_reviewers_case_is_half_as_long(self) -> None:
+        """The ledger's measurement: Pt 500 um, cathodic-first, r_a = 1.3, 300 uA. The anodic
+        branch holds 0.1963495408493621 uC to the 0.8 V edge, not 0.3926990816987242."""
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(300.0, 200.0, 130.0, 1.0, charge_recovery_ratio=1.3),
+        )
+        drift = calc.assess().water_window.drift
+        assert drift.window_headroom_V == 0.8
+        assert drift.window_charge_uC == pytest.approx(0.1963495408493621, rel=1e-15)
+        assert drift.time_to_exit_s == pytest.approx(0.16782012038407015 / 2.0, rel=1e-12)
+
+    def test_a_measured_capacitance_is_one_value(self) -> None:
+        """The override is unchanged: one measurement, not split by polarity."""
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(300.0, 200.0, 130.0, 1.0, charge_recovery_ratio=1.3),
+            capacitance_uF_cm2=250.0,
+        )
+        drift = calc.assess().water_window.drift
+        assert drift.window_charge_uC == pytest.approx(0.8 * 250.0 * calc.e.area_cm2, rel=1e-15)
+
+    def test_a_capped_compliance_offset_means_the_window_fails(self) -> None:
+        """Ledger 140's cap stated that an offset reaching the headroom has made Water
+        window FAIL. Over-recovery broke it for every material whose opposite branch is the
+        smaller; it now holds in both directions. The sweep spans the materials, both
+        polarities, under- and over-recovery, trains and resting potentials."""
+        import math
+
+        capped = 0
+        for material, anodic_first, recovery, current, train, rest in itertools.product(
+            ("Pt", "PtIr", "AIROF", "SIROF", "TIROF", "TiN", "PEDOT", "SS316LVM"),
+            (False, True), (0.8, 0.95, 1.05, 1.3, 1.5), (20.0, 300.0),
+            (0.05, 1.0, math.inf), (0.0, -0.2),
+        ):
+            assessment = SafetyCalculator(
+                DiscElectrode(100.0, material),
+                StimProtocol(
+                    current, 200.0, 130.0, train, anodic_first=anodic_first,
+                    charge_recovery_ratio=recovery,
+                ),
+                compliance_V=10.0, resting_potential_V=rest,
+            ).assess()
+            result = assessment.compliance
+            if not (math.isfinite(result.offset_cap_V) and result.offset_V == result.offset_cap_V):
+                continue
+            window = next(c for c in assessment.checks if c.name == "Water window")
+            assert window.status is Status.FAIL, (material, anodic_first, recovery, current, train)
+            capped += 1
+        assert capped >= 300, capped
+
+
 class TestTheUnrecoveredChargeIsExactlyLinear:
     """Ledger 103, 104 and 112 (Phase 2 review F1, F2, F10): one expression for the residue.
 

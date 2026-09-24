@@ -99,6 +99,7 @@ def partial_recovery_exit_time_s(
     leading_window_V: float,
     opposite_window_V: float,
     max_pulses: int = 10_000_000,
+    opposite_capacitance_uF_cm2: float | None = None,
 ) -> float:
     """First time the interface leaves the window, following every phase of every pulse.
 
@@ -113,6 +114,12 @@ def partial_recovery_exit_time_s(
     ``leading_window_V`` and ``opposite_window_V`` are the positive distances from rest to
     the edge in the leading phase's direction and to the other edge.
 
+    ``opposite_capacitance_uF_cm2`` is the areal capacitance while the stored charge sits on
+    the other side of rest (ledger 141). The loop then follows the *charge*, and turns it into
+    a potential with whichever branch holds it: ``capacitance_uF_cm2`` on the leading side,
+    this one on the other. Omitted, one capacitance serves both, and the loop is the one
+    above, step for step.
+
     Returns ``inf`` if the window is not left within ``max_pulses``.
     """
     if frequency_hz <= 0.0:
@@ -121,12 +128,28 @@ def partial_recovery_exit_time_s(
     capacitance_F = (capacitance_uF_cm2 * 1e-6) * area_cm2
     excursion_V = charge_C / capacitance_F
 
-    potential_V = 0.0  # signed: positive is toward the leading phase's edge
+    if opposite_capacitance_uF_cm2 is None:
+        potential_V = 0.0  # signed: positive is toward the leading phase's edge
+        for pulse in range(1, max_pulses + 1):
+            potential_V += excursion_V
+            if potential_V > leading_window_V:
+                return pulse / frequency_hz
+            potential_V -= recovered_fraction * excursion_V
+            if -potential_V > opposite_window_V:
+                return pulse / frequency_hz
+        return math.inf
+
+    opposite_F = (opposite_capacitance_uF_cm2 * 1e-6) * area_cm2
+
+    def potential(q_C: float) -> float:
+        return q_C / (capacitance_F if q_C >= 0.0 else opposite_F)
+
+    stored_C = 0.0  # signed: positive is on the leading phase's side of rest
     for pulse in range(1, max_pulses + 1):
-        potential_V += excursion_V
-        if potential_V > leading_window_V:
+        stored_C += charge_C
+        if potential(stored_C) > leading_window_V:
             return pulse / frequency_hz
-        potential_V -= recovered_fraction * excursion_V
-        if -potential_V > opposite_window_V:
+        stored_C -= recovered_fraction * charge_C
+        if -potential(stored_C) > opposite_window_V:
             return pulse / frequency_hz
     return math.inf

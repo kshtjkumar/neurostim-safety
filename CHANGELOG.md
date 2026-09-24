@@ -138,6 +138,29 @@ less. For a 500 µm Pt disc at 100 µA, 200 µs, 130 Hz and 95 % recovery:
 - a continuous one goes to 0.926 V, the 0.6 V cap reached;
 - with a counter, a continuous train goes to an infinite requirement (it was 0.506 V).
 
+### An over-recovering drift is timed on the branch it charges
+
+A waveform whose return phase recovers more than the leading phase injected drifts
+toward the edge opposite the leading phase, so its offset is stored on that polarity's
+branch. The drift clause used the leading polarity's capacitance for the window budget
+in both directions. For most materials the two differ. A cathodic-first Pt pulse drifting
+anodic was given 250 µF/cm² where the anodic branch holds 125, so it was allowed twice
+the time to the edge, which is too permissive. An anodic-first Pt pulse was held to half
+the time, which is too strict. Both are corrected, and a measured capacitance is still
+one value.
+
+Only over-recovering waveforms with a derived capacitance move, 2592 of 16 848 swept, and
+only for materials whose two branches differ. Water-window ceilings move by exactly ×0.5
+to ×2 (732 down, 708 up). Water-window verdicts go CAUTION → FAIL in 34 cases and
+FAIL → CAUTION in 56. For a 500 µm Pt disc at 300 µA, 200 µs, 130 Hz, 1 s and 130 %
+recovery:
+
+- cathodic-first: the ceiling goes from 50.35 µA to 25.17 µA;
+- anodic-first: it goes from 18.88 µA to 37.76 µA.
+
+The compliance budget's cap on an unbalanced train's offset now always coincides with a
+Water window FAIL, in both drift directions.
+
 ### Shannon says it was fit on discs
 
 Shannon (1992): "the limit of safe stimulation is linearly related to electrode diameter,

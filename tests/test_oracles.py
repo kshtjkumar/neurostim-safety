@@ -1042,6 +1042,25 @@ class TestPartialRecoveryExitTime:
             opposite_window_V=0.8,
         ) == pytest.approx(9.0 / 50.0)
 
+    def test_over_recovery_charges_the_opposite_branch(self) -> None:
+        """Ledger 141. e = 0.5 V at 250 uF/cm^2 on the leading side; recovered at 130 %,
+        each pulse leaves 0.3 of its charge on the other side, where 125 uF/cm^2 turns it
+        into 0.3 V (not 0.15 V). After the return phase of pulse 3 the potential is -0.9 V,
+        past the 0.8 V edge: 3/50 s. With one capacitance it would be pulse 6, -0.9 V."""
+        area = math.pi * 0.025**2
+        kwargs = dict(
+            current_uA=1227.184630308513, pulse_width_us=200.0, recovered_fraction=1.3,
+            frequency_hz=50.0, area_cm2=area, capacitance_uF_cm2=250.0,
+            leading_window_V=0.6, opposite_window_V=0.8,
+        )
+        assert drift.partial_recovery_exit_time_s(
+            **kwargs, opposite_capacitance_uF_cm2=125.0
+        ) == pytest.approx(3.0 / 50.0)
+        assert drift.partial_recovery_exit_time_s(**kwargs) == pytest.approx(6.0 / 50.0)
+        assert drift.partial_recovery_exit_time_s(
+            **kwargs, opposite_capacitance_uF_cm2=250.0
+        ) == drift.partial_recovery_exit_time_s(**kwargs)
+
     def test_the_loop_never_evaluates_a_closed_form(self) -> None:
         text = Path(drift.__file__ or "").read_text(encoding="utf-8")
         body = text.split("def partial_recovery_exit_time_s(", 1)[1]

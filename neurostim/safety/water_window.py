@@ -222,6 +222,13 @@ class DcDrift:
     interface the same model takes out of the window at 0.42 s. An over-recovering pulse
     drifts toward the *other* edge, and its leading phase moves away from that edge, so
     nothing rides and the budget is the whole headroom.
+
+    **At the branch it is stored on** (ledger 141). ``C`` is the ``C_eff`` of the polarity
+    the offset heads for: the leading one for under-recovery, the opposite one for
+    over-recovery. The window budget used the leading polarity's for both, so a
+    cathodic-first Pt pulse drifting anodic was given 250 uF/cm^2 where the anodic branch
+    holds 125, and twice the time to the edge. A measured ``capacitance_uF_cm2`` is one
+    value and applies to both.
     """
 
     net_dc_current_uA: float
@@ -409,6 +416,7 @@ def evaluate(
     """
     mat = material if isinstance(material, Material) else get_material(material)
     validate_resting_potential_V(mat, resting_potential_V)
+    measured = capacitance_uF_cm2 is not None
     if capacitance_uF_cm2 is None:
         capacitance_uF_cm2 = effective_capacitance_uF_cm2(
             mat, anodic_first=anodic_first_for_capacitance
@@ -431,10 +439,20 @@ def evaluate(
         headroom = drift_headroom_V(
             mat.water_window, resting_potential_V, anodic=drift_anodic
         )
+        # The offset is stored on the branch it heads for (ledger 141): the leading
+        # polarity's for under-recovery, the opposite one's for over-recovery. A measured
+        # capacitance is one value, and so is the polarity-blind default (ledger 8).
+        drift_capacitance = capacitance_uF_cm2
+        if (
+            not measured
+            and anodic_first_for_capacitance is not None
+            and drift_anodic != anodic_first_for_capacitance
+        ):
+            drift_capacitance = effective_capacitance_uF_cm2(mat, anodic_first=drift_anodic)
         drift = DcDrift(
             net_dc_current_uA=net_dc_current_uA,
             window_headroom_V=headroom,
-            window_charge_uC=window_charge_uC(headroom, capacitance_uF_cm2, area_cm2),
+            window_charge_uC=window_charge_uC(headroom, drift_capacitance, area_cm2),
             train_duration_s=train_duration_s,
             riding_charge_uC=(
                 recovered_charge_uC if drift_anodic == anodic_first else 0.0

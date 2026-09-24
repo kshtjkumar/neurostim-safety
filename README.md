@@ -250,7 +250,8 @@ the electrode's own access resistance.
   of a resting potential or bias. Supply a measured `capacitance_uF_cm2` to override the
   derivation.
 - **DC drift** — the interface is a leak-free capacitor charged by the net unrecovered
-  current, so drift times are lower bounds. A real interface leaks and can reach a steady
+  current, so drift times are lower bounds. The capacitor has the `C_eff` of the polarity
+  the offset heads for, which for over-recovery is the one opposite the leading phase. A real interface leaks and can reach a steady
   state (Merrill 2005 §2.4). A continuous train with *any* unrecovered charge therefore
   gets a zero water-window ceiling and the headline refuses a number. That is a bound from
   the model, not a sourced damage threshold. The drift runs over the wall-clock
