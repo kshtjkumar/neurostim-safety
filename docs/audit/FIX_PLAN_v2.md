@@ -1079,7 +1079,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 68 | MED | PARTIAL | C0.1, C7.6 | branch floor now implementable (§3) |
 | 69 | MED | PARTIAL | C0.2, C0.5, C1.11, C3.5 | **FIXED** `978c1da` (T18 landed at C3.5); ledger gate at C0.5 |
 | 70 | — | N/A | — | vindication |
-| 71 | HIGH | OK | C4.5 | |
+| 71 | HIGH | OK | C4.5 | **FIXED** `c375476` |
 | 72 | HIGH | OK | C4.6 | |
 | 73 | HIGH | OK | C4.6 | |
 | 74 | HIGH | OK | C0.4, C7.4 | transcript regenerates from C0.4 on every numeric commit |
