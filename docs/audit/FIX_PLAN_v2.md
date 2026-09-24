@@ -1120,7 +1120,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 106 | HIGH | — (found in Phase 2 review, F4) | **C2.10** | **FIXED** `4dbca6e`; booking only: the missing section 6 rows, and the C2.4 row corrected |
 | 107 | HIGH | — (found in Phase 2 review, F5) | **C2.11** | **FIXED** `3bd56f0`; README, CHANGELOG, module docstrings, GUI train_duty_cycle field, example_output regenerated |
 | 108 | MED | — (found in Phase 2 review, F6) | **C3.0** (own commit immediately before C3.1; moved from C5.11 at ledger 123) | **FIXED** `5dc9eb1`; render text: describe() must print the combined peak-and-drift verdict |
-| 109 | MED | — (found in Phase 2 review, F7) | **unscheduled** | needs a decision on whether drift runs over on-time or wall-clock; conservative today. To be settled at the Phase 3 start, before C3.5 touches the voltage budget |
+| 109 | MED | — (found in Phase 2 review, F7) | **C4.2** (user decision after the Phase 3d review) | the drift runs over the wall-clock train while n_pulses, the mean and RMS currents and, since C3.17, the compliance train offset scale with train_duty_cycle; conservative today. Settled at C4.2 |
 | 110 | MED | — (found in Phase 2 review, F8) | C2.8, C2.9 | **FIXED** `1fc2cbc`; residual-net and partial-recovery populations at C2.8; partial-recovery oracle, `exits_during_train` boundary pair and over-recovery edge at C2.9 |
 | 111 | LOW | — (found in Phase 2 review, F9) | **unscheduled** | test-only. Run the oracle over the whole sweep with the set written literally; first Phase 3 commit |
 | 112 | LOW | — (found in Phase 2 review, F10) | C2.8 | **FIXED** `f4f08b8`; removed by the exact-linear net: the balance test becomes amplitude-independent |
@@ -1157,6 +1157,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 143 | HIGH | — (found in Phase 3c review, K2) | **C3.20** | **FIXED** `362752e`; render an infinite requirement as a refusal sentence naming why on every surface; report_to_json strictly valid (null plus a reason field), schema change documented |
 | 144 | LOW | — (found in Phase 3c review, K3) | **C3.21** | **DOCUMENTED** `2d87352` (bound stated, not modelled); compute the over-recovery overshoot from the clamped state if cheap and model-sourced, otherwise document the exception and its bound |
 | 145 | LOW | — (found in Phase 3c review, K4) | **C3.22** | **FIXED** `25cc8da`; correct the C3.12 row: numbers, statuses and limits identical; the detail's 'return phase' line moves, with before/after text |
+| 146 | LOW | — (found in Phase 3d review, L1) | **C4.0a** (first Phase 4 commit) | protocol_from_dict and every JSON/CSV reader map a null train_duration_s back to math.inf; report_to_json → load → protocol round-trip test for continuous and finite trains |
+| 147 | LOW | — (found in Phase 3d review, L2) | **C4.0a** | keep None for an unbounded row in the batch frame (object dtype), or document it; decided and justified in the commit |
+| 148 | LOW | — (found in Phase 3d review, L3) | **C4.0b** | correct the documented maximum deficit to the verified figure, citing the configuration |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
