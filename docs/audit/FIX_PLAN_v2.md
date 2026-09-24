@@ -1136,7 +1136,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 130 | LOW | — (found in Phase 3 review, H4) | **C3.10** | **FIXED** `982b65b`; separation guard on the largest half-dimension for elongated geometries |
 | 131 | MED | — (found in Phase 3 review, H5) | **C3.9** | **FIXED** `248a6f5`; each phase uses its own polarity's C_eff for the counter and for the active electrode's return-phase term |
 | 132 | LOW | — (found in Phase 3 review, H6) | **C3.10** | **FIXED** `982b65b`; the drift-CAUTION water-window header reads '-> CAUTION (...)' |
-| 133 | MED | — (found in Phase 3 review, H7) | **C3.11** | counter electrode not assessed: a design choice proposed to the user first; the out-of-scope statement lands in the README and compliance docstring regardless |
+| 133 | MED | — (found in Phase 3 review, H7) | **C3.11** | **FIXED** `b355890`; counter electrode not assessed: a design choice proposed to the user first; the out-of-scope statement lands in the README and compliance docstring regardless |
 | 134 | LOW | — (found in Phase 3 review addendum, H8) | **P3b docs commit** | ledger 8's note reworded: the 2x comes from the polarity-specific CIC and half-window together, and the re-check moves to ledger 7's boolean branches |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
