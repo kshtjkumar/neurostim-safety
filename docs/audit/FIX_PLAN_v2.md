@@ -1126,7 +1126,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
 | 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
 | 130 | LOW | — (found in Phase 3 review, H4) | **C3.10** | separation guard on the largest half-dimension for elongated geometries |
-| 131 | MED | — (found in Phase 3 review, H5) | **C3.9** | each phase uses its own polarity's C_eff for the counter and for the active electrode's return-phase term |
+| 131 | MED | — (found in Phase 3 review, H5) | **C3.9** | **FIXED** `248a6f5`; each phase uses its own polarity's C_eff for the counter and for the active electrode's return-phase term |
 | 132 | LOW | — (found in Phase 3 review, H6) | **C3.10** | the drift-CAUTION water-window header reads '-> CAUTION (...)' |
 | 133 | MED | — (found in Phase 3 review, H7) | **C3.11** | counter electrode not assessed: a design choice proposed to the user first; the out-of-scope statement lands in the README and compliance docstring regardless |
 | 134 | LOW | — (found in Phase 3 review addendum, H8) | **P3b docs commit** | ledger 8's note reworded: the 2x comes from the polarity-specific CIC and half-window together, and the re-check moves to ledger 7's boolean branches |
