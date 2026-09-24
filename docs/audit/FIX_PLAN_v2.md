@@ -1009,7 +1009,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 22 | MED | DOC | — | §8 |
 | 23 | MED | DOC | C6.6 | `square()`/`__pow__` only |
 | 24 | MED | OK | C4.1 | **FIXED** `53a0713` |
-| 25 | MED | OK | C4.1 | |
+| 25 | MED | OK | C4.1 (C4.1b) | **FIXED** `55afec4`; option (c), inherited constants labelled |
 | 26 | LOW | OK | C6.6 | |
 | 27 | LOW | OK | C6.6 | |
 | 28 | LOW | LISTED-ONLY | C3.4 | **FIXED** `d5136df`; own commit |
@@ -1165,7 +1165,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 147 | LOW | — (found in Phase 3d review, L2) | **C4.0a** | **FIXED** `e255fc9`; keep None for an unbounded row in the batch frame (object dtype), or document it; decided and justified in the commit |
 | 148 | LOW | — (found in Phase 3d review, L3) | **C4.0b** | **FIXED** `72df609`; correct the documented maximum deficit to the verified figure, citing the configuration |
 | 149 | LOW | — (found at C4.0a) | **C4.4** | the audit record's JSON strict, with the protocol's null duration explained as report_to_json does, and old records' digests still reproducible |
-| 150 | HIGH | — (found at C4.1b) | **C4.1b** | the water-window seed reads the result's own window, not the material looked up by key |
+| 150 | HIGH | — (found at C4.1b) | **C4.1b** | **FIXED** `55afec4`; the water-window seed reads the result's own window, not the material looked up by key |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
