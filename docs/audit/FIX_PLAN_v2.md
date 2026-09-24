@@ -1081,8 +1081,8 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 69 | MED | PARTIAL | C0.2, C0.5, C1.11, C3.5 | **FIXED** `978c1da` (T18 landed at C3.5); ledger gate at C0.5 |
 | 70 | — | N/A | — | vindication |
 | 71 | HIGH | OK | C4.5 | **FIXED** `c375476` |
-| 72 | HIGH | OK | C4.6 | |
-| 73 | HIGH | OK | C4.6 | |
+| 72 | HIGH | OK | C4.6 | **FIXED** `a879ef9`; |
+| 73 | HIGH | OK | C4.6 | **FIXED** `a879ef9`; |
 | 74 | HIGH | OK | C0.4, C7.4 | transcript regenerates from C0.4 on every numeric commit |
 | 75 | HIGH | OK | C4.8 | |
 | 76 | HIGH | OK | C7.4 | exit criterion 6 restated so it no longer conflicts |
@@ -1172,7 +1172,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 148 | LOW | — (found in Phase 3d review, L3) | **C4.0b** | **FIXED** `72df609`; correct the documented maximum deficit to the verified figure, citing the configuration |
 | 149 | LOW | — (found at C4.0a) | **C4.4** | **FIXED** `889b525`; the audit record's JSON strict, with the protocol's null duration explained as report_to_json does, and old records' digests still reproducible |
 | 150 | HIGH | — (found at C4.1b) | **C4.1b** | **FIXED** `55afec4`; the water-window seed reads the result's own window, not the material looked up by key |
-| 151 | LOW | — (found at C4.6) | **C4.6** | attribute the 316LVM 1.2 V reversible limit to Riedy & Walter's ref. [5], as their p. 662 does |
+| 151 | LOW | — (found at C4.6) | **C4.6** | **FIXED** `a879ef9`; attribute the 316LVM 1.2 V reversible limit to Riedy & Walter's ref. [5], as their p. 662 does |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
