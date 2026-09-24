@@ -257,3 +257,211 @@ class TestTheWindowSeedReadsTheWindowItIsGiven:
         )
         assert search.passes(ceiling)
         assert not search.passes(math.nextafter(ceiling, math.inf))
+
+
+class TestAnUnverifiedLimitMarksEverythingDerivedFromIt:
+    """Ledgers 19 and 60 (T7). An unverified ``with_measured_cic`` value sets the interfacial
+    capacitance, and through it the water-window excursion, the peak potential and the
+    compliance polarisation. Raising the user CIC 100 -> 500 uC/cm^2 moved C 250 -> 833 and
+    loosened the water window, and only the Charge injection row said PROVISIONAL.
+
+    Asserted by dependency, not by a list: every limit-bearing check whose ceiling moves
+    when only the unverified number moves must be provisional.
+    """
+
+    PROTOCOL = StimProtocol(80.0, 200.0, 130.0, 1.0)
+
+    def _assess(self, cic, protocol=None, **kwargs):
+        return SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), protocol or self.PROTOCOL,
+            material=with_measured_cic(get_material("Pt"), cic), compliance_V=10.0, **kwargs,
+        ).assess()
+
+    @pytest.mark.parametrize(
+        "protocol",
+        [
+            StimProtocol(80.0, 200.0, 130.0, 1.0),
+            StimProtocol(20.0, 200.0, 130.0, 1.0, anodic_first=True),
+            StimProtocol(20.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9),
+        ],
+    )
+    def test_every_check_that_depends_on_the_unverified_number_is_provisional(self, protocol):
+        low, high = self._assess(100.0, protocol), self._assess(500.0, protocol)
+        dependent = [
+            a.name for a, b in zip(low.checks, high.checks, strict=True)
+            if a.ceiling_uA != b.ceiling_uA
+        ]
+        assert "Water window" in dependent and "Compliance voltage" in dependent
+        for assessment in (low, high):
+            flags = {c.name: c.provisional for c in assessment.checks}
+            assert all(flags[name] for name in dependent), (dependent, flags)
+
+    def test_the_water_window_detail_says_so(self):
+        text = self._assess(500.0).water_window.describe()
+        assert "PROVISIONAL" in text
+        assert "PROVISIONAL" not in SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), self.PROTOCOL
+        ).assess().water_window.describe()
+
+    def test_the_compliance_detail_says_so(self):
+        assert "PROVISIONAL" in self._assess(500.0).compliance.describe()
+
+    def test_the_pdf_rows_derived_from_it_say_so(self):
+        from neurostim.io.report import _computed_rows, _provenance_rows
+
+        calc = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), self.PROTOCOL,
+            material=with_measured_cic(get_material("Pt"), 62.0), compliance_V=10.0,
+        )
+        assessment = calc.assess()
+        provenance = dict(_provenance_rows(calc, assessment))
+        computed = dict(_computed_rows(calc, assessment))
+        assert "PROVISIONAL" in provenance["Interface model"]
+        assert "unverified" in provenance["Water window"]
+        assert "PROVISIONAL" in computed["Peak electrode potential"]
+        assert "PROVISIONAL" in computed["Required compliance"]
+
+    def test_a_measured_capacitance_is_labelled_measured_not_derived(self):
+        """The interface line said "derived from the material's own CIC" whatever the
+        caller passed."""
+        result = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), self.PROTOCOL, capacitance_uF_cm2=300.0
+        ).assess().water_window
+        assert "derived" not in result.interface_model
+        assert "supplied" in result.interface_model
+
+    def test_shipped_materials_carry_no_such_flag(self):
+        for key in ("Pt", "SIROF", "TiN"):
+            assessment = SafetyCalculator(
+                DiscElectrode(100.0, key), self.PROTOCOL, compliance_V=10.0
+            ).assess()
+            assert "PROVISIONAL" not in assessment.water_window.interface_model
+
+    def test_an_unverified_chronic_threshold_makes_its_check_provisional(self):
+        """Ledger 30 gave the threshold a flag; the check now reads it."""
+        pt = get_material("Pt")
+        material = replace(pt, chronic_threshold=replace(pt.chronic_threshold, verified=False))
+        assessment = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), self.PROTOCOL, material=material
+        ).assess()
+        chronic = next(c for c in assessment.checks if c.name == "Chronic degradation")
+        assert chronic.provisional is True
+
+
+class TestADriftBoundLimitIsProvisional:
+    """Ledger 118 (Phase 2 review F16). A Water window limit set by the drift clause rests
+    on a no-leak capacitor the code itself calls a lower bound; Merrill 2005 sec 2.4
+    describes imbalanced trains reaching a steady state. It was not flagged."""
+
+    def test_drift_binding_is_provisional_and_says_no_leak_bound(self):
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9),
+        ).assess()
+        window = next(c for c in assessment.checks if c.name == "Water window")
+        balanced = next(
+            c for c in SafetyCalculator(
+                DiscElectrode(500.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0)
+            ).assess().checks if c.name == "Water window"
+        )
+        assert window.ceiling_uA < balanced.ceiling_uA  # the premise: the drift binds
+        assert window.provisional is True
+        assert "no-leak bound" in window.summary
+        assert balanced.provisional is False
+
+    def test_an_unbalanced_train_whose_peak_binds_is_not_marked_for_the_drift(self):
+        """Drift participates but does not bind: a short over-recovering train heads for the
+        far edge with nothing riding on it. (Under-recovery spends the riding charge first,
+        ledger 105, so its drift term binds even for a very short train.)"""
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, 0.01, charge_recovery_ratio=1.001),
+        ).assess()
+        window = next(c for c in assessment.checks if c.name == "Water window")
+        balanced = next(
+            c for c in SafetyCalculator(
+                DiscElectrode(500.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 0.01)
+            ).assess().checks if c.name == "Water window"
+        )
+        assert window.ceiling_uA == balanced.ceiling_uA  # the premise: the peak binds
+        assert window.provisional is False
+        assert "no-leak bound" not in window.summary
+
+
+class TestAProvisionalBindingLimitIsMarkedWhereTheLimitIsShown:
+    """Ledger 128 (Phase 3 review H2). ``Check.provisional`` reached only the JSON checks
+    list. When a provisional check binds -- dbs_3389 at 3000 uA / 60 us / 130 Hz, 10 V,
+    where Shannon binds and is provisional -- describe(), the PDF header, the GUI headline
+    and the figure showed the limiting current with no caveat."""
+
+    @staticmethod
+    def _calc(current=3000.0):
+        from neurostim.electrodes import electrode
+
+        return SafetyCalculator(
+            electrode("dbs_3389"), StimProtocol(current, 60.0, 130.0, 1.0), compliance_V=10.0
+        )
+
+    def test_the_premise(self):
+        assessment = self._calc().assess()
+        binding = next(c for c in assessment.checks if c.name == assessment.limiting_mechanism)
+        assert binding.provisional is True
+        assert assessment.limiting_current_uA is not None
+
+    def test_every_headline_surface_says_provisional(self):
+        from neurostim.gui.app import headline_text
+        from neurostim.io.report import _headline_html
+
+        calc = self._calc()
+        assessment = calc.assess()
+        note = assessment.provisional_limit_note()
+        assert note.startswith("PROVISIONAL")
+        assert "Shannon criterion" in note
+        # The headline block: the "Limiting current" line and its indented lines.
+        lines = assessment.describe().splitlines()
+        start = next(i for i, line in enumerate(lines) if line.startswith("Limiting current:"))
+        block = [lines[start]]
+        for line in lines[start + 1:]:
+            if not line.startswith("  "):
+                break
+            block.append(line)
+        assert any(note in line for line in block)
+        assert "PROVISIONAL" in headline_text(assessment)
+        assert "PROVISIONAL" in _headline_html(assessment)
+
+    def test_the_figure_annotation_says_provisional(self):
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        from neurostim.viz.plots import safety_summary
+
+        fig, _ = safety_summary(self._calc())
+        texts = [t.get_text() for t in fig.findobj(matplotlib.text.Text)]
+        plt.close(fig)
+        assert any("binding limit" in t and "provisional" in t.lower() for t in texts)
+
+    def test_a_non_provisional_binding_limit_is_not_marked(self):
+        from neurostim.gui.app import headline_text
+
+        assessment = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0), compliance_V=10.0
+        ).assess()
+        binding = next(c for c in assessment.checks if c.name == assessment.limiting_mechanism)
+        assert binding.provisional is False  # the premise
+        assert assessment.provisional_limit_note() == ""
+        assert "PROVISIONAL" not in headline_text(assessment)
+
+    def test_the_monotonicity_caps_binder_is_read_when_the_cap_binds(self):
+        """The inherited limit is the biphasic counterpart's; its binder's flag is the one
+        that applies."""
+        from dataclasses import replace as dc_replace
+
+        calc = self._calc()
+        mono = SafetyCalculator(
+            calc.e, dc_replace(calc.p, waveform="monophasic"), compliance_V=10.0
+        ).assess()
+        if mono.monotonicity_capped:
+            assert mono.limit_is_provisional == mono.biphasic_provisional
+        assert isinstance(mono.biphasic_provisional, bool)

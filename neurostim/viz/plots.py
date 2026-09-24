@@ -273,7 +273,8 @@ def current_limit_sweep(
                    alpha=0.6)
         ax.annotate(
             f"binding limit {format_limit(binding_uA)} µA\n"
-            f"({assessment.limiting_mechanism})",
+            f"({assessment.limiting_mechanism})"
+            + (", provisional" if assessment.limit_is_provisional else ""),
             xy=(currents[0], binding_uA),
             xytext=(2, 3),
             textcoords="offset points",

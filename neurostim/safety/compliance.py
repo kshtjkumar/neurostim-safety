@@ -364,6 +364,8 @@ class ComplianceResult:
     """The counter's C_eff for an overshoot past rest, at the leading polarity."""
     overshoot_fraction: float = 0.0
     """``max(0, r_a - 1)``: the share of the leading charge the return phase carries past rest."""
+    capacitance_provisional: bool = False
+    """Whether C_eff came from an unverified charge-injection limit (ledgers 19, 60)."""
     offset_pulses: float = 0.0
     """``N - 1``: the pulses before the last one, each leaving its residue (ledger 140).
 
@@ -571,7 +573,12 @@ class ComplianceResult:
             lines.append(f"  lead R        {self.lead_resistance_ohm:.0f} ohm")
         lines += [
             f"  ohmic drop    {self.ohmic_drop_V:.3f} V",
-            f"  polarisation  {self.polarisation_V:.3f} V",
+            f"  polarisation  {self.polarisation_V:.3f} V"
+            + (
+                " PROVISIONAL (C_eff derived from an unverified charge-injection limit)"
+                if self.capacitance_provisional
+                else ""
+            ),
         ]
         if self.counter_modelled:
             lines.append(f"  counter pol.  {self.counter_polarisation_V:.3f} V")
@@ -744,6 +751,7 @@ def evaluate(
     density = charge_density_uC_cm2(protocol.charge_per_phase_uC, electrode.area_cm2)
     # Same interfacial capacitance the water-window check uses: the polarisation term in
     # the voltage budget and the excursion inside the window are the same quantity.
+    measured_capacitance = capacitance_uF_cm2 is not None
     if capacitance_uF_cm2 is None:
         capacitance_uF_cm2 = effective_capacitance_uF_cm2(
             mat, anodic_first=protocol.anodic_first
@@ -849,6 +857,11 @@ def evaluate(
         return_capacitance_uF_cm2=return_capacitance,
         counter_return_capacitance_uF_cm2=counter_return_capacitance,
         overshoot_fraction=overshoot_fraction,
+        capacitance_provisional=(
+            not measured_capacitance
+            and mat.water_window is not None
+            and not mat.cic.verified
+        ),
         offset_pulses=offset_pulses,
         offset_factor=offset_factor,
         offset_on_return=offset_on_return,

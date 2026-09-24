@@ -227,6 +227,94 @@ def _required_compliance_text(calc: SafetyCalculator, result: ComplianceResult) 
     return f"{text}; monopolar single-interface budget assumed)"
 
 
+def _headline_html(assessment: SafetyAssessment) -> str:
+    """The PDF's one-line verdict: status, what did not run, the limit and its caveats.
+
+    A limit set by a provisional check is marked here too (ledger 128).
+    """
+    verdict = (
+        f'<font color="{_STATUS_HEX[assessment.status]}">'
+        f"<b>{assessment.status.value}</b></font>"
+    )
+    # The status is the worst verdict among the checks that ran, so the ones that did not
+    # run are named beside it rather than left for the reader to spot in the table.
+    not_evaluated = assessment.not_evaluated_note()
+    # In place of the amplitude, never beside it: a reader who sees a number will
+    # programme it whatever the sentence next to it says (ledger 84).
+    limit_uA = assessment.limiting_current_uA
+    headline = (
+        f"<b>{assessment.no_safe_amplitude_note()}</b>"
+        if limit_uA is None
+        else (
+            f"limiting current "
+            f"<b>{format_limit(limit_uA)} &micro;A</b> "
+            f"({assessment.limiting_mechanism})"
+        )
+    )
+    incomplete = assessment.limits_incomplete_note()
+    provisional = assessment.provisional_limit_note()
+    return (
+        f"Overall assessment: {verdict}"
+        + (f" {not_evaluated}" if not_evaluated else "")
+        + f" &middot; {headline}"
+        + (f" &middot; <b>{provisional}</b>" if provisional else "")
+        + (f" &middot; {incomplete}" if incomplete and limit_uA is not None else "")
+    )
+
+
+def _computed_rows(
+    calc: SafetyCalculator, assessment: SafetyAssessment
+) -> list[tuple[str, str]]:
+    """The PDF's "Computed quantities" rows.
+
+    A quantity derived from an unverified charge-injection limit says PROVISIONAL, as the
+    Charge injection row does: the peak potential and the required compliance both rest
+    on the capacitance that limit sets (ledger 60).
+    """
+    rows: list[tuple[str, str]] = [
+        (
+            "Charge density",
+            f"{assessment.charge.charge_density_uC_cm2:.4g} &micro;C/cm&sup2; per phase",
+        ),
+        (
+            "Shannon k",
+            f"{assessment.shannon.k_metric:.3f} "
+            f"(threshold {calc.k:.2f}; Shannon 1992, Merrill 2005 eq. 5.1)",
+        ),
+        (
+            "Shannon current limit",
+            f"{format_limit(assessment.shannon.max_current_uA)} &micro;A",
+        ),
+        (
+            "Charge-injection limit",
+            f"{format_limit(assessment.charge.cic_limit_uC_cm2)} "
+            f"&micro;C/cm&sup2; "
+            f"({calc.policy} policy)",
+        ),
+        (
+            "Charge-injection current limit",
+            f"{format_limit(assessment.charge.max_current_uA)} &micro;A",
+        ),
+        (
+            "Peak electrode potential",
+            f"{assessment.water_window.peak_potential_V:+.3f} V "
+            f"{_potential_scale(calc)}",
+        ),
+        (
+            "Required compliance",
+            _required_compliance_text(calc, assessment.compliance),
+        ),
+    ]
+    marked = {
+        "Peak electrode potential": assessment.water_window.capacitance_provisional,
+        "Required compliance": assessment.compliance.capacitance_provisional,
+    }
+    return [
+        (label, f"{value} PROVISIONAL" if marked.get(label) else value)
+        for label, value in rows
+    ]
+
+
 def _provenance_rows(
     calc: SafetyCalculator, assessment: SafetyAssessment
 ) -> list[tuple[str, str]]:
@@ -239,7 +327,12 @@ def _provenance_rows(
         ("Charge-injection limit", calc.material.cic.describe()),
     ]
     if calc.material.water_window is not None:
-        prov.append(("Water window", calc.material.water_window.describe()))
+        window = calc.material.water_window.describe()
+        if assessment.water_window.capacitance_provisional:
+            # The limits are the source's; the headroom beside them came off the user's
+            # unverified CIC through C_eff (ledger 60).
+            window += "; the excursion within it uses C_eff from an unverified CIC"
+        prov.append(("Water window", window))
     else:
         prov.append(
             ("Water window", "no potential limits on record for this material")
@@ -296,39 +389,7 @@ def build_report(
     story.append(Paragraph(byline, styles["small"]))
     story.append(Spacer(1, 4 * mm))
 
-    verdict = (
-        f'<font color="{_STATUS_HEX[assessment.status]}">'
-        f"<b>{assessment.status.value}</b></font>"
-    )
-    # The status is the worst verdict among the checks that ran, so the ones that did not
-    # run are named beside it rather than left for the reader to spot in the table.
-    not_evaluated = assessment.not_evaluated_note()
-    # In place of the amplitude, never beside it: a reader who sees a number will
-    # programme it whatever the sentence next to it says (ledger 84).
-    limit_uA = assessment.limiting_current_uA
-    headline = (
-        f"<b>{assessment.no_safe_amplitude_note()}</b>"
-        if limit_uA is None
-        else (
-            f"limiting current "
-            f"<b>{format_limit(limit_uA)} &micro;A</b> "
-            f"({assessment.limiting_mechanism})"
-        )
-    )
-    incomplete = assessment.limits_incomplete_note()
-    story.append(
-        Paragraph(
-            f"Overall assessment: {verdict}"
-            + (f" {not_evaluated}" if not_evaluated else "")
-            + f" &middot; {headline}"
-            + (
-                f" &middot; {incomplete}"
-                if incomplete and limit_uA is not None
-                else ""
-            ),
-            styles["body"],
-        )
-    )
+    story.append(Paragraph(_headline_html(assessment), styles["body"]))
     story.append(Spacer(1, 3 * mm))
 
     story.append(Paragraph("Electrode", styles["h2"]))
@@ -387,45 +448,7 @@ def build_report(
     story.append(_checks_table(assessment, styles))
 
     story.append(Paragraph("Computed quantities", styles["h2"]))
-    story.append(
-        _kv_table(
-            [
-                (
-                    "Charge density",
-                    f"{assessment.charge.charge_density_uC_cm2:.4g} &micro;C/cm&sup2; per phase",
-                ),
-                (
-                    "Shannon k",
-                    f"{assessment.shannon.k_metric:.3f} "
-                    f"(threshold {calc.k:.2f}; Shannon 1992, Merrill 2005 eq. 5.1)",
-                ),
-                (
-                    "Shannon current limit",
-                    f"{format_limit(assessment.shannon.max_current_uA)} &micro;A",
-                ),
-                (
-                    "Charge-injection limit",
-                    f"{format_limit(assessment.charge.cic_limit_uC_cm2)} "
-                    f"&micro;C/cm&sup2; "
-                    f"({calc.policy} policy)",
-                ),
-                (
-                    "Charge-injection current limit",
-                    f"{format_limit(assessment.charge.max_current_uA)} &micro;A",
-                ),
-                (
-                    "Peak electrode potential",
-                    f"{assessment.water_window.peak_potential_V:+.3f} V "
-                    f"{_potential_scale(calc)}",
-                ),
-                (
-                    "Required compliance",
-                    _required_compliance_text(calc, assessment.compliance),
-                ),
-            ],
-            styles,
-        )
-    )
+    story.append(_kv_table(_computed_rows(calc, assessment), styles))
 
     story.append(Paragraph("Provenance of applied limits", styles["h2"]))
     story.append(_kv_table(_provenance_rows(calc, assessment), styles))

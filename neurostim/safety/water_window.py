@@ -108,6 +108,28 @@ def effective_capacitance_uF_cm2(
     return limit / available_V
 
 
+def interface_model_note(material: Material, *, measured: bool) -> str:
+    """Where the interfacial capacitance came from, as every surface names it.
+
+    A caller-supplied capacitance is named as such; it used to be labelled "derived from
+    the material's own CIC" whatever was passed. A capacitance derived from an unverified
+    charge-injection limit (a ``with_measured_cic`` value) says PROVISIONAL: it sets the
+    excursion, the peak potential and the compliance polarisation, and only the Charge
+    injection row used to say so (ledgers 19, 60).
+    """
+    if measured:
+        return "capacitance supplied by the caller"
+    if material.water_window is None:
+        return "no window on record; smooth-metal double-layer capacitance"
+    note = "capacitance derived from the material's own CIC and window"
+    if not material.cic.verified:
+        note += (
+            ", PROVISIONAL: the charge-injection limit it is derived from is unverified "
+            f"({material.cic.reference})"
+        )
+    return note
+
+
 def validate_resting_potential_V(
     material: Material | str, resting_potential_V: float
 ) -> None:
@@ -420,6 +442,11 @@ class WaterWindowResult:
             lines.append(self.drift.describe())
         return "\n".join(lines)
 
+    @property
+    def capacitance_provisional(self) -> bool:
+        """Whether C_eff came from an unverified charge-injection limit (ledgers 19, 60)."""
+        return "PROVISIONAL" in self.interface_model
+
 
 def evaluate(
     material: Material | str,
@@ -499,6 +526,7 @@ def evaluate(
         capacitance_uF_cm2 = effective_capacitance_uF_cm2(
             mat, anodic_first=anodic_first_for_capacitance
         )
+    interface_model = interface_model_note(mat, measured=measured)
     excursion = polarisation_V(charge_density_uC_cm2, capacitance_uF_cm2)
     polarity = "anodic" if anodic_first else "cathodic"
     sign = 1.0 if anodic_first else -1.0
@@ -553,6 +581,7 @@ def evaluate(
         peak_potential_V=peak,
         polarity=polarity,
         capacitance_uF_cm2=capacitance_uF_cm2,
+        interface_model=interface_model,
         drift=drift,
     )
 

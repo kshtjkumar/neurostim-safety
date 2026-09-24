@@ -338,6 +338,8 @@ class SafetyAssessment:
     """The check that binds the biphasic counterpart, named when the cap is what binds."""
     counter_charge: charge_mod.ChargeResult | None = None
     """The counter electrode's own charge-injection result; ``None`` without a counter."""
+    biphasic_provisional: bool = False
+    """Whether the check binding the biphasic counterpart is provisional (ledger 128)."""
     counter_charge_interval_uA: Interval | None = None
     """The counter's ceiling over its published CIC range, in leading amplitude (ledger 136)."""
 
@@ -687,6 +689,32 @@ class SafetyAssessment:
             return self.biphasic_mechanism
         return min(self._limit_bearing, key=lambda c: c.ceiling_uA).name
 
+    @property
+    def limit_is_provisional(self) -> bool:
+        """Whether the limit rests on a check flagged provisional (ledger 128).
+
+        The binding check's own flag, or, when the monotonicity cap binds, the flag of the
+        check that binds the biphasic counterpart, since that is the limit inherited.
+        """
+        if self.monotonicity_capped:
+            return self.biphasic_provisional
+        return min(self._limit_bearing, key=lambda c: c.ceiling_uA).provisional
+
+    def provisional_limit_note(self) -> str:
+        """Sentence marking a provisional limit wherever the limit is shown; else empty.
+
+        ``Check.provisional`` reached only the JSON checks list, so a limit set by a
+        provisional check -- dbs_3389 at 3000 uA / 60 us, where Shannon binds -- was
+        printed with no caveat on describe(), the PDF header, the GUI headline and the
+        figure (ledger 128). One renderer for all of them.
+        """
+        if self.limiting_current_uA is None or not self.limit_is_provisional:
+            return ""
+        return (
+            f"PROVISIONAL: the binding check ({self.limiting_mechanism}) rests on a "
+            f"constant or model flagged as unconfirmed; see its detail"
+        )
+
     def monotonicity_cap_note(self) -> str:
         """Sentence saying the limit is inherited from the biphasic waveform; else empty."""
         if not self.monotonicity_capped:
@@ -758,6 +786,9 @@ class SafetyAssessment:
                 f"{self._published_range_note()}",
                 f"  by kind: {self._by_kind_line()}",
             ]
+            provisional = self.provisional_limit_note()
+            if provisional:
+                lines.append(f"  {provisional}")
             capped = self.monotonicity_cap_note()
             if capped:
                 lines.append(f"  {capped}")
@@ -1415,7 +1446,10 @@ def _charge_check(result: charge_mod.ChargeResult, waveform: str) -> Check:
 
 
 def _water_window_check(
-    result: ww_mod.WaterWindowResult, dropped: tuple[str, ...] = ()
+    result: ww_mod.WaterWindowResult,
+    dropped: tuple[str, ...] = (),
+    *,
+    drift_binds: bool = False,
 ) -> Check:
     """Two clauses: what one pulse does, and what the train leaves behind.
 
@@ -1454,6 +1488,13 @@ def _water_window_check(
         )
     drift = result.drift
     if drift is not None and drift.drifts:
+        # When the drift clause sets the limit, the limit is the no-leak capacitor's: a
+        # lower bound on the time, not a sourced threshold (ledger 118).
+        no_leak = (
+            "; the limit is a no-leak bound (the capacitor model has no leakage)"
+            if drift_binds
+            else ""
+        )
         train = (
             "a continuous train"
             if math.isinf(drift.train_duration_s)
@@ -1469,6 +1510,7 @@ def _water_window_check(
                     f"peak {result.peak_potential_V:+.2f} V is inside the window, but "
                     f"{drift.net_dc_current_uA:+.4g} uA of net DC reaches the edge in "
                     f"{drift.time_to_exit_s:.4g} s of on-time -- within {train}"
+                    f"{no_leak}"
                 ),
                 detail=result.describe(),
             )
@@ -1479,7 +1521,7 @@ def _water_window_check(
                 f"peak {result.peak_potential_V:+.2f} V, "
                 f"{result.headroom_V:.2f} V headroom, but "
                 f"{drift.net_dc_current_uA:+.4g} uA of net DC reaches the edge in "
-                f"{drift.time_to_exit_s:.4g} s of on-time -- after {train}"
+                f"{drift.time_to_exit_s:.4g} s of on-time -- after {train}{no_leak}"
             ),
             detail=result.describe(),
         )
@@ -2073,6 +2115,17 @@ class SafetyCalculator:
                 counter_result, self.p, self.counter_electrode.area_cm2
             )
 
+        # The drift binds when it lowers the ceiling below the peak clause's own (ledger 118).
+        ww_ceiling_uA = _water_window_ceiling_uA(ww_result, self.p, self.e.area_cm2)
+        drift_binds = (
+            ww_result.drift is not None
+            and ww_result.drift.drifts
+            and ww_ceiling_uA
+            < _water_window_ceiling_uA(
+                replace(ww_result, drift=None), self.p, self.e.area_cm2
+            )
+        )
+
         raw_checks = (
             _shannon_check(
                 shannon_result,
@@ -2083,7 +2136,9 @@ class SafetyCalculator:
                 geometry_note=shannon_mod.geometry_caveat(self.e),
             ),
             _charge_check(charge_result, self.p.waveform),
-            _water_window_check(ww_result, self.material.dropped),
+            _water_window_check(
+                ww_result, self.material.dropped, drift_binds=drift_binds
+            ),
             _envelope_check(envelope_result),
             _current_density_check(jd_result),
             _regime_check(self.e, self.p),
@@ -2108,9 +2163,7 @@ class SafetyCalculator:
         ceilings = {
             "Shannon criterion": shannon_result.max_current_uA,
             "Charge injection limit": charge_result.max_current_uA,
-            "Water window": _water_window_ceiling_uA(
-                ww_result, self.p, self.e.area_cm2
-            ),
+            "Water window": ww_ceiling_uA,
             "Current density": _current_density_ceiling_uA(
                 jd_result, self.p, self.e.area_cm2
             ),
@@ -2139,10 +2192,15 @@ class SafetyCalculator:
             "Charge injection limit": bool(charge_result.condition_warning)
             or bool(charge_result.policy_warning)
             or not charge_result.verified,
-            # The window itself may be provisional, and the interfacial capacitance is
-            # derived from the material's own CIC unless the caller measured one.
-            "Water window": ww_result.window is not None
-            and not ww_result.window.verified,
+            # The window itself may be provisional; the interfacial capacitance is derived
+            # from the material's own CIC unless the caller measured one, and an unverified
+            # CIC makes it provisional (ledgers 19, 60); and a limit the drift clause sets is
+            # the no-leak capacitor's (ledger 118).
+            "Water window": (
+                ww_result.window is not None and not ww_result.window.verified
+            )
+            or ww_result.capacitance_provisional
+            or drift_binds,
             # Always. Butterwick's threshold is chick membrane and retina, so the margin
             # is against a preparation that is not the one being stimulated -- which is
             # also why this check never returns a bare PASS.
@@ -2152,11 +2210,13 @@ class SafetyCalculator:
             "Microelectrode charge/phase": cogan2016.in_regime_transition(
                 self.e.area_cm2
             ),
-            # ChronicThreshold carries no `verified` field yet (ledger 30); when it does,
-            # this reads it.
-            "Chronic degradation": False,
-            # An estimated access resistance is the dominant term in the voltage budget.
-            "Compliance voltage": not compliance_result.access_resistance_is_exact,
+            # The threshold's own flag (ledger 30).
+            "Chronic degradation": self.material.chronic_threshold is not None
+            and not self.material.chronic_threshold.verified,
+            # An estimated access resistance is the dominant term in the voltage budget, and
+            # the polarisation rests on the same capacitance the water window uses.
+            "Compliance voltage": not compliance_result.access_resistance_is_exact
+            or compliance_result.capacitance_provisional,
             # The same caveats as the active electrode's limit.
             "Counter charge injection": counter_result is not None
             and (
@@ -2183,7 +2243,7 @@ class SafetyCalculator:
                 for check in raw_checks
             )
         )
-        cap_uA, cap_mechanism = self._biphasic_cap()
+        cap_uA, cap_mechanism, cap_provisional = self._biphasic_cap()
         return SafetyAssessment(
             electrode=self.e,
             protocol=self.p,
@@ -2197,6 +2257,7 @@ class SafetyCalculator:
             policy=self.policy,
             biphasic_ceiling_uA=cap_uA,
             biphasic_mechanism=cap_mechanism,
+            biphasic_provisional=cap_provisional,
             counter_charge=counter_result,
             counter_charge_interval_uA=(
                 None
@@ -2207,7 +2268,7 @@ class SafetyCalculator:
             ),
         )
 
-    def _biphasic_cap(self) -> tuple[float, str | None]:
+    def _biphasic_cap(self) -> tuple[float, str | None, bool]:
         """The limit the same electrode and protocol report as a biphasic waveform.
 
         A monophasic protocol is a strictly worse waveform and cannot earn a higher limit
@@ -2230,15 +2291,19 @@ class SafetyCalculator:
         Recurses exactly once: the twin is biphasic, so its own call returns immediately.
         """
         if self.p.waveform != "monophasic":
-            return math.inf, None
+            return math.inf, None, False
         try:
             counterpart = replace(self.p, waveform="biphasic")
         except ValueError:
-            return math.inf, None
+            return math.inf, None, False
         twin = copy.copy(self)
         twin.p = counterpart
         assessment = twin.assess()
-        return assessment.limit_bearing_ceiling_uA, assessment.limiting_mechanism
+        return (
+            assessment.limit_bearing_ceiling_uA,
+            assessment.limiting_mechanism,
+            assessment.limit_is_provisional,
+        )
 
     def report(self) -> dict:
         """Flat dictionary of results.

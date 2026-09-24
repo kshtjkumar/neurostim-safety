@@ -240,6 +240,27 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### A provisional limit says so wherever it is shown
+
+- A limit set by a check flagged provisional is marked on `describe()`, the PDF header,
+  the GUI headline and the summary figure: "PROVISIONAL: the binding check (Shannon
+  criterion) rests on a constant or model flagged as unconfirmed". It used to be marked
+  only in the JSON check list. When the monotonicity cap binds, the biphasic
+  counterpart's binding check decides. In a 3 072-configuration sweep, 894 of the 1 536
+  headlines with a limit are now marked; none were before.
+- An unverified charge-injection limit (a `with_measured_cic` value) sets the interfacial
+  capacitance. Everything derived from it now says PROVISIONAL: the Water window and
+  Compliance voltage checks, the water-window detail's interface line, the compliance
+  polarisation, and the PDF's peak potential, required compliance, interface model and
+  water-window provenance rows. This is asserted by dependency: every check whose ceiling
+  moves when only the unverified number moves is flagged.
+- A Water window limit set by the drift clause is provisional, and says "the limit is a
+  no-leak bound": the capacitor model has no leakage. (2 016 shipped configurations
+  gain the flag; no number moves.)
+- A caller-supplied `capacitance_uF_cm2` is labelled "capacitance supplied by the
+  caller". It was labelled "derived from the material's own CIC".
+- An unverified chronic threshold makes the Chronic degradation check provisional.
+
 ### The DC drift runs over the train's on-time
 
 The water-window drift clause timed the offset against the train's wall-clock duration,

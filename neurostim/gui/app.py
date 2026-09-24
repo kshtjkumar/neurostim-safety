@@ -144,10 +144,12 @@ def headline_text(assessment: SafetyAssessment) -> str:
         )
     )
     incomplete = assessment.limits_incomplete_note()
+    provisional = assessment.provisional_limit_note()
     return (
         f"{assessment.status.value}"
         + (f" {not_evaluated}" if not_evaluated else "")
         + f" - {limit}"
+        + (f" - {provisional}" if provisional else "")
         + (f" - {incomplete}" if incomplete and limit_uA is not None else "")
     )
 

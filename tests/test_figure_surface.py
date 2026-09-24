@@ -299,7 +299,9 @@ class TestEveryPanelUsesTheCalculatorsSettings:
         finally:
             plt.close(figure)
 
-        assert annotation == "binding limit 4869 µA (Shannon criterion)"
+        # G12 (C4.3, ledger 128): at k = 1.2, below Shannon's own 1.5, the binding Shannon
+        # check is provisional, and the figure now says so as every headline surface does.
+        assert annotation == "binding limit 4869 µA (Shannon criterion), provisional"
         assert "6878" not in annotation
         assert levels["Compliance voltage"] == pytest.approx(
             calc.assess().compliance.max_current_uA, rel=1e-12
