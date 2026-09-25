@@ -1186,7 +1186,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 152 | LOW | — (found at the C4.6 follow-up) | **C4.6b** | name Riedy & Walter's refs [5] and [8] as via-citation attributions; primaries not in the library (gap stays open, like 124's Weiland 2002) |
 | 153 | LOW | — (found at C4.7c) | **C4.7e** | **FIXED** `3f76340`; docstring and caveat comment corrected (PASS possible, always provisional); no verdict change, by decision |
 | 154 | MED | — (found at C4.7c) | **C4.7d** | **FIXED** `1f542fd`; no single-pulse relief below 200 µm (anti-conservative for short trains on small electrodes) |
-| 155 | HIGH | — (Phase 4 review M1) | **C4b.1** | audit digest covers results and a hash of the model constants used; `reproduces` names what moved; version bump |
+| 155 | HIGH | — (Phase 4 review M1) | **C4b.1** | **FIXED** `48dc70e`; payload v3 (answer + per-module model-constant hashes), results compared at every version, 0.16.0 |
 | 156 | HIGH | — (Phase 4 review M2) | **C4b.2** | pulse-width-dependent Pt/PtIr in-vivo derating from Leung's Fig. 4; provisional below 100 µs |
 | 157 | HIGH | — (Phase 4 review M3) | C5.5 | with 114: `max_current_cic_uA` ignores `medium` |
 | 158 | LOW | — (Phase 4 review M4) | **C4b.3** | provisional flag (and `limits_incomplete`) into `report()` and the CSV |
