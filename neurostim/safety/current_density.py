@@ -17,7 +17,9 @@ The threshold
 -------------
 :mod:`neurostim.data.butterwick2007` supplies the damage threshold: it falls as
 ``t^-0.5`` with pulse width, is independent of electrode size above 300 um, rises as
-``d^-2`` below 200 um, and saturates after about 50 pulses.
+``d^-2`` below 200 um, and saturates after about 50 pulses. Below 200 um the ``d^-2``
+extension sits under the small-electrode currents the paper measured, and the module
+records both (ledger 77, S-13).
 
 That threshold was measured on chick chorioallantoic membrane and chick retina, verified
 on porcine retina. Applying it to cortex is an extrapolation **across preparation**, so

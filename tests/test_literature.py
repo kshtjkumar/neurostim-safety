@@ -1795,3 +1795,97 @@ class TestLedger78DerivedValuesAndSecondaryChains:
         assert "Cochlearnucleusauditoryprostheses" in _pdf_page_text(
             "papers_stim_calc_ref/nihms854736.pdf", 18
         )
+
+
+class TestLedger77SmallElectrodeAnchor:
+    """Ledger 77, S-13, C4.7c, per the user's decision (b'): the d^-2 model stays and no
+    number moves; the paper's own small-electrode measurements are recorded beside it.
+
+    Butterwick p. 2264, Fig. 5 caption: "In the regime of constant current, electrodes
+    smaller than 200 um, the threshold value of total current for damage is 139 uA on
+    retina and 55 uA on CAM"; the text: "only one pulse of duration 60 us on CAM and 600 us
+    on the retina"; and, read from the page image (the exponents are glyphs the text layer
+    drops), "the slopes are also t^-0.48 for the large pipette and t^-0.29 for the small
+    one"."""
+
+    BUTTERWICK = "papers_stim_calc_ref/Tissue_Damage_by_Pulsed_Electrical_Stimulation.pdf"
+
+    def test_the_anchor_and_slope_are_recorded_from_page_2264(self):
+        from neurostim.data import butterwick2007 as b
+
+        page = _pdf_page_text(self.BUTTERWICK, 4)
+        # The text layer renders the micro sign as the control character U+0016.
+        assert "thresholdvalueoftotalcurrentfordamageis139\x16Aonretinaand55\x16AonCAM" in page
+        assert "onlyonepulseofduration60sonCAMand600sontheretina" in page
+        assert b.SMALL_ELECTRODE_THRESHOLD_CURRENT_UA == {"retina": 139.0, "cam": 55.0}
+        assert b.SMALL_ELECTRODE_PULSE_WIDTH_US == {"retina": 600.0, "cam": 60.0}
+        assert b.SMALL_ELECTRODE_DURATION_EXPONENT_RETINA == -0.29
+        assert "t^-0.29" in b.SMALL_ELECTRODE_QUOTE and "139 uA" in b.SMALL_ELECTRODE_QUOTE
+
+    def test_the_measured_density_is_the_total_current_over_the_disc(self):
+        from neurostim.data import butterwick2007 as b
+
+        assert b.measured_small_electrode_A_per_cm2(199.0) == pytest.approx(
+            139e-6 / (math.pi * (199e-4 / 2) ** 2), rel=1e-12
+        )
+        assert b.measured_small_electrode_A_per_cm2(100.0, "cam") == pytest.approx(
+            55e-6 / (math.pi * (100e-4 / 2) ** 2), rel=1e-12
+        )
+        with pytest.raises(ValueError, match="200"):
+            b.measured_small_electrode_A_per_cm2(200.0)
+
+    def test_the_model_sits_below_every_measured_point_checked(self):
+        """At the saturated default, at the anchor's own pulse width: 2.62x below on retina
+        and 1.12x below on CAM, the same at every diameter since both scale as d^-2. The
+        model is unchanged: 0.169 A/cm^2 at 600 us and 200 um."""
+        from neurostim.data import butterwick2007 as b
+
+        assert b.threshold_A_per_cm2(600.0, 200.0) == pytest.approx(0.16912, rel=1e-4)
+        assert b.measured_small_electrode_A_per_cm2(199.999) == pytest.approx(0.4425, rel=1e-3)
+        for tissue, low, high in (("retina", 2.61, 2.63), ("cam", 1.11, 1.13)):
+            pw = b.SMALL_ELECTRODE_PULSE_WIDTH_US[tissue]
+            for d in (20.0, 50.0, 100.0, 115.0, 150.0, 199.0):
+                ratio = b.measured_small_electrode_A_per_cm2(d, tissue) / (
+                    b.threshold_A_per_cm2(pw, d, tissue=tissue)
+                )
+                assert low < ratio < high, (tissue, d, ratio)
+
+    def test_the_docstring_states_the_comparison_and_the_cam_inconsistency(self):
+        from neurostim.data import butterwick2007 as b
+
+        doc = b.__doc__
+        assert "139 uA" in doc and "55 uA" in doc and "t^-0.29" in doc
+        assert "0.169 A/cm^2" in doc and "0.44 A/cm^2" in doc
+        # The retina line at 60 us, 139 x 10^0.29 = 271 uA, over three is about 90 uA,
+        # against the 55 uA measured on CAM.
+        assert "90 uA" in doc
+        cam_predicted_uA = 139.0 * 10**0.29 / 3.0
+        assert 90.3 < cam_predicted_uA < 90.5
+        # The comparison holds at the saturated default; below it the single-pulse relief
+        # is applied on top of d^-2, and that was not measured below 200 um.
+        assert "saturated" in doc and "not measured below 200 um" in doc
+
+    def test_a_small_electrode_renders_the_anchor_and_is_provisional(self):
+        from neurostim import SafetyCalculator, StimProtocol
+
+        assessment = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), StimProtocol(5, 200, 130, 1)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Current density")
+        assert check.provisional
+        assert "provisional below 200 um" in check.detail
+        assert "139 uA" in check.detail and "55 uA" in check.detail
+        # A 1 mm disc is outside the regime and gets no such line.
+        big = SafetyCalculator(
+            DiscElectrode(1000.0, "Pt"), StimProtocol(5, 200, 130, 1)
+        ).assess()
+        detail = next(c for c in big.checks if c.name == "Current density").detail
+        assert "provisional below 200 um" not in detail
+
+    def test_below_saturation_the_line_says_the_relief_was_not_measured(self):
+        from neurostim.data import butterwick2007 as b
+
+        few = b.compare(0.1, 600.0, 100.0, n_pulses=5).describe()
+        many = b.compare(0.1, 600.0, 100.0).describe()
+        assert "not measured below 200 um" in few
+        assert "not measured below 200 um" not in many

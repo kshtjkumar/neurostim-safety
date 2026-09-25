@@ -21,6 +21,30 @@ becomes constant instead, so the threshold current density rises as ``d^-2``. Sm
 electrodes therefore tolerate far higher current densities -- the same qualitative
 conclusion Cogan et al. (2016) reach for charge density, arrived at independently.
 
+**What the paper measured on small electrodes, and why the model does not use it.**
+Below 200 um they give the damaging *total current* directly: 139 uA on retina at
+600 us and 55 uA on CAM at 60 us (p. 2264, Fig. 5), and a strength-duration slope of
+t^-0.29 for the 0.115 mm pipette against t^-0.48 for the 1 mm one (Fig. 6). This module
+does not model that line. It extends the large-electrode density from 200 um as d^-2,
+which sits below every measured point checked: at 600 us and 200 um it gives
+0.169 A/cm^2, where 139 uA over a 200 um disc is 0.44 A/cm^2 -- 2.62x below on retina,
+and 1.12x below on CAM at 60 us, the same at every diameter since both scale as d^-2
+(ledger 77, S-13). Adopting the measured line instead would relax small-electrode
+thresholds 1.3-3.7x across 6 us to 6 ms, and put a step at 200 um, where the 200-300 um
+band keeps the large-electrode value.
+
+Two things keep the measured line from being adopted as it stands. The CAM and retina
+anchors disagree under this module's CAM rule: the retina line at 60 us is
+139 x 10^0.29 = 271 uA, a third of which is about 90 uA, against the 55 uA measured on
+CAM, and the paper gives no small-electrode slope for CAM. And the text says Fig. 5 was
+measured with "only one pulse", while its caption calls the exposures sustained; its
+large-electrode values sit at the sustained level of Fig. 4.
+
+The comparison above is at the saturated pulse count, this module's default. Below it
+the single-pulse relief is applied on top of d^-2, a combination that was
+not measured below 200 um. The current-density check is provisional at every size, and its
+detail says so for this regime.
+
 **Pulse count.** The threshold drops steeply over the first pulses and then *saturates*:
 by a factor of about 7 on retina and 14 on chorioallantoic membrane between 1 and 50
 pulses, and is constant thereafter. A protocol is therefore either a single-shot case or
@@ -86,6 +110,26 @@ SIZE_INDEPENDENT_ABOVE_UM = 300.0
 
 CONSTANT_CURRENT_BELOW_UM = 200.0
 """Below this diameter the threshold *total current* is constant, so J_th scales d^-2."""
+
+SMALL_ELECTRODE_THRESHOLD_CURRENT_UA = {"retina": 139.0, "cam": 55.0}
+"""Damaging total current below 200 um, as measured (p. 2264, Fig. 5 caption).
+
+Recorded, not used by :func:`threshold_A_per_cm2` (ledger 77, S-13)."""
+
+SMALL_ELECTRODE_PULSE_WIDTH_US = {"retina": 600.0, "cam": 60.0}
+"""Pulse width each small-electrode current was measured at (p. 2264)."""
+
+SMALL_ELECTRODE_DURATION_EXPONENT_RETINA = -0.29
+"""Strength-duration slope for the 0.115 mm pipette on retina (p. 2264, Fig. 6), read
+from the page image; the exponent is typeset as a glyph the text layer drops."""
+
+SMALL_ELECTRODE_QUOTE = (
+    "In the regime of constant current, electrodes smaller than 200 um, the threshold "
+    "value of total current for damage is 139 uA on retina and 55 uA on CAM (Fig. 5 "
+    "caption); these measurements were performed with only one pulse of duration 60 us "
+    "on CAM and 600 us on the retina; the slopes are also t^-0.48 for the large pipette "
+    "and t^-0.29 for the small one (Butterwick et al. 2007, p. 2264)"
+)
 
 # --- pulse count ------------------------------------------------------------------
 
@@ -171,6 +215,23 @@ def threshold_A_per_cm2(
     return base
 
 
+def measured_small_electrode_A_per_cm2(
+    diameter_um: float, tissue: Tissue = "retina"
+) -> float:
+    """The paper's small-electrode total current over a disc of ``diameter_um``.
+
+    At the anchor's own pulse width (:data:`SMALL_ELECTRODE_PULSE_WIDTH_US`). For
+    comparison only; :func:`threshold_A_per_cm2` sits below it (ledger 77, S-13).
+    """
+    if not 0 < diameter_um < CONSTANT_CURRENT_BELOW_UM:
+        raise ValueError(
+            f"the small-electrode anchor holds below {CONSTANT_CURRENT_BELOW_UM:g} um, "
+            f"got {diameter_um!r}"
+        )
+    area_cm2 = math.pi * (diameter_um * 1e-4 / 2.0) ** 2
+    return SMALL_ELECTRODE_THRESHOLD_CURRENT_UA[tissue] * 1e-6 / area_cm2
+
+
 def size_regime(diameter_um: float) -> str:
     """Which electrode-size regime a diameter falls in."""
     if diameter_um < CONSTANT_CURRENT_BELOW_UM:
@@ -223,6 +284,24 @@ class ThresholdComparison:
         """
         from ..safety._limits import format_limit
 
+        small = (
+            self.diameter_um is not None and self.diameter_um < CONSTANT_CURRENT_BELOW_UM
+        )
+        regime_lines = (
+            [
+                f"  regime      provisional below 200 um: d^-2 from the large-electrode "
+                f"density, below the measured {SMALL_ELECTRODE_THRESHOLD_CURRENT_UA['retina']:g} uA "
+                f"(retina, 600 us) and {SMALL_ELECTRODE_THRESHOLD_CURRENT_UA['cam']:g} uA "
+                f"(CAM, 60 us) small-electrode currents"
+            ]
+            if small
+            else []
+        )
+        if small and self.n_pulses < PULSE_COUNT_SATURATION:
+            regime_lines.append(
+                "              the single-pulse relief on top of d^-2 was not measured "
+                "below 200 um"
+            )
         return "\n".join(
             [
                 f"  applied     {self.applied_A_per_cm2:.4g} A/cm^2",
@@ -230,6 +309,7 @@ class ThresholdComparison:
                 f"({self.utilisation * 100:.1f} % used, {self.margin:.2f}x margin)",
                 f"  conditions  {self.pulse_width_us:g} us, {self.n_pulses} pulses, "
                 f"{self.regime}",
+                *regime_lines,
                 f"  source      Butterwick et al. 2007, {PREPARATION};"
                 f"\n              applying it to other tissue is an extrapolation "
                 f"across preparation",

@@ -255,6 +255,22 @@ arguments, so none of its numbers move.
   and reproduces the way it was made. New records' digests differ from old ones for the
   same inputs.
 
+### Small electrodes: what Butterwick measured, beside what the package models
+
+Below 200 µm the current-density threshold is unchanged: the large-electrode density
+extended as d⁻². Butterwick et al. also measured this regime directly, 139 µA on retina
+at 600 µs and 55 µA on CAM at 60 µs, with a t^-0.29 slope for the small pipette (p. 2264).
+Those figures are now recorded in `butterwick2007`, with
+`measured_small_electrode_A_per_cm2()` to compare against. The model sits below every
+point checked: at 600 µs and 200 µm it gives 0.169 A/cm², against the 0.44 A/cm² the
+measured current makes over a 200 µm disc (2.62× below on retina, 1.12× on CAM). The
+measured line is not adopted, because the CAM and retina anchors disagree under the
+package's CAM rule (about 90 µA predicted, 55 µA measured). The comparison holds at the
+saturated pulse count. Below it, the single-pulse relief is applied on top of d⁻², which
+was not measured on small electrodes. The Current density check was already provisional
+at every size. Its detail now says so for this regime, and says it again when the pulse
+count is below saturation.
+
 ### Five smaller corrections to the data modules
 
 - `mccreery1990.separating_k_range()` returns (1.699, 2.107), from the highest no-damage
