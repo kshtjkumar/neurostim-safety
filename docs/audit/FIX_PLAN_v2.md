@@ -1144,7 +1144,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 111 | LOW | — (found in Phase 2 review, F9) | **unscheduled** | test-only. Run the oracle over the whole sweep with the set written literally; first Phase 3 commit |
 | 112 | LOW | — (found in Phase 2 review, F10) | C2.8 | **FIXED** `f4f08b8`; removed by the exact-linear net: the balance test becomes amplitude-independent |
 | 113 | LOW | — (found in Phase 2 review, F11) | **P2b docs commit** (docstring narrowed; ledger 123) | **FIXED** `96ccae5`; documentation-only today (not rendered); fix with the next change to the interval, or narrow the docstring |
-| 114 | LOW | — (found in Phase 2 review, F12) | C5.5 | batch CSV columns |
+| 114 | LOW | — (found in Phase 2 review, F12) | C5.5 | batch CSV columns; with 157 (Phase 4 review M3): 500 µm Pt in vivo reports `max_current_cic_uA` 981.75 against the check ceiling 112.84 |
 | 115 | LOW | — (found in Phase 2 review, F13) | C2.8 | **FIXED** `f4f08b8`; one sentence in D2 point 2 |
 | 116 | LOW | — (found in Phase 2 review, F14) | C5.11 | viz |
 | 117 | LOW | — (found in Phase 2 review, F15; extended by Phase 2b review G1 = ledger 119) | C2.8, C4.2 | **FIXED** `76ffd06` (contract and charge interval; nan term earlier); the nan term closes at C2.8; water_window.evaluate's argument contract at C4.2, which already reworks its polarity arguments; the charge-interval fallback at C4.2 — nan term **FIXED** at `f4f08b8` |
@@ -1185,6 +1185,11 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 152 | LOW | — (found at the C4.6 follow-up) | **C4.6b** | name Riedy & Walter's refs [5] and [8] as via-citation attributions; primaries not in the library (gap stays open, like 124's Weiland 2002) |
 | 153 | LOW | — (found at C4.7c) | **C4.7e** | **FIXED** `3f76340`; docstring and caveat comment corrected (PASS possible, always provisional); no verdict change, by decision |
 | 154 | MED | — (found at C4.7c) | **C4.7d** | **FIXED** `1f542fd`; no single-pulse relief below 200 µm (anti-conservative for short trains on small electrodes) |
+| 155 | HIGH | — (Phase 4 review M1) | **C4b.1** | audit digest covers results and a hash of the model constants used; `reproduces` names what moved; version bump |
+| 156 | HIGH | — (Phase 4 review M2) | **C4b.2** | pulse-width-dependent Pt/PtIr in-vivo derating from Leung's Fig. 4; provisional below 100 µs |
+| 157 | HIGH | — (Phase 4 review M3) | C5.5 | with 114: `max_current_cic_uA` ignores `medium` |
+| 158 | LOW | — (Phase 4 review M4) | **C4b.3** | provisional flag (and `limits_incomplete`) into `report()` and the CSV |
+| 159 | LOW | — (Phase 4 review M5) | **C4b.4** | Butterwick 0.115 mm text vs 0.12 mm Fig. 6 caption |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
