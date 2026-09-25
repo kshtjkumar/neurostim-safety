@@ -730,7 +730,8 @@ class TestTheDigestCoversTheAnswerAndTheModel:
         ok, diffs = audit.reproduces(self._old(), self._pt500_in_vivo())
         assert not ok
         assert (
-            "results.limiting_current_uA: 70.12483601762932 -> 112.84456370652995" in diffs
+            # G12 (C4b.2, ledger 156): the answer moved again, to Leung's 35/3.84.
+            "results.limiting_current_uA: 70.12483601762932 -> 107.71174812307864" in diffs
         )
 
     def test_a_new_record_digests_the_answer_and_the_model_constants(self):
@@ -740,10 +741,11 @@ class TestTheDigestCoversTheAnswerAndTheModel:
         body = rec.payload()
         assert rec.payload_version == 3
         answer = body["answer"]
-        assert answer["limiting_current_uA"] == 112.84456370652995
+        # G12 (C4b.2, ledger 156): 112.84456370652995 at 8.7x, 107.71174812307864 at 35/3.84.
+        assert answer["limiting_current_uA"] == 107.71174812307864
         assert answer["limiting_mechanism"] == "Charge injection limit"
         checks = answer["checks"]
-        assert checks["Charge injection limit"]["ceiling_uA"] == 112.84456370652995
+        assert checks["Charge injection limit"]["ceiling_uA"] == 107.71174812307864
         assert set(checks) == {c.name for c in self._pt500_in_vivo().assess().checks}
         assert {"status", "ceiling_uA", "provisional"} == set(checks["Shannon criterion"])
         assert set(body["model_constants"]) == set(audit.MODEL_CONSTANT_MODULES)

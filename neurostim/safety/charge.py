@@ -138,6 +138,11 @@ class ChargeResult:
     medium: str = "saline"
     derating_applied: float = 1.0
     derating_note: str = ""
+    derating_provisional: bool = False
+    """Whether the pulse width is below the shortest one the derating was measured at
+    (ledger 156): the factor then rests on no measurement."""
+    derating_measured_from_us: float | None = None
+    """The shortest pulse width the applied derating was measured at, if the source says."""
 
     @property
     def limit_is_a_range(self) -> bool:
@@ -202,6 +207,12 @@ class ChargeResult:
         )
         if not self.verified:
             lines.append("  PROVISIONAL: limit not confirmed against a primary source")
+        if self.derating_provisional:
+            lines.append(
+                f"  PROVISIONAL: the in vivo derating was not measured below "
+                f"{self.derating_measured_from_us:g} us, where the source reports the "
+                f"reduction grows (ledger 156)"
+            )
         if self.condition_warning:
             lines.append(f"  CAUTION: {self.condition_warning}")
         if self.policy_warning:
@@ -237,6 +248,8 @@ def evaluate(
 
     derating = 1.0
     derating_note = ""
+    derating_provisional = False
+    measured_from: float | None = None
     if medium == "in_vivo":
         reported = cogan2016.derating_for(mat.key)
         if reported is None:
@@ -248,6 +261,8 @@ def evaluate(
             derating = reported.worst
             derating_note = reported.describe()
             limit = limit / derating
+            measured_from = reported.shortest_measured_pulse_width_us
+            derating_provisional = measured_from is not None and pulse_width_us < measured_from
 
     warning = ""
     measured_pw = mat.cic.pulse_width_us
@@ -327,4 +342,6 @@ def evaluate(
         medium=medium,
         derating_applied=derating,
         derating_note=derating_note,
+        derating_provisional=derating_provisional,
+        derating_measured_from_us=measured_from,
     )

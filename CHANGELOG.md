@@ -419,6 +419,27 @@ In-vivo Pt and PtIr charge-injection limits rise by 14/8.7 = 1.609x (in a 864-co
 sweep: 216 limits up, 14 verdicts FAIL → CAUTION). Saline limits and the other materials
 are unchanged.
 
+**Then corrected to 9.11×, at every pulse width.** The quoted "8.7 (200 μs)" is not
+Leung's largest factor. It is the 100 μs pair: Fig. 4 (p. 853) gives about 5.7× at
+200 μs. Their largest matched reduction is 35 µC/cm² in vitro (abstract, p. 849) over
+3.84 acute in vivo (p. 852) at 100 µs, which is 9.11×. That factor now applies at every
+pulse width, so every in-vivo Pt and PtIr charge-injection limit tightens by
+8.7/9.11 = 0.9545 (−4.5 %) relative to the 8.7× above. On a 500 µm Pt disc at 50 µA and
+200 µs the limiting current goes from 112.84 to 107.71 µA. No preset's status changes.
+Net of both corrections, the release moves in-vivo Pt limits from ÷14 to ÷9.11, a
+×1.536 relaxation.
+
+Below 100 µs Leung measured nothing, and they report that the reduction grows at short
+pulse widths. A limit derated there is now provisional
+(`ChargeResult.derating_provisional`), and so is the Charge injection or Counter
+charge injection check.
+
+A per-width curve was considered and declined. It relaxes in-vivo limits 1.5-2.7× above
+100 µs on single-site data. It also misses cortex: Leung's one cortical point, 7.84× at
+400 µs, sits well above the suprachoroidal 4.7×. The digitised Fig. 4, with its method
+and calibration, is recorded in `cogan2016` (`LEUNG_FIG4_DIGITISED_UC_CM2`,
+`PT_IN_VIVO_DERATING_DOC`).
+
 ### Reports carry every setting, their own version, and their provenance
 
 - The PDF gains "Settings" (all 11 calculator settings, the counter electrode included)

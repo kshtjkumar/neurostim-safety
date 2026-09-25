@@ -2194,7 +2194,10 @@ class SafetyCalculator:
             # or a policy the source argues against.
             "Charge injection limit": bool(charge_result.condition_warning)
             or bool(charge_result.policy_warning)
-            or not charge_result.verified,
+            or not charge_result.verified
+            # An in vivo derating below the shortest pulse width it was measured at
+            # (ledger 156).
+            or charge_result.derating_provisional,
             # The window itself may be provisional; the interfacial capacitance is derived
             # from the material's own CIC unless the caller measured one, and an unverified
             # CIC makes it provisional (ledgers 19, 60); and a limit the drift clause sets is
@@ -2226,6 +2229,7 @@ class SafetyCalculator:
                 bool(counter_result.condition_warning)
                 or bool(counter_result.policy_warning)
                 or not counter_result.verified
+                or counter_result.derating_provisional
             ),
         }
         _check_caveat_keys(caveats)

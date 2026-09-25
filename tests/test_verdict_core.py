@@ -1633,33 +1633,35 @@ class TestALimitFloorsWhateverItsUnit:
     """
 
     def test_the_derated_charge_injection_limit_floors_on_every_surface(self):
-        """Pt's cathodic-first nominal 125 uC/cm^2 over Leung's in vivo 8.7x is
-        14.367816091954024.
+        """Pt's cathodic-first optimistic 150 uC/cm^2 over Leung's in vivo 35/3.84 is
+        16.457142857142856.
 
-        Not tautological: 125 and 8.7 are published constants, the quotient is written out
-        here, "14.37" is what ``:.4g`` prints and is asserted absent on each surface, and
-        "14.36" is the hand-floored four-digit form. The FAIL and the CAUTION branches
+        Not tautological: 150, 35 and 3.84 are published constants, the quotient is written
+        out here, "16.46" is what ``:.4g`` prints and is asserted absent on each surface,
+        and "16.45" is the hand-floored four-digit form. The FAIL and the CAUTION branches
         render the limit through different f-strings and are both asserted.
 
         G12 (C4.5, ledger 71): this pinned 100/14 = 7.142857142857143 ("7.143" against
-        "7.142"). With Leung's matched 8.7x the conservative end is 100/8.7 = 11.494...,
-        where ``:.4g`` already rounds down and the test could not fail; the nominal end
+        "7.142"), then the nominal 125/8.7 = 14.367816091954024 ("14.37" against "14.36").
+        G12 again (C4b.2, ledger 156): at 35/3.84 the nominal end is 13.714285714285714,
+        which ``:.4g`` rounds down, so the test could not fail there; the optimistic end
         keeps a value that ``:.4g`` rounds up.
         """
         failing = SafetyCalculator(
             DiscElectrode(100.0, "Pt"),
             StimProtocol(80.0, 200.0, 130.0, 1.0),
-            medium="in_vivo", policy="nominal",
+            medium="in_vivo", policy="optimistic",
         ).assess()
         cautioning = SafetyCalculator(
             DiscElectrode(100.0, "Pt"),
             StimProtocol(5.0, 200.0, 130.0, 1.0),
-            medium="in_vivo", policy="nominal",
+            medium="in_vivo", policy="optimistic",
         ).assess()
 
         assert failing.charge.cic_limit_uC_cm2 == pytest.approx(
-            14.367816091954024, rel=1e-15
+            150.0 / (35.0 / 3.84), rel=1e-15
         )
+        assert failing.charge.cic_limit_uC_cm2 == pytest.approx(16.457142857142856, rel=1e-15)
         assert [
             next(c for c in a.checks if c.name == "Charge injection limit").status.value
             for a in (failing, cautioning)
@@ -1668,27 +1670,28 @@ class TestALimitFloorsWhateverItsUnit:
             check = next(
                 c for c in assessment.checks if c.name == "Charge injection limit"
             )
-            assert "14.36" in check.summary, check.summary
-            assert "14.37" not in check.summary, check.summary
-            assert "14.36" in assessment.charge.describe()
-            assert "14.37" not in assessment.charge.describe()
+            assert "16.45" in check.summary, check.summary
+            assert "16.46" not in check.summary, check.summary
+            assert "16.45" in assessment.charge.describe()
+            assert "16.46" not in assessment.charge.describe()
 
     def test_the_pdf_charge_injection_row_floors(self, tmp_path):
         """The sixth surface, and the one a reader takes away from the room.
 
         Not tautological: the PDF is rendered and its extracted text searched for the two
         literal forms, neither of which the renderer is asked about. G12 (C4.5): the
-        nominal policy, for the reason above.
+        nominal policy, for the reason above; G12 again (C4b.2, ledger 156): the optimistic
+        policy, for the reason above.
         """
         calc = SafetyCalculator(
             DiscElectrode(100.0, "Pt"),
             StimProtocol(80.0, 200.0, 130.0, 1.0),
-            medium="in_vivo", policy="nominal",
+            medium="in_vivo", policy="optimistic",
         )
         text = pdf_text(calc, tmp_path / "derated.pdf")
 
-        assert "14.36" in text
-        assert "14.37" not in text
+        assert "16.45" in text
+        assert "16.46" not in text
 
     def test_the_electroporation_threshold_floors(self):
         """Butterwick's threshold is a power law, so it is round only by accident: 32 of 56
@@ -1888,30 +1891,28 @@ class TestTheDerivedChargeLimitsFloor:
         assert checked == 9 * 2 * 3 * 2, checked
 
     def test_the_derated_platinum_limit_does_not_round_up(self):
-        """The review's defect, on today's values. Pt's unpolarised range is 50-150 uC/cm^2
-        and its worst in vivo reduction is Leung's 8.7x, so nominal is 100/8.7 =
-        11.49425287356322 and optimistic 150/8.7 = 17.24137931034483 -- printed "11.4943"
-        and "17.2414" by ``:g``, each above the limit it names. The floored forms are
-        "11.49" and "17.24".
+        """The review's defect, on today's values. Pt's cathodic-first range is 100-150
+        uC/cm^2 and its in vivo reduction is Leung's 35/3.84, so nominal is 125/(35/3.84) =
+        13.714285714285714 -- printed "13.7143" by ``:g``, above the limit it names. The
+        floored form is "13.71".
 
         G12 (C4.5, ledger 71): the review's values were 100/14 and 150/14, with "7.14286"
-        and "10.7143"; the derating is now Leung's matched-pulse-width 8.7x, and the defect
-        this pins -- :g rounding a maximum up -- shows the same way at the new values.
+        and "10.7143"; then the unpolarised 100/8.7 and 150/8.7 ("11.4943", "17.2414"). G12
+        again (C4b.2, ledger 156): at 35/3.84 neither unpolarised end rounds up under
+        ``:g`` (10.9714, 16.4571), so the pin moves to the cathodic-first nominal end, where
+        the defect -- :g rounding a maximum up -- still shows.
         """
         from neurostim.data import cogan2016
 
-        assert cogan2016.derating_for("Pt").worst == 8.7  # the fixture's premise
-        assert float("11.4943") > 100.0 / 8.7  # the defect's direction, written out
-        assert float("17.2414") > 150.0 / 8.7
+        assert cogan2016.derating_for("Pt").worst == 35.0 / 3.84  # the fixture's premise
+        assert float("13.7143") > 125.0 / (35.0 / 3.84)  # the defect's direction, written out
         seen = {}
         for key, policy, anodic_first, medium, result, _ in self._warnings():
-            if key == "Pt" and medium == "in_vivo" and anodic_first is None:
+            if key == "Pt" and medium == "in_vivo" and anodic_first is False:
                 seen[policy] = result.policy_warning
         assert set(seen) == {"nominal", "optimistic"}
-        assert "applies 11.49 uC/cm^2" in seen["nominal"], seen["nominal"]
-        assert "applies 17.24 uC/cm^2" in seen["optimistic"], seen["optimistic"]
-        for warning in seen.values():
-            assert "11.4943" not in warning and "17.2414" not in warning, warning
+        assert "applies 13.71 uC/cm^2" in seen["nominal"], seen["nominal"]
+        assert "13.7143" not in seen["nominal"], seen["nominal"]
 
 
 class TestEveryLimitBearingCheckHasAMargin:

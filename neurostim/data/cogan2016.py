@@ -94,6 +94,9 @@ class Derating:
     factor_low: float
     factor_high: float
     evidence: str
+    shortest_measured_pulse_width_us: float | None = None
+    """Below this pulse width the factor rests on no measurement, and a limit derated by it
+    is provisional (ledger 156). ``None`` where the source gives no pulse-width range."""
 
     @property
     def worst(self) -> float:
@@ -121,6 +124,71 @@ PDF's Greek mu). The derating factors are theirs, each in vitro value over the m
 vivo value at the same pulse width (ledger 71)."""
 
 
+LEUNG_IN_VITRO_QUOTE = (
+    "Qinj increased with pulsewidth from 35 to 54 \u03bcC/cm2 for respective pulse widths "
+    "of 100 to 3200 \u03bcs per phase in vitro"
+)
+"""Leung et al., abstract, p. 849. Their results (p. 852) say "34 to 54"; the abstract's 35
+is the larger, so the factor built on it is the larger (ledger 156)."""
+
+LEUNG_ACUTE_IN_VIVO_QUOTE = (
+    "The mean suprachoroidal Qinj in the acutely implanted animals was between 3.84 to 16.6 "
+    "\u03bcC/cm2 for pulsewidths of 100 to 3200 \u03bcs (n = 18)"
+)
+"""Leung et al., p. 852."""
+
+LEUNG_IN_VITRO_100US_UC_CM2 = 35.0
+LEUNG_ACUTE_IN_VIVO_100US_UC_CM2 = 3.84
+LEUNG_SHORTEST_MEASURED_PULSE_WIDTH_US = 100.0
+LEUNG_CORTEX_400US_UC_CM2 = 4.63
+"""Subdural (cortical) Qinj at 400 us, "4.63 \u00b1 0.04 \u03bcC/cm2 (n = 4)", p. 852."""
+
+LEUNG_FIG4_DIGITISED_UC_CM2: dict[str, dict[int, float]] = {
+    "in_vitro": {100: 33.51, 200: 34.23, 400: 36.29, 800: 39.97, 1600: 46.26, 3200: 53.92},
+    "acute": {100: 3.883, 200: 6.032, 400: 7.692, 1600: 12.357, 3200: 16.605},
+    "chronic": {200: 7.03, 400: 8.77, 1600: 12.19, 3200: 15.87},
+    "intracochlear": {400: 10.818},
+}
+"""Leung et al. Fig. 4 (p. 853), read from the embedded raster; see
+:data:`PT_IN_VIVO_DERATING_DOC` for the method and calibration. Suprachoroidal acute and
+chronic, intracochlear chronic; the subdural point is :data:`LEUNG_CORTEX_400US_UC_CM2`."""
+
+LEUNG_CORTEX_400US_FACTOR = LEUNG_FIG4_DIGITISED_UC_CM2["in_vitro"][400] / LEUNG_CORTEX_400US_UC_CM2
+"""In vitro at 400 us (digitised, 36.29) over the cortical 4.63: about 7.84x."""
+
+PT_IN_VIVO_DERATING = LEUNG_IN_VITRO_100US_UC_CM2 / LEUNG_ACUTE_IN_VIVO_100US_UC_CM2
+PT_IN_VIVO_DERATING_DOC = """\
+Pt and PtIr in vivo: 35/3.84 = 9.11x at every pulse width (ledger 156, user decision (D)).
+
+The factor is the largest matched reduction in Leung et al.'s data: 35 uC/cm^2 in vitro
+at 100 us (abstract, p. 849) over the 3.84 acute suprachoroidal mean at 100 us (p. 852).
+Their text's "8.7 times less (200us pulsewidth)" (p. 852) is the 100 us pair: Fig. 4
+(p. 853) gives 33.51/3.883 = 8.63 at 100 us, and about 5.7x at 200 us (34.23/6.032). It
+was the factor used before, and it sat about 5 % under their own 100 us value. Their
+cortical point, 4.63 uC/cm^2 at 400 us (p. 852), is 7.84x against the in vitro 36.29
+there, below 9.11. Below 100 us they measured nothing, and they write that "the reduction
+in the in vivo Qinj was greater at short pulsewidths" (p. 853), so a limit derated at a
+shorter pulse is provisional.
+
+A per-width curve was declined. Fig. 4's suprachoroidal factors fall to 5.7x at 200 us,
+4.7x at 400, 3.8x at 1600 and 3.4x at 3200, so a curve built on them relaxes the in-vivo
+limit 1.5-2.7x above 100 us on single-site data, and it misses cortex, where the one
+measured point (7.84x at 400 us) sits well above the suprachoroidal 4.7x. The flat
+factor relaxes nothing.
+
+Digitisation method. Fig. 4 is an 800 x 945 greyscale raster embedded at 300 ppi,
+extracted with pdfimages. Its horizontal gridlines were located as rows of near-uniform
+grey across the plot width: in vitro 0-60 uC/cm^2 at 6.81 px per uC/cm^2, in vivo 0-20 at
+20.48 px per uC/cm^2. Marker centres were taken as the centroids of the dark connected
+regions after a morphological opening (circles; the acute bars with a 3 x 13 element),
+and of the grey outlines for the chronic squares. The pulse-width axis was fixed by the
+six in vitro centroids, 0.2005 px per us, which agree with 100-3200 us to under a pixel.
+Calibration against values the text quotes: acute 100 us 3.883 (text 3.84), acute
+3200 us 16.605 (16.6), intracochlear 400 us 10.818 (10.8), in vitro 3200 us 53.92 (54).
+That is about one pixel: 0.05 uC/cm^2 in vivo, 0.15 in vitro. The digitised values are
+recorded for the record; the factor itself uses only the two quoted numbers.
+"""
+
 HU_IN_VIVO_QUOTE = (
     "For the chosen compliance limit, the in vivo value is about 10% of the in vitro "
     "ones for both electrodes."
@@ -133,14 +201,25 @@ IN_VIVO_DERATING: dict[str, Derating] = {
     # the best in-vitro value divided by the worst in-vivo one across different pulse
     # widths: the low end more permissive than the source's 3.2, and the high end above
     # even Cogan 2016's "as much as a factor of 10".
+    # The flat 9.11x (ledger 156, Phase 4 review M2, user decision (D)); see
+    # PT_IN_VIVO_DERATING_DOC. 8.7x sat under Leung's own 100 us pair.
     "Pt": Derating(
         3.2,
-        8.7,
-        "Leung et al. 2014, p. 852: suprachoroidal Qinj in vivo 8.7 times less at 200 us "
-        "and 3.2 times less at 3200 us than in vitro, at matched pulse widths (in vitro "
-        "34-54 uC/cm^2; in vivo 3.84-16.6 acute, 6.99-15.8 chronic)",
+        PT_IN_VIVO_DERATING,
+        "Leung et al. 2015: the largest matched reduction in their data, 35 uC/cm^2 in "
+        "vitro (abstract, p. 849) over 3.84 acute in vivo (p. 852) at 100 us, 9.11x, "
+        "applied at every pulse width; their '8.7 times less (200us pulsewidth)' (p. 852) "
+        "is the 100 us pair, Fig. 4 (p. 853) giving about 5.7x at 200 us; 3.2x at "
+        "3200 us; cortex 7.84x at 400 us (4.63 uC/cm^2, p. 852); nothing measured below "
+        "100 us, where they report the reduction grows",
+        shortest_measured_pulse_width_us=LEUNG_SHORTEST_MEASURED_PULSE_WIDTH_US,
     ),
-    "PtIr": Derating(3.2, 8.7, "assumed to follow platinum; not measured separately"),
+    "PtIr": Derating(
+        3.2,
+        PT_IN_VIVO_DERATING,
+        "assumed to follow platinum; not measured separately",
+        shortest_measured_pulse_width_us=LEUNG_SHORTEST_MEASURED_PULSE_WIDTH_US,
+    ),
     # Hu et al.'s own in vivo sentence (ledger 77, S-7). The evidence used to say their
     # "3-4 mC/cm^2 is about ten times what the same films deliver in vivo", welding the
     # in vivo result to a different sentence of theirs, which compares AIROF with platinum.

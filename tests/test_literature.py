@@ -693,7 +693,8 @@ class TestCogan2016:
         """Saline CIC overstates in vivo capacity by up to 10x for Pt and AIROF."""
         from neurostim.data import cogan2016 as c
 
-        assert c.derating_for("Pt").worst == pytest.approx(8.7)  # G12, C4.5: Leung's matched
+        # G12, C4.5: Leung's matched 8.7x; G12 again, C4b.2 (ledger 156): 35/3.84.
+        assert c.derating_for("Pt").worst == pytest.approx(35.0 / 3.84)
         assert c.derating_for("AIROF").worst == pytest.approx(10.0)
         assert c.derating_for("SIROF").worst == pytest.approx(4.0)
         assert c.derating_for("TiN") is None
@@ -1230,9 +1231,10 @@ class TestInVivoDeratingSources:
 
         d = c.derating_for("Pt")
         assert "Leung" in d.evidence
-        # G12 (C4.5, ledger 71): Leung's own matched-pulse-width factors, p. 852.
+        # G12 (C4.5, ledger 71): Leung's own matched-pulse-width factors, p. 852. G12 again
+        # (C4b.2, ledger 156): the high end is their 100 us pair, 35/3.84.
         assert d.factor_low == pytest.approx(3.2)
-        assert d.factor_high == pytest.approx(8.7)
+        assert d.factor_high == pytest.approx(35.0 / 3.84)
 
     def test_airof_from_hu(self):
         from neurostim.data import cogan2016 as c
@@ -1369,9 +1371,11 @@ class TestLeungsPulseWidthMatchedDerating:
 
         quote = c.LEUNG_MATCHED_PULSE_WIDTH_QUOTE
         assert "8.7 times less (200" in quote and "3.2 times less (3200" in quote
+        # G12 (C4b.2, ledger 156): the quote stays, pinned; its "8.7 (200us)" is the 100 us
+        # pair, and the high end is now that pair from the quoted numbers, 35/3.84.
         for key in ("Pt", "PtIr"):
             d = c.derating_for(key)
-            assert (d.factor_low, d.factor_high) == (3.2, 8.7), key
+            assert (d.factor_low, d.factor_high) == (3.2, 35.0 / 3.84), key
         assert "p. 852" in c.derating_for("Pt").evidence
 
     def test_the_quote_is_on_page_852_of_the_pdf(self):
@@ -2035,3 +2039,129 @@ class TestLedger159SmallPipetteDiameter:
         assert "measuredwithpipettesof0.12(" in page
         doc = " ".join(b.__doc__.split())
         assert "0.115 mm" in doc and "0.12 mm" in doc and "Fig. 6 caption" in doc
+
+
+class TestLedger156PlatinumInVivoDerating:
+    """Ledger 156 (Phase 4 review M2), C4b.2, per the user's decision (D): Pt and PtIr in
+    vivo are derated by the largest matched reduction in Leung et al.'s data, 35/3.84 =
+    9.114583333333334x at every pulse width, and marked provisional below 100 us, where they
+    measured nothing and say the reduction grows."""
+
+    PDF = "papers_stim_calc_ref/In_Vivo_and_In_Vitro_Comparison_of_the_Charge_Injection_Capacity_of_Platinum_Macroelectrodes.pdf"
+
+    def test_the_two_numbers_are_on_their_pages(self):
+        from neurostim.data import cogan2016 as c
+
+        abstract = _pdf_page_text(self.PDF, 1)  # journal p. 849
+        results = _pdf_page_text(self.PDF, 4)  # journal p. 852
+        assert "increasedwithpulsewidthfrom35to54μC/cm2forrespectivepulsewidthsof100" in abstract
+        assert "acutelyimplantedanimalswasbetween3.84to16.6μC/cm2forpulsewidthsof100" in results
+        assert "corticalQinjwas4.63±0.04μC/cm2(n=4)" in results
+        assert c.LEUNG_IN_VITRO_100US_UC_CM2 == 35.0
+        assert c.LEUNG_ACUTE_IN_VIVO_100US_UC_CM2 == 3.84
+        assert c.LEUNG_CORTEX_400US_UC_CM2 == 4.63
+        for quote in (c.LEUNG_IN_VITRO_QUOTE, c.LEUNG_ACUTE_IN_VIVO_QUOTE):
+            assert "".join(quote.split()).replace("Qinj", "") in (abstract + results).replace(
+                "Qinj", ""
+            ), quote
+
+    def test_platinum_and_ptir_take_the_flat_factor(self):
+        from neurostim.data import cogan2016 as c
+
+        assert c.PT_IN_VIVO_DERATING == 35.0 / 3.84 == 9.114583333333334
+        for key in ("Pt", "PtIr"):
+            d = c.derating_for(key)
+            assert d.worst == c.PT_IN_VIVO_DERATING, key
+            assert d.shortest_measured_pulse_width_us == 100.0, key
+        assert c.derating_for("SIROF").shortest_measured_pulse_width_us is None
+
+    def test_the_digitisation_is_recorded_and_calibrated(self):
+        """Fig. 4, p. 853, read from the embedded raster: four points the text also quotes
+        land within about one pixel of their quoted values."""
+        from neurostim.data import cogan2016 as c
+
+        fig = c.LEUNG_FIG4_DIGITISED_UC_CM2
+        assert set(fig) == {"in_vitro", "acute", "chronic", "intracochlear"}
+        assert set(fig["in_vitro"]) == {100, 200, 400, 800, 1600, 3200}
+        assert fig["acute"][100] == pytest.approx(3.84, abs=0.05)
+        assert fig["acute"][3200] == pytest.approx(16.6, abs=0.05)
+        assert fig["intracochlear"][400] == pytest.approx(10.8, abs=0.05)
+        assert fig["in_vitro"][3200] == pytest.approx(54.0, abs=0.15)
+        # The text's "8.7 times less (200us)" is the 100 us pair; at 200 us the figure gives
+        # about 5.7x.
+        # 33.51/3.883 = 8.63 from pixels, 33.51/3.84 = 8.73 with the quoted in vivo mean.
+        assert 8.6 < fig["in_vitro"][100] / fig["acute"][100] < 8.8
+        assert 8.6 < fig["in_vitro"][100] / c.LEUNG_ACUTE_IN_VIVO_100US_UC_CM2 < 8.8
+        assert 5.5 < fig["in_vitro"][200] / fig["acute"][200] < 5.9
+        assert 7.83 < c.LEUNG_CORTEX_400US_FACTOR < 7.85
+        assert c.LEUNG_CORTEX_400US_FACTOR < c.PT_IN_VIVO_DERATING
+
+    def test_the_evidence_states_the_choice_and_the_slip(self):
+        from neurostim.data import cogan2016 as c
+
+        evidence = c.derating_for("Pt").evidence
+        doc = " ".join(c.PT_IN_VIVO_DERATING_DOC.split())
+        for text in (evidence, doc):
+            assert "35" in text and "3.84" in text and "9.11" in text
+            assert "100 us pair" in text and "7.84" in text
+        assert "per-width curve was declined" in doc
+        assert "relaxes" in doc and "single-site" in doc and "cortex" in doc
+        assert "method" in doc.lower() and "calibrat" in doc.lower()
+
+    def test_below_100us_the_limit_is_provisional_and_says_why(self):
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.safety import charge
+
+        short = charge.evaluate("Pt", 0.001, 0.01, 60.0, medium="in_vivo")
+        at = charge.evaluate("Pt", 0.001, 0.01, 100.0, medium="in_vivo")
+        saline = charge.evaluate("Pt", 0.001, 0.01, 60.0)
+        assert short.derating_provisional and not at.derating_provisional
+        assert not saline.derating_provisional
+        assert short.derating_applied == at.derating_applied == 35.0 / 3.84
+        assert "below 100 us" in short.describe()
+        # Pt's CIC was measured at 200 us, so every pulse below 100 us already carries a
+        # pulse-width condition warning. A Pt record measured at 80 us isolates the new
+        # caveat: at 60 us it has no condition warning, only the unmeasured derating.
+        from dataclasses import replace
+
+        pt = get_material("Pt")
+        pt80 = replace(pt, cic=replace(pt.cic, pulse_width_us=80.0))
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(50, 60, 130, 1), medium="in_vivo",
+            material=pt80,
+        )
+        assessment = calc.assess()
+        assert not assessment.charge.condition_warning  # the premise
+        assert assessment.charge.derating_provisional
+        check = next(c for c in assessment.checks if c.name == "Charge injection limit")
+        assert check.provisional
+
+    def test_the_reviewers_case_tightens_by_the_factor_ratio(self):
+        """500 um Pt disc, 50 uA, 200 us, 130 Hz, in vivo: 112.84456370652995 uA at 8.7x."""
+        from neurostim import SafetyCalculator, StimProtocol
+
+        a = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1), medium="in_vivo"
+        ).assess()
+        assert a.charge.cic_limit_uC_cm2 == 100.0 / (35.0 / 3.84)
+        assert a.limiting_current_uA == pytest.approx(112.84456370652995 * 8.7 / (35 / 3.84), rel=1e-12)
+        assert a.limiting_mechanism == "Charge injection limit"
+
+    def test_the_counter_carries_the_same_caveat(self, monkeypatch):
+        """The counter's material comes from the registry, so the 80 us Pt record is put
+        there; the counter's Charge injection check is then provisional only through the
+        unmeasured derating."""
+        from dataclasses import replace
+
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.materials import MATERIALS
+
+        pt = get_material("Pt")
+        monkeypatch.setitem(MATERIALS, "Pt", replace(pt, cic=replace(pt.cic, pulse_width_us=80.0)))
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "SIROF"), StimProtocol(50, 60, 130, 1), medium="in_vivo",
+            counter_electrode=DiscElectrode(2000.0, "Pt"), counter_separation_um=5000.0,
+        ).assess()
+        assert assessment.counter_charge is not None
+        check = next(c for c in assessment.checks if c.name == "Counter charge injection")
+        assert check.provisional
