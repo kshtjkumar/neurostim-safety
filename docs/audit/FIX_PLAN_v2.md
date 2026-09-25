@@ -1183,7 +1183,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 150 | HIGH | — (found at C4.1b) | **C4.1b** | **FIXED** `55afec4`; the water-window seed reads the result's own window, not the material looked up by key |
 | 151 | LOW | — (found at C4.6) | **C4.6** | **FIXED** `a879ef9`; attribute the 316LVM 1.2 V reversible limit to Riedy & Walter's ref. [5], as their p. 662 does |
 | 152 | LOW | — (found at the C4.6 follow-up) | **C4.6b** | name Riedy & Walter's refs [5] and [8] as via-citation attributions; primaries not in the library (gap stays open, like 124's Weiland 2002) |
-| 153 | LOW | — (found at C4.7c) | **decision** | Current density's "never a bare PASS" docstrings against a verdict that returns PASS at margin ≥ 2; fix the text or the verdict, per the lead's call |
+| 153 | LOW | — (found at C4.7c) | **C4.7e** | **FIXED** `3f76340`; docstring and caveat comment corrected (PASS possible, always provisional); no verdict change, by decision |
 | 154 | MED | — (found at C4.7c) | **C4.7d** | **FIXED** `1f542fd`; no single-pulse relief below 200 µm (anti-conservative for short trains on small electrodes) |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
