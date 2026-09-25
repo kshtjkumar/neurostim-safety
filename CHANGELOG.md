@@ -298,7 +298,9 @@ measured line is not adopted, because the CAM and retina anchors disagree under 
 package's CAM rule (about 90 µA predicted, 55 µA measured). The comparison holds at the
 saturated pulse count. Below it, the single-pulse relief is applied on top of d⁻², which
 was not measured on small electrodes. The Current density check was already provisional
-at every size. Its detail now says so for this regime.
+at every size. Its detail now says so for this regime. Butterwick gives the small pipette as 0.115 mm in
+the text and 0.12 mm in the Fig. 6 caption. The module now notes both sizes, and no
+number depends on which is right.
 
 **Short trains on small electrodes get no single-pulse relief.** Below 200 µm the
 threshold is now the saturated (50-pulse) one whatever the pulse count. Butterwick

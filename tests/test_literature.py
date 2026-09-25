@@ -2018,3 +2018,20 @@ class TestLedger153CurrentDensityPassIsProvisional:
         assert "can PASS" in doc and "provisional at every size" in doc
         source = inspect.getsource(assessment.SafetyCalculator.assess)
         assert "never returns a bare PASS" not in source
+
+
+class TestLedger159SmallPipetteDiameter:
+    """Ledger 159 (Phase 4 review M5), C4b.4. Butterwick p. 2264 gives the small pipette
+    two sizes: "two different diameters—0.115 and 1.0 mm" in the text, and "pipettes of
+    0.12 (●) and 1.0 mm (○)" in the Fig. 6 caption. No number is affected."""
+
+    BUTTERWICK = "papers_stim_calc_ref/Tissue_Damage_by_Pulsed_Electrical_Stimulation.pdf"
+
+    def test_both_sizes_are_on_the_page_and_the_module_names_both(self):
+        from neurostim.data import butterwick2007 as b
+
+        page = _pdf_page_text(self.BUTTERWICK, 4)
+        assert "twodifferentdiameters—0.115and1.0mm" in page
+        assert "measuredwithpipettesof0.12(" in page
+        doc = " ".join(b.__doc__.split())
+        assert "0.115 mm" in doc and "0.12 mm" in doc and "Fig. 6 caption" in doc

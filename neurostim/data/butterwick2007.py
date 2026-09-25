@@ -24,7 +24,9 @@ conclusion Cogan et al. (2016) reach for charge density, arrived at independentl
 **What the paper measured on small electrodes, and why the model does not use it.**
 Below 200 um they give the damaging *total current* directly: 139 uA on retina at
 600 us and 55 uA on CAM at 60 us (p. 2264, Fig. 5), and a strength-duration slope of
-t^-0.29 for the 0.115 mm pipette against t^-0.48 for the 1 mm one (Fig. 6). This module
+t^-0.29 for the 0.115 mm pipette against t^-0.48 for the 1 mm one (Fig. 6). The page
+gives the small pipette two sizes, 0.115 mm in the text and 0.12 mm in the Fig. 6
+caption; no number here depends on which (ledger 159). This module
 does not model that line. It extends the large-electrode density from 200 um as d^-2,
 which sits below every measured point checked: at 600 us and 200 um it gives
 0.169 A/cm^2, where 139 uA over a 200 um disc is 0.44 A/cm^2 -- 2.62x below on retina,
@@ -123,8 +125,8 @@ SMALL_ELECTRODE_PULSE_WIDTH_US = {"retina": 600.0, "cam": 60.0}
 """Pulse width each small-electrode current was measured at (p. 2264)."""
 
 SMALL_ELECTRODE_DURATION_EXPONENT_RETINA = -0.29
-"""Strength-duration slope for the 0.115 mm pipette on retina (p. 2264, Fig. 6), read
-from the page image; the exponent is typeset as a glyph the text layer drops."""
+"""Strength-duration slope for the small pipette on retina -- 0.115 mm in the text, 0.12 mm
+in the Fig. 6 caption (p. 2264; ledger 159) -- read from the page image; the exponent is typeset as a glyph the text layer drops."""
 
 SMALL_ELECTRODE_QUOTE = (
     "In the regime of constant current, electrodes smaller than 200 um, the threshold "
