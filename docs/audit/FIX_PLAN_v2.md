@@ -1191,7 +1191,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 156 | HIGH | — (Phase 4 review M2) | **C4b.2** | pulse-width-dependent Pt/PtIr in-vivo derating from Leung's Fig. 4; provisional below 100 µs |
 | 157 | HIGH | — (Phase 4 review M3) | C5.5 | with 114: `max_current_cic_uA` ignores `medium` |
 | 158 | LOW | — (Phase 4 review M4) | **C4b.3** | provisional flag (and `limits_incomplete`) into `report()` and the CSV |
-| 159 | LOW | — (Phase 4 review M5) | **C4b.4** | Butterwick 0.115 mm text vs 0.12 mm Fig. 6 caption |
+| 159 | LOW | — (Phase 4 review M5) | **C4b.4** | **FIXED** `888305f`; both sizes named (text 0.115 mm, Fig. 6 caption 0.12 mm) |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
