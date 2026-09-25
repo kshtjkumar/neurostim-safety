@@ -269,6 +269,20 @@ arguments, so none of its numbers move.
 - The TiO2 capacitor note quotes the source's "a factor of as much as 4" and its table
   (2.4× storage), not "5-10x".
 
+### Derived values say they are derived, and second-hand citations say so
+
+- The AIROF record's measured area, 4.1 × 10⁻⁴ cm², is the midpoint of the 3.7-4.5 × 10⁻⁴
+  cm² that Hu et al. state (p. 494), and its note now says so.
+- The Ta2O5 module's Schaldach figures are back-solved from the densities the paper gives,
+  and the note says that rather than presenting them as read from it.
+- The DBS lead's contact diameter is not stated in Elwassif et al. It is the
+  manufacturer's figure, and the docstring names it as such.
+- Four sources the package cites but does not hold are now in `references.py` as
+  entries of their own, each with a note naming the paper it was cited through: Wang &
+  Weiland 2012 and McCreery 2008 (via Cogan 2016), and Robblee & Rose 1990 and Lan,
+  Daroux & Mortimer (via Riedy & Walter). A new `chapter` source type covers the book
+  chapter.
+
 ### Citations that point at the paper the values came from
 
 - `elwassif2006` cited the J Neural Eng article, with its DOI and PMID, but its Table I

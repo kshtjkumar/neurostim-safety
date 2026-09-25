@@ -14,7 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 SourceType = str
-"""One of ``journal``, ``conference``, ``abstract``, ``unpublished``, ``database``, ``user``.
+"""One of ``journal``, ``conference``, ``chapter``, ``abstract``, ``unpublished``, ``database``,
+``user``.
 
 ``abstract`` and ``unpublished`` matter: a value that has not been through peer review
 carries less weight than one that has, and the difference should be visible at the point
@@ -620,6 +621,76 @@ REFERENCES: dict[str, Reference] = {
         note=(
             "Placeholder provenance for values supplied by the user's own electrode "
             "characterisation. Never attribute these to a published source."
+        ),
+    ),
+    # --- secondary sources: cited via a paper in the library (ledger 78, S-25) --------
+    # Metadata as the citing paper's reference list prints it. None of these is in the
+    # library, so each value that rests on one is an attribution via the citing paper.
+    "wang_weiland2012": _ref(
+        key="wang_weiland2012",
+        authors="Wang B, Weiland JD",
+        title=(
+            "Reduction of current density at disk electrode periphery by shaping current "
+            "pulse edges"
+        ),
+        year=2012,
+        venue="Conf Proc IEEE Eng Med Biol Soc",
+        pages="5138-5141",
+        pmid="23367085",
+        source_type="conference",
+        note=(
+            "Not in the library; cited via cogan2016 (author manuscript p. 11, reference "
+            "list p. 20) for preferential edge corrosion of Pt discs at 240 uC/cm^2."
+        ),
+    ),
+    "mccreery2008": _ref(
+        key="mccreery2008",
+        authors="McCreery DB",
+        title="Cochlear nucleus auditory prostheses",
+        year=2008,
+        venue="Hearing Research",
+        volume="242",
+        pages="64-73",
+        note=(
+            "Not in the library; cited via cogan2016 (author manuscript p. 11, reference "
+            "list p. 18) for physiological thresholds of about 1-2 nC/phase on ~1000 um^2 "
+            "microelectrodes."
+        ),
+    ),
+    "robblee_rose1990_chapter": _ref(
+        key="robblee_rose1990_chapter",
+        authors="Robblee LS, Rose TL",
+        title=(
+            "Electrochemical guidelines for selection of protocols and electrode materials "
+            "for neural stimulation"
+        ),
+        year=1990,
+        venue=(
+            "In: Agnew WF, McCreery DB (eds), Neural Prostheses: Fundamental Studies. "
+            "Englewood Cliffs, NJ: Prentice-Hall"
+        ),
+        pages="25-66",
+        source_type="chapter",
+        note=(
+            "Not in the library; cited via riedy_walter1996 (their ref. [8], p. 663) for "
+            "the 20 uC/cm^2 tissue-damage figure and the reversible-limit term (ledger 152)."
+        ),
+    ),
+    "lan_daroux_mortimer": _ref(
+        key="lan_daroux_mortimer",
+        authors="Lan N, Daroux M, Mortimer JT",
+        title=(
+            "Pitting corrosion of high strength alloy stimulation electrodes under dynamic "
+            "conditions"
+        ),
+        year=1981,
+        venue="Journal of the Electrochemical Society",
+        volume="136",
+        pages="947-954",
+        note=(
+            "Not in the library; cited via riedy_walter1996 (their ref. [5], p. 663) for "
+            "the 1.2 V 316LVM reversible limit (ledger 152). The year is as Riedy & Walter "
+            "print it; volume 136 suggests 1989, which is not checked here."
         ),
     ),
     "rand_woods1971": _ref(

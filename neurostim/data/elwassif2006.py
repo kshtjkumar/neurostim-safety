@@ -138,6 +138,11 @@ PERFUSION_RANGE_PER_S = (0.004, 0.012)
 """Perfusion is tabulated in ml/s/ml, which is already a volumetric rate in 1/s."""
 
 LEAD_3389_CONTACT_DIAMETER_UM = 1270.0
+"""The Medtronic 3389's contact diameter, 1.27 mm.
+
+Not stated in the paper, which gives "1.5 mm electrodes and 0.5 mm spacing" (Fig. 1
+caption, p. 3581) but no diameter. It is the manufacturer's figure, and the library holds
+no manufacturer reference for it (ledger 78, S-23)."""
 LEAD_3389_CONTACT_HEIGHT_UM = 1500.0
 LEAD_3389_SPACING_UM = 500.0
 LEAD_3387_SPACING_UM = 1500.0

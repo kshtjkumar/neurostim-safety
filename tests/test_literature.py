@@ -1741,3 +1741,57 @@ class TestLedger77ExponentAndDerating:
         assert "afactoroffourlowerwithSIROF" in _pdf_page_text(
             "papers_stim_calc_ref/nihms854736.pdf", 8
         )
+
+
+class TestLedger78DerivedValuesAndSecondaryChains:
+    """Ledger 78 (literature audit S-22, S-23, S-25), C4.9b."""
+
+    def test_s22_two_derived_values_are_labelled_as_derived(self):
+        """AIROF's measured_area_cm2 = 4.1e-4 is the midpoint of Beebe & Rose's "3.7 to
+        4.5 x 10-4 cm2" (p. 494); the Schaldach wire's forming_voltage_V = 2.5 is back-solved
+        from the quoted "breakdown voltage of 2 V" (Rose et al. p. 184) over 0.8."""
+        from neurostim.data import ta2o5_capacitor as ta
+
+        assert "3.7to4.5x10-4cm2" in _pdf_page_text("papers_stim_calc_ref/beebe1988.pdf", 1)
+        airof = get_material("AIROF").cic
+        assert airof.measured_area_cm2 == pytest.approx(4.1e-4)
+        assert "midpoint" in airof.note and "3.7-4.5e-4" in airof.note
+        schaldach = next(d for d in ta.DESIGNS if "Schaldach" in d.label)
+        assert "back-solved" in schaldach.note and "2 V" in schaldach.note
+
+    def test_s23_the_contact_diameter_is_not_attributed_to_elwassif(self):
+        """The conference paper states "1.5 mm electrodes and 0.5 mm spacing" (p. 3581) but
+        no contact diameter; the 1.27 mm is the manufacturer's figure."""
+        import inspect
+
+        from neurostim.data import elwassif2006 as e
+
+        assert "1.5mmelectrodesand0.5mmspacing" in _pdf_page_text(
+            "papers_stim_calc_ref/elwassif2006.pdf", 2
+        )
+        source = inspect.getsource(e)
+        doc = source.split("LEAD_3389_CONTACT_DIAMETER_UM = ", 1)[1].split('"""', 2)[1]
+        assert "not stated in the paper" in doc.lower() and "manufacturer" in doc
+
+    @pytest.mark.parametrize(
+        ("key", "via"),
+        [("wang_weiland2012", "cogan2016"), ("mccreery2008", "cogan2016"),
+         ("robblee_rose1990_chapter", "riedy_walter1996"),
+         ("lan_daroux_mortimer", "riedy_walter1996")],
+    )
+    def test_s25_each_secondary_source_is_recorded_as_cited_via(self, key, via):
+        """Four sources the package's figures rest on through another paper. Each has an
+        entry whose metadata is taken from the citing paper's reference list, marked as not
+        in the library and cited via that paper."""
+        from neurostim.references import cite
+
+        ref = cite(key)
+        assert f"cited via {via}" in ref.note
+        assert "not in the library" in ref.note.lower()
+
+    def test_s25_the_citing_lists_carry_them(self):
+        cogan = _pdf_page_text("papers_stim_calc_ref/nihms854736.pdf", 20)
+        assert "Reductionofcurrentdensityatdiskelectrodeperiphery" in cogan
+        assert "Cochlearnucleusauditoryprostheses" in _pdf_page_text(
+            "papers_stim_calc_ref/nihms854736.pdf", 18
+        )

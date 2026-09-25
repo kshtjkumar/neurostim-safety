@@ -48,7 +48,9 @@ MICROELECTRODE_PHYSIOLOGICAL_THRESHOLD_NC_PER_PHASE = (1.0, 2.0)
 On that area this corresponds to 100-200 uC/cm^2, several times the 30 uC/cm^2 approved
 for DBS -- which is the crux of the paper: useful microstimulation requires charge
 densities that the macroelectrode limit forbids.
-"""
+
+McCreery 2008 (``mccreery2008``), cited via this review (author manuscript p. 11); the
+primary is not in the library (ledger 78, S-25)."""
 
 MACRO_MICRO_BOUNDARY_DIAMETER_UM = (200.0, 300.0)
 """Diameter range where current thresholds stop scaling as macroelectrodes.
@@ -209,7 +211,10 @@ POROUS_PT_SALINE_CIC_UC_CM2 = 1000.0
 """Porous platinum can reach about 1 mC/cm^2 in saline."""
 
 PT_EDGE_CORROSION_CHARGE_DENSITY_UC_CM2 = 240.0
-"""Preferential corrosion at platinum disc edges was reported at this density."""
+"""Preferential corrosion at platinum disc edges was reported at this density.
+
+Wang & Weiland 2012 (``wang_weiland2012``), cited via this review (author manuscript
+p. 11); the primary is not in the library (ledger 78, S-25)."""
 
 AIROF_BIAS_SAFE_CHARGE_NC_PER_PHASE = 3.6
 """Biased AIROF showed no deleterious tissue effect at or below this charge per phase."""

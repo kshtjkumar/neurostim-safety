@@ -161,7 +161,12 @@ DESIGNS: tuple[CapacitorElectrode, ...] = (
         charge_storage_uC_mm2=1.5,
         forming_voltage_V=2.5,
         reference="rose1985_capacitor",
-        note="Quoted at a 2 V breakdown voltage rather than at 80 % of forming",
+        note=(
+            "Quoted at a 2 V breakdown voltage rather than at 80 % of forming (Rose et "
+            "al. p. 184: 'about 1.5 uC/mm2 at breakdown voltage of 2 V'). "
+            "forming_voltage_V = 2.5 is back-solved from that 2 V over 0.8, not a "
+            "stated forming voltage (ledger 78, S-22)"
+        ),
     ),
     CapacitorElectrode(
         label="sintered porous disc (Guyton & Hambrecht 1973/74)",

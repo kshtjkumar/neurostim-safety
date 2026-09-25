@@ -520,7 +520,9 @@ _MATERIAL_LIST: tuple[Material, ...] = (
                 "and uncompensated iR drop widen the usable window. Cogan 2008 "
                 "Table 2 rounds this row to 1-5 mC/cm^2. Cogan also reports Qinj "
                 "rising from 1.67 to 2.0 mC/cm^2 between 20 C and 37 C at 0.1 ms, so "
-                "room-temperature figures understate body-temperature performance."
+                "room-temperature figures understate body-temperature performance. "
+                "measured_area_cm2 = 4.1e-4 is the midpoint of their stated "
+                "3.7-4.5e-4 cm^2 (p. 494), not a single measured area (ledger 78, S-22)."
             ),
         ),
         water_window=_PT_IR_WINDOW,
