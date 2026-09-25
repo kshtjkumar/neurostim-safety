@@ -53,7 +53,7 @@ from .references import REFERENCES, Reference, bibliography, cite
 from .safety import SafetyAssessment, SafetyCalculator, Status
 from .uncertainty import Interval
 
-__version__ = "0.15.0"
+__version__ = "0.16.0"
 
 __all__ = [
     "MATERIALS",

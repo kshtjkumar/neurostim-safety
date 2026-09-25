@@ -660,7 +660,9 @@ class TestTheDigestCoversEveryConditionAndOldRecordsStillVerify:
         from neurostim import audit
 
         record = audit.record(self._calc())
-        assert record.payload_version == 2
+        # G12, changed at C4b.1 (ledger 155): record() now writes version 3, which keeps
+        # version 2's conditions and adds the answer and the model constants.
+        assert record.payload_version == 3
         assert set(record.constants_v2) == self.V2_FIELDS
         assert "constants_v2" in record.payload()
         assert record.digest_matches
@@ -692,3 +694,151 @@ class TestTheDigestCoversEveryConditionAndOldRecordsStillVerify:
         assert loaded.digest_matches
         assert audit.reproduces(loaded, self._calc())[0]
         assert "constants_v2" not in loaded.payload()
+
+
+class TestTheDigestCoversTheAnswerAndTheModel:
+    """Ledger 155 (Phase 4 review M1), C4b.1. A record made at c89fdf4 of a 500 um Pt disc
+    in vivo, limiting current 70.12483601762932 uA, "reproduced" at 507ab91 as (True, [])
+    though the answer had moved to 112.84456370652995 uA (C4.5). The digest covered inputs
+    and base material constants only: not the results, not the model constants."""
+
+    FIXTURE = "fixtures/audit_c89fdf4_pt500_in_vivo.json"
+
+    @staticmethod
+    def _pt500_in_vivo():
+        return SafetyCalculator(
+            DiscElectrode(500, "Pt"), StimProtocol(50, 200, 130, 1), medium="in_vivo"
+        )
+
+    def _old(self):
+        from pathlib import Path
+
+        from neurostim import audit
+
+        return audit.load((Path(__file__).parent / self.FIXTURE).read_text())
+
+    def test_the_reviewers_record_loads_and_still_verifies(self):
+        old = self._old()
+        assert old.payload_version == 1
+        assert old.package_version == "0.15.0"
+        assert old.digest_matches
+        assert old.results["limiting_current_uA"] == 70.12483601762932
+
+    def test_the_reviewers_record_no_longer_reproduces_and_names_the_limit(self):
+        from neurostim import audit
+
+        ok, diffs = audit.reproduces(self._old(), self._pt500_in_vivo())
+        assert not ok
+        assert (
+            "results.limiting_current_uA: 70.12483601762932 -> 112.84456370652995" in diffs
+        )
+
+    def test_a_new_record_digests_the_answer_and_the_model_constants(self):
+        from neurostim import audit
+
+        rec = audit.record(self._pt500_in_vivo())
+        body = rec.payload()
+        assert rec.payload_version == 3
+        answer = body["answer"]
+        assert answer["limiting_current_uA"] == 112.84456370652995
+        assert answer["limiting_mechanism"] == "Charge injection limit"
+        checks = answer["checks"]
+        assert checks["Charge injection limit"]["ceiling_uA"] == 112.84456370652995
+        assert set(checks) == {c.name for c in self._pt500_in_vivo().assess().checks}
+        assert {"status", "ceiling_uA", "provisional"} == set(checks["Shannon criterion"])
+        assert set(body["model_constants"]) == set(audit.MODEL_CONSTANT_MODULES)
+        # Tampering with the stored answer breaks the digest.
+        forged = replace(rec, answer={**rec.answer, "limiting_current_uA": 1.0})
+        assert not forged.digest_matches
+
+    def test_a_moved_model_constant_fails_and_names_its_module(self, monkeypatch):
+        from neurostim import audit
+        from neurostim.data import butterwick2007
+
+        rec = audit.record(self._pt500_in_vivo())
+        monkeypatch.setattr(butterwick2007, "PREPARATION", "moved")
+        ok, diffs = audit.reproduces(rec, self._pt500_in_vivo())
+        assert not ok
+        assert any(d.startswith("model_constants.neurostim.data.butterwick2007:") for d in diffs)
+
+    def test_a_moved_answer_fails_even_when_every_constant_agrees(self, monkeypatch):
+        from neurostim import audit
+        from neurostim.safety import assessment
+
+        rec = audit.record(self._pt500_in_vivo())
+        real = assessment.SafetyCalculator.report
+
+        def shifted(self):
+            out = real(self)
+            return {**out, "status": "FAIL"}
+
+        monkeypatch.setattr(assessment.SafetyCalculator, "report", shifted)
+        ok, diffs = audit.reproduces(rec, self._pt500_in_vivo())
+        assert not ok
+        assert any(d.startswith("results.status:") for d in diffs)
+
+    def test_the_same_answer_under_another_version_still_reproduces(self):
+        """The version is recorded, and a version difference alone is not a failure: the
+        inputs, the constants, the model constants and the answer all agree."""
+        from neurostim import audit
+
+        rec = audit.record(self._pt500_in_vivo())
+        older = replace(rec, package_version="0.0.1")
+        assert older.package_version != rec.package_version
+        older = replace(older, digest=older.compute_digest())
+        assert audit.reproduces(older, self._pt500_in_vivo()) == (True, [])
+
+    def test_the_model_modules_cover_every_data_module_the_checks_read(self):
+        import importlib
+        import pkgutil
+        import types
+
+        import neurostim.safety
+        from neurostim import audit
+
+        referenced = set()
+        for info in pkgutil.iter_modules(neurostim.safety.__path__):
+            module = importlib.import_module(f"neurostim.safety.{info.name}")
+            for value in vars(module).values():
+                if isinstance(value, types.ModuleType) and value.__name__.startswith(
+                    "neurostim.data."
+                ):
+                    referenced.add(value.__name__)
+        assert referenced
+        assert referenced <= set(audit.MODEL_CONSTANT_MODULES)
+
+    def test_every_model_constant_canonicalises(self):
+        from neurostim import audit
+
+        hashes = audit.model_constants()
+        assert all(len(h) == 64 for h in hashes.values())
+        assert hashes == audit.model_constants()
+
+    def test_a_strict_json_round_trip_keeps_a_v3_record_verifying(self):
+        from neurostim import audit
+
+        rec = audit.record(self._pt500_in_vivo())
+        loaded = audit.load(rec.to_json())
+        assert loaded.digest_matches and loaded == rec
+        assert audit.reproduces(loaded, self._pt500_in_vivo()) == (True, [])
+
+
+class TestThePackageVersionIsBumpedForPhasesOneToFour:
+    """Ledger 155: __version__ stayed 0.15.0 through Phases 1-4 while numbers moved, and
+    pyproject.toml and CITATION.cff said 0.13.0."""
+
+    def test_the_version_agrees_everywhere(self):
+        import re
+        from pathlib import Path
+
+        import neurostim
+
+        root = Path(__file__).resolve().parents[1]
+        # tomllib is 3.11+, and CI runs 3.10: read the one line.
+        pyproject = re.search(
+            r'^version = "([^"]+)"$', (root / "pyproject.toml").read_text(), re.M
+        )
+        assert neurostim.__version__ == "0.16.0"
+        assert pyproject is not None and pyproject.group(1) == neurostim.__version__
+        assert "\nversion: 0.16.0\n" in (root / "CITATION.cff").read_text()
+        assert "\n## 0.16.0 " in (root / "CHANGELOG.md").read_text()

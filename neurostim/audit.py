@@ -16,11 +16,31 @@ Inputs *and* the constants they were evaluated against. If a charge-injection li
 later corrected, an old record's digest will no longer match a fresh run of the same
 inputs -- which is the point. A digest over inputs alone would silently claim
 reproducibility across a change that altered the answer.
+
+Until payload version 3 it did exactly that for everything outside the material record:
+a record of a 500 um Pt disc in vivo, made before the in-vivo derating moved, still
+"reproduced" when its limiting current had gone from 70.12 to 112.84 uA (ledger 155).
+Version 3 adds the answer itself -- the limiting current and mechanism, the status, the
+flags, and every check's status, ceiling and provisional flag -- and a SHA-256 of the
+module-level constants of every module the assessment reads (:data:`MODEL_CONSTANT_MODULES`),
+one hash per module so a mismatch names the module.
+
+What reproduces means
+---------------------
+:func:`reproduces` rebuilds the record at the original's payload version and compares it
+section by section, and compares the stored ``results`` with fresh ones key by key,
+whatever the version -- so a version 1 or 2 record whose answer moved fails too, and
+says which value moved. The package version is recorded and reported, but a difference
+in it alone is not a failure: when the inputs, the constants, the model constants and the
+answer all agree, the result has been reproduced, whichever release computed it.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import enum
 import hashlib
+import importlib
 import json
 import math
 import platform
@@ -57,6 +77,11 @@ class AuditRecord:
     """The conditions the version 1 digest left out: the verified flag, area basis,
     waveform, bias, medium, temperature, measured area, polarity sub-ranges and the
     recommended policy -- the conditions the package says are its point."""
+    answer: dict[str, Any] = field(default_factory=dict)
+    """Version 3: the answer the digest certifies (ledger 155); see :func:`answer_of`."""
+    model_constants: dict[str, str] = field(default_factory=dict)
+    """Version 3: one SHA-256 per module in :data:`MODEL_CONSTANT_MODULES`; see
+    :func:`model_constants`."""
 
     def payload(self) -> dict[str, Any]:
         """The parts of the record the digest is taken over.
@@ -74,6 +99,9 @@ class AuditRecord:
         if self.payload_version >= 2:
             body["payload_version"] = self.payload_version
             body["constants_v2"] = self.constants_v2
+        if self.payload_version >= 3:
+            body["answer"] = self.answer
+            body["model_constants"] = self.model_constants
         return body
 
     def compute_digest(self) -> str:
@@ -120,27 +148,141 @@ class AuditRecord:
         return "\n".join(lines)
 
     def differences_from(self, other: AuditRecord) -> list[str]:
-        """Every payload field that differs between two records.
+        """Every payload field that differs, as ``"path: this -> other"``.
 
-        Use when a digest fails to match: this says which input or constant moved.
+        Use when a digest fails to match: this says which input or constant moved. Nested
+        sections are walked to the leaf, so a moved check ceiling reads
+        ``answer.checks.<name>.ceiling_uA``, not the whole table.
         """
-        diffs: list[str] = []
-        mine, theirs = self.payload(), other.payload()
-        for section in sorted(set(mine) | set(theirs)):
-            a, b = mine.get(section), theirs.get(section)
-            if a == b:
-                continue
-            if isinstance(a, dict) and isinstance(b, dict):
-                for key in sorted(set(a) | set(b)):
-                    if a.get(key) != b.get(key):
-                        diffs.append(f"{section}.{key}: {a.get(key)!r} -> {b.get(key)!r}")
-            else:
-                diffs.append(f"{section}: {a!r} -> {b!r}")
-        return diffs
+        return _diff("", self.payload(), other.payload())
 
 
-PAYLOAD_VERSION = 2
-"""The payload :func:`record` writes (ledger 77, S-10)."""
+def _diff(path: str, a: Any, b: Any) -> list[str]:
+    """Leaf-level differences between two JSON-shaped values."""
+    if a == b:
+        return []
+    if isinstance(a, dict) and isinstance(b, dict):
+        out: list[str] = []
+        for key in sorted(set(a) | set(b), key=str):
+            out += _diff(f"{path}.{key}" if path else str(key), a.get(key), b.get(key))
+        return out
+    return [f"{path}: {a!r} -> {b!r}"]
+
+
+PAYLOAD_VERSION = 3
+"""The payload :func:`record` writes (ledger 77, S-10; version 3, ledger 155)."""
+
+MODEL_CONSTANT_MODULES: tuple[str, ...] = (
+    "neurostim.data.butterwick2007",
+    "neurostim.data.cogan2016",
+    "neurostim.data.gabriel1996",
+    "neurostim.data.mccreery1995",
+    "neurostim.data.mccreery2010",
+    "neurostim.geometry.arrays",
+    "neurostim.geometry.base",
+    "neurostim.geometry.planar",
+    "neurostim.geometry.volumetric",
+    "neurostim.materials",
+    "neurostim.protocol",
+    "neurostim.safety._limits",
+    "neurostim.safety.assessment",
+    "neurostim.safety.charge",
+    "neurostim.safety.compliance",
+    "neurostim.safety.current_density",
+    "neurostim.safety.envelope",
+    "neurostim.safety.shannon",
+    "neurostim.safety.water_window",
+    "neurostim.uncertainty",
+    "neurostim.units",
+)
+"""Every module whose module-level constants the assessment reads (ledger 155).
+
+The data modules are the ones :mod:`neurostim.safety` imports; a test holds the list to
+that. A constant is a module attribute named in capitals (``_CAPITALS`` included) that
+is not a module, class or function."""
+
+
+def _canonical(value: Any) -> Any:
+    """A JSON-shaped, deterministic form of one constant.
+
+    Floats go through ``repr``, which round-trips exactly and names ``inf``; dataclasses
+    by field; mappings by sorted key; functions by qualified name; a sentinel with no
+    state by its class. Anything else raises rather than hashing something unstable.
+    """
+    if value is None or isinstance(value, bool | int | str):
+        return value
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, enum.Enum):
+        return _canonical(value.value)
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return {f.name: _canonical(getattr(value, f.name)) for f in dataclasses.fields(value)}
+    if isinstance(value, dict):
+        return {str(k): _canonical(v) for k, v in sorted(value.items(), key=lambda kv: str(kv[0]))}
+    if isinstance(value, list | tuple):
+        return [_canonical(v) for v in value]
+    if isinstance(value, set | frozenset):
+        return sorted((_canonical(v) for v in value), key=repr)
+    if callable(value):
+        return f"{value.__module__}.{value.__qualname__}"
+    if not getattr(value, "__dict__", None) and not getattr(type(value), "__slots__", ()):
+        return f"<{type(value).__module__}.{type(value).__qualname__}>"
+    raise TypeError(f"cannot canonicalise a model constant of type {type(value).__name__}")
+
+
+def _is_constant_name(name: str) -> bool:
+    bare = name.lstrip("_")
+    return bool(bare) and bare.upper() == bare and any(c.isalpha() for c in bare)
+
+
+def model_constants() -> dict[str, str]:
+    """One SHA-256 per module in :data:`MODEL_CONSTANT_MODULES`, over its constants."""
+    import types
+
+    hashes: dict[str, str] = {}
+    for name in MODEL_CONSTANT_MODULES:
+        module = importlib.import_module(name)
+        constants = {
+            key: _canonical(value)
+            for key, value in sorted(vars(module).items())
+            if _is_constant_name(key)
+            and not isinstance(value, types.ModuleType | type)
+            and not (callable(value) and not isinstance(value, dict))
+        }
+        canonical = json.dumps(constants, sort_keys=True, separators=(",", ":"))
+        hashes[name] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return hashes
+
+
+def _finite_or_none(value: float) -> float | None:
+    return value if math.isfinite(value) else None
+
+
+def answer_of(calc: SafetyCalculator) -> dict[str, Any]:
+    """The answer a version 3 digest certifies (ledger 155).
+
+    The limiting current and mechanism, the overall status, the three flags that qualify
+    the limit, and every check's status, ceiling and provisional flag. An unbounded
+    ceiling is ``None``, as in the strict JSON report.
+    """
+    assessment = calc.assess()
+    report = calc.report()
+    return {
+        "limiting_current_uA": report["limiting_current_uA"],
+        "limiting_mechanism": report["limiting_mechanism"],
+        "status": report["status"],
+        "limit_is_provisional": assessment.limit_is_provisional,
+        "limits_incomplete": assessment.limits_incomplete,
+        "unsafe_at_any_amplitude": [c.name for c in assessment.unsafe_at_any_amplitude],
+        "checks": {
+            check.name: {
+                "status": check.status.value,
+                "ceiling_uA": _finite_or_none(check.ceiling_uA),
+                "provisional": check.provisional,
+            }
+            for check in assessment.checks
+        },
+    }
 
 
 def record(
@@ -200,6 +342,11 @@ def record(
             ),
             "cic_recommended_policy": cic.recommended_policy,
         }
+    answer: dict[str, Any] = {}
+    hashes: dict[str, str] = {}
+    if payload_version >= 3:
+        answer = answer_of(calc)
+        hashes = model_constants()
     rec = AuditRecord(
         package_version=__version__,
         timestamp_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -215,6 +362,8 @@ def record(
         note=note,
         payload_version=payload_version,
         constants_v2=constants_v2,
+        answer=answer,
+        model_constants=hashes,
     )
     # Frozen dataclass: rebuild with the digest filled in.
     return AuditRecord(**{**asdict(rec), "digest": rec.compute_digest()})
@@ -240,11 +389,23 @@ def reproduces(original: AuditRecord, calc: SafetyCalculator) -> tuple[bool, lis
     """Whether a calculator reproduces a stored record, and what differs if not.
 
     The usual failure is not a mistake but a correction: a constant moved between
-    versions. The returned differences say which.
+    versions. The differences read ``"path: recorded -> now"``. The stored results are
+    compared key by key at every payload version, so an old record whose answer moved
+    fails and names the value (ledger 155); a key only one side has is not compared. A
+    package-version difference is listed beside a failure but is not one by itself; see
+    the module docstring.
     """
     # At the stored record's own payload version, so a version 1 record is checked the way
     # it was made (ledger 77, S-10).
     fresh = record(calc, payload_version=original.payload_version)
-    if fresh.digest == original.digest:
+    diffs = original.differences_from(fresh)
+    shared = sorted(set(original.results) & set(fresh.results))
+    diffs += _diff(
+        "results",
+        {key: original.results[key] for key in shared},
+        {key: fresh.results[key] for key in shared},
+    )
+    failing = [d for d in diffs if not d.startswith("package_version:")]
+    if not failing:
         return True, []
-    return False, fresh.differences_from(original)
+    return False, diffs

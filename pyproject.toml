@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neurostim-safety"
-version = "0.13.0"
+version = "0.16.0"
 description = "Electrode safety and stimulation modelling for neural interfaces, with primary-source provenance for every constant"
 readme = "README.md"
 requires-python = ">=3.10"

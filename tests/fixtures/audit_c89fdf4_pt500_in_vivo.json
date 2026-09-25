@@ -1,0 +1,77 @@
+{
+  "package_version": "0.15.0",
+  "timestamp_utc": "2026-09-25T00:00:00+00:00",
+  "python_version": "3.x",
+  "electrode": {
+    "shape": "disc",
+    "diameter_um": 500,
+    "material": "Pt",
+    "environment": "half_space",
+    "stands_in_for": ""
+  },
+  "protocol": {
+    "current_uA": 50,
+    "pulse_width_us": 200,
+    "frequency_hz": 130,
+    "train_duration_s": 1,
+    "waveform": "biphasic",
+    "interphase_gap_us": 0.0,
+    "anodic_first": false,
+    "return_phase_ratio": 1.0,
+    "charge_recovery_ratio": 1.0,
+    "train_duty_cycle": 1.0
+  },
+  "settings": {
+    "shannon_k": 1.5,
+    "cic_policy": "conservative",
+    "medium": "in_vivo",
+    "tissue_conductivity_S_per_m": 0.35,
+    "lead_resistance_ohm": 0.0,
+    "compliance_V": null,
+    "measured_impedance_ohm": null,
+    "resting_potential_V": 0.0,
+    "capacitance_uF_cm2": null
+  },
+  "constants": {
+    "material": "Pt",
+    "cic_units": "mC/cm2",
+    "cic_low": 0.05,
+    "cic_high": 0.15,
+    "cic_reference": "rose_robblee1990",
+    "cic_pulse_width_us": 200.0,
+    "shannon_k_default": 1.5,
+    "water_window_V": [
+      -0.6,
+      0.8
+    ],
+    "chronic_threshold_uC_cm2": [
+      20.0,
+      50.0
+    ]
+  },
+  "results": {
+    "area_cm2": 0.001963495408493621,
+    "charge_uC": 0.01,
+    "charge_density_uC_cm2": 5.09295817894065,
+    "shannon_metric": -1.2930298900382091,
+    "max_current_shannon_uA": 1245.905059196182,
+    "max_current_cic_uA": 981.7477042468105,
+    "material": "Pt",
+    "shannon_k_threshold": 1.5,
+    "cic_policy": "conservative",
+    "cic_limit_uC_cm2": 7.142857142857143,
+    "max_charge_shannon_uC": 0.2491810118392364,
+    "access_resistance_ohm": 2857.1428571428573,
+    "required_compliance_V": 0.16322897557290544,
+    "required_compliance_note": "",
+    "peak_electrode_potential_V": -0.0203718327157626,
+    "duty_cycle": 0.052,
+    "net_dc_current_uA": 0.0,
+    "limiting_current_uA": 70.12483601762932,
+    "limiting_mechanism": "Charge injection limit",
+    "status": "CAUTION"
+  },
+  "digest": "e9b4b5c8f9cc9761da665d64cde6244e40c9b85a70faefb40614008d0ba592c0",
+  "note": "Phase 4 review M1 repro, made at c89fdf4",
+  "operator": ""
+}

@@ -1,6 +1,36 @@
 # Changelog
 
-## Unreleased
+## 0.16.0 — unreleased: the limiting current was 7.07x too high
+
+Phases 1-4 of the audit fixes. The version is a minor bump because, before 1.0, a minor
+bump is where incompatible changes go, and these are incompatible:
+- published numbers move (the limiting current, the in-vivo derating, the drift budget);
+- `report()` and the JSON write `None` where they wrote infinity;
+- the JSON is strict;
+- audit records gain a payload version.
+
+1.0.0 would promise a stable interface, and Phases 5-7 still change it.
+`pyproject.toml` and `CITATION.cff` had stayed at 0.13.0 while `__version__` said
+0.15.0. All three now say 0.16.0.
+
+### An audit record certifies the answer, not only the inputs
+
+`audit.reproduces` said a record reproduced when the answer had moved. Take a record of a
+500 µm Pt disc in vivo made before the in-vivo derating changed: its limiting current was
+70.12 µA and is now 112.84 µA, yet it came back `(True, [])`. The digest covered the
+inputs and the material record, not the results or the model's other constants.
+
+- **Payload version 3**, which `record()` now writes, adds the answer to the digest: the
+  limiting current and mechanism, the status, the provisional, incomplete and unsafe
+  flags, and every check's status, ceiling and provisional flag.
+- Version 3 also adds a SHA-256 per module over the constants of every module the
+  assessment reads (`audit.MODEL_CONSTANT_MODULES`, `audit.model_constants()`).
+- `reproduces` compares the stored results with fresh ones at every payload version.
+  That record now fails with `results.limiting_current_uA: 70.12483601762932 ->
+  112.84456370652995`.
+- Differences now read recorded → now, walked to the leaf.
+- A package-version difference alone is not a failure. It is listed beside a real one.
+- Records of versions 1 and 2 still load and verify.
 
 ### The limiting current was 7.07x too high, and is corrected
 
