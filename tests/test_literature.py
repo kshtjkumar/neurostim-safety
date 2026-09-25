@@ -1991,3 +1991,30 @@ class TestLedger78SourceRadius:
         two = e.implied_power_W(source_radius_m=0.9759610647971567e-3)
         assert two == pytest.approx(5.30e-3, rel=1e-3)
         assert e.V_RMS**2 / two == pytest.approx(459.2, rel=1e-3)
+
+
+class TestLedger153CurrentDensityPassIsProvisional:
+    """Ledger 153, per the user's decision: text only, no verdict change. The check can
+    PASS, and is provisional at every size; its docstring and the caveat comment said it
+    never returns a bare PASS."""
+
+    def test_a_pass_is_possible_and_always_provisional(self):
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.safety.assessment import Status
+
+        assessment = SafetyCalculator(
+            DiscElectrode(100.0, "Pt"), StimProtocol(5, 200, 130, 1)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Current density")
+        assert check.status is Status.PASS and check.provisional
+
+    def test_the_text_no_longer_claims_no_bare_pass(self):
+        import inspect
+
+        from neurostim.safety import assessment
+
+        doc = " ".join(assessment._current_density_check.__doc__.split())
+        assert "never returns a bare PASS" not in doc
+        assert "can PASS" in doc and "provisional at every size" in doc
+        source = inspect.getsource(assessment.SafetyCalculator.assess)
+        assert "never returns a bare PASS" not in source

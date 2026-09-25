@@ -1578,9 +1578,12 @@ def _envelope_check(result: envelope_mod.EnvelopeResult) -> Check:
 def _current_density_check(result: jd_mod.CurrentDensityResult) -> Check:
     """Compare current density against the Butterwick electroporation threshold.
 
-    The threshold comes from chick membrane and retina, so this never returns a bare
-    PASS: crossing it is a FAIL, but staying under it is a CAUTION at best, because the
-    margin is against a preparation that is not the one being stimulated.
+    The threshold comes from chick membrane and retina. Crossing it is a FAIL; a margin
+    below ``CAUTION_MARGIN`` is a CAUTION; above that the check can PASS. It is
+    provisional at every size, because the margin is against a preparation that is not
+    the one being stimulated, so a limit it sets carries the PROVISIONAL note. The
+    docstring used to claim no bare PASS was possible, which the verdict never matched
+    (ledger 153).
 
     Over the *binding* phase, since ledger 4. A return phase of width ``W*r`` carries
     ``I*r_a/r`` through the same area, and the package compared only the leading one: with
@@ -2202,8 +2205,8 @@ class SafetyCalculator:
             or ww_result.capacitance_provisional
             or drift_binds,
             # Always. Butterwick's threshold is chick membrane and retina, so the margin
-            # is against a preparation that is not the one being stimulated -- which is
-            # also why this check never returns a bare PASS.
+            # is against a preparation that is not the one being stimulated. The check
+            # can still PASS; this flag is what marks it (ledger 153).
             "Current density": jd_result.binding_threshold is not None,
             # The macro/micro boundary is itself a band; inside it neither criterion is
             # clearly the right one.

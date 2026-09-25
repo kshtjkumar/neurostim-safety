@@ -281,6 +281,11 @@ the Current density ceiling at one pulse falls from 822.4 µA to 117.5 µA. None
 limiting currents move, because Microelectrode charge/phase binds first. At and above
 200 µm nothing changes.
 
+The Current density check can PASS, and always could. It is provisional at every size,
+so any limit it sets carries the PROVISIONAL note. The 0.6.0 entry below, and the
+check's own docstring, said it "never returns a bare PASS". The docstring and the
+caveat comment are corrected, and no verdict changes.
+
 ### Five smaller corrections to the data modules
 
 - `mccreery1990.separating_k_range()` returns (1.699, 2.107), from the highest no-damage
