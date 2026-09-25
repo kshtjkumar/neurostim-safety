@@ -149,11 +149,15 @@ IN_VIVO_DERATING: dict[str, Derating] = {
         "both electrodes' (their in vitro 1.69 and 1.18 mC/cm^2 in PBS; in the bird brain "
         "0.14 and 0.15)",
     ),
+    # Both sources named (ledger 77, S-8, user decision (b)): the 2-3 is Kane's, the 4
+    # the review's. The evidence named only Kane while the range went to 4.
     "SIROF": Derating(
         2.0,
         4.0,
-        "Kane et al. 2013: chronically implanted in cat cortex, electrodes delivering "
-        "8 nC/phase in vitro approached or exceeded water reduction in vivo",
+        "Kane et al. 2013 (author manuscript p. 7): chronically implanted in cat cortex, "
+        "'the maximum charge capacity in vivo was reduced by a factor of 2-3'; the upper "
+        "4 is Cogan et al. 2016's review figure (author manuscript p. 8), 'a factor of "
+        "four lower with SIROF microelectrodes'",
     ),
 }
 """Reported reductions in charge-injection capacity measured in vivo versus in saline.

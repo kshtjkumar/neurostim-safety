@@ -24,7 +24,7 @@ import hashlib
 import json
 import math
 import platform
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -47,6 +47,16 @@ class AuditRecord:
     digest: str = ""
     note: str = ""
     operator: str = ""
+    payload_version: int = 1
+    """Which payload the digest is taken over (ledger 77, S-10).
+
+    1 is the payload before the measurement conditions joined it; a record loaded without
+    this field is version 1, and keeps computing and verifying the old way. 2 adds
+    :attr:`constants_v2`. :func:`record` writes version 2."""
+    constants_v2: dict[str, Any] = field(default_factory=dict)
+    """The conditions the version 1 digest left out: the verified flag, area basis,
+    waveform, bias, medium, temperature, measured area, polarity sub-ranges and the
+    recommended policy -- the conditions the package says are its point."""
 
     def payload(self) -> dict[str, Any]:
         """The parts of the record the digest is taken over.
@@ -54,13 +64,17 @@ class AuditRecord:
         Excludes the timestamp, operator and note: the same calculation run twice by
         different people on different days must produce the same digest.
         """
-        return {
+        body: dict[str, Any] = {
             "package_version": self.package_version,
             "electrode": self.electrode,
             "protocol": self.protocol,
             "settings": self.settings,
             "constants": self.constants,
         }
+        if self.payload_version >= 2:
+            body["payload_version"] = self.payload_version
+            body["constants_v2"] = self.constants_v2
+        return body
 
     def compute_digest(self) -> str:
         """SHA-256 over the canonicalised payload."""
@@ -125,10 +139,22 @@ class AuditRecord:
         return diffs
 
 
+PAYLOAD_VERSION = 2
+"""The payload :func:`record` writes (ledger 77, S-10)."""
+
+
 def record(
-    calc: SafetyCalculator, *, operator: str = "", note: str = ""
+    calc: SafetyCalculator,
+    *,
+    operator: str = "",
+    note: str = "",
+    payload_version: int = PAYLOAD_VERSION,
 ) -> AuditRecord:
-    """Build a reproducibility record for a calculator's current configuration."""
+    """Build a reproducibility record for a calculator's current configuration.
+
+    ``payload_version=1`` builds the record as it was before the conditions joined the
+    digest, which is what :func:`reproduces` does to check a version 1 record.
+    """
     # Imported here rather than at module scope: the package __init__ imports this
     # module, so a top-level import of __version__ would be circular.
     from . import __version__
@@ -155,6 +181,25 @@ def record(
             material.chronic_threshold.high_uC_cm2,
         ]
 
+    cic = material.cic
+    constants_v2: dict[str, Any] = {}
+    if payload_version >= 2:
+        constants_v2 = {
+            "cic_verified": cic.verified,
+            "cic_area_basis": cic.area_basis,
+            "cic_waveform": cic.waveform,
+            "cic_bias": cic.bias,
+            "cic_medium": cic.medium,
+            "cic_temperature_C": cic.temperature_C,
+            "cic_measured_area_cm2": cic.measured_area_cm2,
+            "cic_anodic_first_range": (
+                list(cic.anodic_first_range) if cic.anodic_first_range else None
+            ),
+            "cic_cathodic_first_range": (
+                list(cic.cathodic_first_range) if cic.cathodic_first_range else None
+            ),
+            "cic_recommended_policy": cic.recommended_policy,
+        }
     rec = AuditRecord(
         package_version=__version__,
         timestamp_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -168,6 +213,8 @@ def record(
         results=calc.report(),
         operator=operator,
         note=note,
+        payload_version=payload_version,
+        constants_v2=constants_v2,
     )
     # Frozen dataclass: rebuild with the digest filled in.
     return AuditRecord(**{**asdict(rec), "digest": rec.compute_digest()})
@@ -195,7 +242,9 @@ def reproduces(original: AuditRecord, calc: SafetyCalculator) -> tuple[bool, lis
     The usual failure is not a mistake but a correction: a constant moved between
     versions. The returned differences say which.
     """
-    fresh = record(calc)
+    # At the stored record's own payload version, so a version 1 record is checked the way
+    # it was made (ledger 77, S-10).
+    fresh = record(calc, payload_version=original.payload_version)
     if fresh.digest == original.digest:
         return True, []
     return False, fresh.differences_from(original)

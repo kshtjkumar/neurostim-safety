@@ -240,6 +240,21 @@ arguments, so none of its numbers move.
 - A charge result with no current interval now raises rather than collapsing its band to
   a point.
 
+### Butterwick's own exponent, SIROF's two sources, and a digest that covers the conditions
+
+- The electroporation threshold's duration dependence uses Butterwick's published fit,
+  t^-0.48 for retina under sustained pulsing, anchored at 6 ms. It is capped by the line
+  through their two published anchors, so it never exceeds 0.061 A/cm² at 6 ms or 1.3 at
+  6 µs; the cap is this package's construction, not theirs. Below 6 ms nothing changes.
+  Above it the threshold falls slightly (×0.981 at 10 ms).
+- SIROF's in-vivo derating (2-4×) names both of its sources: Kane et al.'s "factor of
+  2-3" and Cogan 2016's "factor of four".
+- The audit digest covers the measurement conditions: the verified flag, area basis,
+  waveform, bias, medium, temperature, measured area, polarity sub-ranges and recommended
+  policy. The payload is versioned, so a record made before this release still verifies
+  and reproduces the way it was made. New records' digests differ from old ones for the
+  same inputs.
+
 ### Five smaller corrections to the data modules
 
 - `mccreery1990.separating_k_range()` returns (1.699, 2.107), from the highest no-damage

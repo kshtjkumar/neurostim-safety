@@ -70,7 +70,14 @@ QUOTED_DURATION_EXPONENT = -0.5
 FITTED_DURATION_EXPONENT = math.log(
     RETINA_THRESHOLD_AT_6US_A_PER_CM2 / RETINA_THRESHOLD_AT_6MS_A_PER_CM2
 ) / math.log(ANCHOR_SHORT_US / ANCHOR_LONG_US)
-"""Exponent fitted to their two retina anchor points; about -0.44."""
+"""Exponent of the straight line through their two retina anchor points; about -0.44."""
+
+PUBLISHED_EXPONENT_RETINA_SUSTAINED = -0.48
+"""The authors' own power fit for retina under sustained pulsing (p. 2264: "the power fit
+slopes are t^-0.52 and t^-0.48 in the chronic regime, and t^-0.49 and t^-0.41 with the
+single shots on CAM and retina, respectively", read from the page image; the exponents are
+typeset as glyphs the text layer drops). The default duration dependence uses it, capped as
+:func:`threshold_A_per_cm2` describes (ledger 77, S-6)."""
 
 # --- electrode size regimes -------------------------------------------------------
 
@@ -116,16 +123,28 @@ def threshold_A_per_cm2(
         Number of pulses. Defaults to the saturated repeated-exposure case, which is
         the conservative choice for any train.
     exponent:
-        Duration exponent. Defaults to the value fitted to the authors' own anchor
-        points; pass :data:`QUOTED_DURATION_EXPONENT` for the -0.5 they quote.
+        Duration exponent. By default the authors' published fit,
+        :data:`PUBLISHED_EXPONENT_RETINA_SUSTAINED` (-0.48), anchored at 6 ms and taken as
+        the minimum with the line through both published anchors, so that neither
+        anchor (0.061 A/cm^2 at 6 ms, 1.3 at 6 us) is exceeded. The cap is this package's
+        construction, not the paper's: the published slope from the 6 ms anchor would give
+        1.67 A/cm^2 at 6 us, above the 1.3 they measured (ledger 77, S-6). In practice the
+        two-anchor line is the lower below 6 ms and the published slope above it. Pass a
+        number (for example :data:`QUOTED_DURATION_EXPONENT`, the -0.5 they quote) for a
+        plain power law.
     """
     if pulse_width_us <= 0 or not math.isfinite(pulse_width_us):
         raise ValueError(f"pulse_width_us must be finite and > 0, got {pulse_width_us!r}")
     if n_pulses < 1:
         raise ValueError(f"n_pulses must be >= 1, got {n_pulses}")
 
-    n = FITTED_DURATION_EXPONENT if exponent is None else exponent
-    base = RETINA_THRESHOLD_AT_6MS_A_PER_CM2 * (pulse_width_us / ANCHOR_LONG_US) ** n
+    ratio = pulse_width_us / ANCHOR_LONG_US
+    if exponent is None:
+        base = RETINA_THRESHOLD_AT_6MS_A_PER_CM2 * min(
+            ratio**PUBLISHED_EXPONENT_RETINA_SUSTAINED, ratio**FITTED_DURATION_EXPONENT
+        )
+    else:
+        base = RETINA_THRESHOLD_AT_6MS_A_PER_CM2 * ratio**exponent
 
     if tissue == "cam":
         # Their CAM thresholds run about threefold below retina at matched settings.

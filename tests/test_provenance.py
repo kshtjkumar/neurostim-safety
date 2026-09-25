@@ -635,3 +635,60 @@ class TestTheAuditRecordIsStrictJSON:
         assert with_counter.settings["counter_electrode"]["diameter_um"] == 900.0
         assert with_counter.settings["counter_separation_um"] == 20000.0
         assert with_counter.digest != audit.record(self._calc(train=1.0)).digest
+
+
+class TestTheDigestCoversEveryConditionAndOldRecordsStillVerify:
+    """Ledger 77/S-10 (literature audit F-40), user decision (ii). The digest's constants were
+    low/high/units/reference/pulse width only: the verified flag, area basis, waveform,
+    bias, medium, temperature, measured area, polarity sub-ranges and recommended policy
+    were outside it. They join under a versioned payload, so a record made before keeps
+    computing, and verifying, the old way."""
+
+    V2_FIELDS = {
+        "cic_verified", "cic_area_basis", "cic_waveform", "cic_bias", "cic_medium",
+        "cic_temperature_C", "cic_measured_area_cm2", "cic_anodic_first_range",
+        "cic_cathodic_first_range", "cic_recommended_policy",
+    }
+
+    def _calc(self, material=None):
+        kwargs = {} if material is None else {"material": material}
+        return SafetyCalculator(
+            DiscElectrode(200.0, "Pt"), StimProtocol(80.0, 200.0, 130.0, 1.0), **kwargs
+        )
+
+    def test_a_new_record_digests_the_conditions(self):
+        from neurostim import audit
+
+        record = audit.record(self._calc())
+        assert record.payload_version == 2
+        assert set(record.constants_v2) == self.V2_FIELDS
+        assert "constants_v2" in record.payload()
+        assert record.digest_matches
+
+    def test_a_condition_outside_the_old_digest_now_moves_it(self):
+        """The verified flag alone differs; the old payload could not see it."""
+        from neurostim import audit
+
+        pt = get_material("Pt")
+        unverified = replace(pt, cic=replace(pt.cic, verified=False))
+        first, second = audit.record(self._calc()), audit.record(self._calc(unverified))
+        assert first.constants == second.constants  # the premise: v1 constants agree
+        assert first.digest != second.digest
+
+    def test_an_old_format_record_still_verifies_and_reproduces(self):
+        """A record as written before the change: no payload_version, no constants_v2."""
+        import json
+        from dataclasses import asdict
+
+        from neurostim import audit
+
+        fresh = audit.record(self._calc(), payload_version=1)
+        body = asdict(fresh)
+        body.pop("payload_version")
+        body.pop("constants_v2")
+        old_text = json.dumps(body)
+        loaded = audit.load(old_text)
+        assert loaded.payload_version == 1
+        assert loaded.digest_matches
+        assert audit.reproduces(loaded, self._calc())[0]
+        assert "constants_v2" not in loaded.payload()

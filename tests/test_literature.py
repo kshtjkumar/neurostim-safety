@@ -1691,3 +1691,53 @@ class TestRiedyAndWaltersCitedSourcesAreNamedAsCited:
         page = _pdf_page_text("papers_stim_calc_ref/10.495287.pdf", 4)
         assert "Pittingcorrosionofhighstrength" in page
         assert "Electrochemicalguidelinesforselectionof" in page
+
+
+class TestLedger77ExponentAndDerating:
+    """Ledger 77, C4.7b, per the user's decisions: S-6 (b) and S-8 (b)."""
+
+    BUTTERWICK = "papers_stim_calc_ref/Tissue_Damage_by_Pulsed_Electrical_Stimulation.pdf"
+
+    def test_s6_the_published_exponent_is_recorded_and_used(self):
+        """Butterwick p. 2264 (read from the page image; the exponents are typeset as
+        glyphs the text layer drops): "the power fit slopes are t^-0.52 and t^-0.48 in the
+        chronic regime". Their abstract (p. 2261) gives the two anchors, "0.061 A/cm2 at
+        6 ms to 1.3 A/cm2 at 6 us"."""
+        from neurostim.data import butterwick2007 as b
+
+        assert b.PUBLISHED_EXPONENT_RETINA_SUSTAINED == -0.48
+        abstract = _pdf_page_text(self.BUTTERWICK, 1)
+        assert "0.061A/cm2at6ms" in abstract
+
+    def test_s6_the_default_is_the_published_line_capped_by_the_anchors(self):
+        """Our construction, not the paper's: the -0.48 line anchored at 6 ms, taken as the
+        minimum with the two-anchor line, so neither published anchor is exceeded."""
+        from neurostim.data import butterwick2007 as b
+
+        def line(n, pw):
+            return b.RETINA_THRESHOLD_AT_6MS_A_PER_CM2 * (pw / b.ANCHOR_LONG_US) ** n
+
+        for pw in (6.0, 60.0, 200.0, 1000.0, 6000.0, 20000.0):
+            expected = min(line(-0.48, pw), line(b.FITTED_DURATION_EXPONENT, pw))
+            assert b.threshold_A_per_cm2(pw) == pytest.approx(expected, rel=1e-12), pw
+        assert b.threshold_A_per_cm2(6.0) == pytest.approx(1.3, rel=1e-12)
+        assert b.threshold_A_per_cm2(6000.0) == pytest.approx(0.061, rel=1e-12)
+        assert b.threshold_A_per_cm2(20000.0) < line(b.FITTED_DURATION_EXPONENT, 20000.0)
+        # An explicit exponent is still a plain power law.
+        assert b.threshold_A_per_cm2(60.0, exponent=-0.5) == pytest.approx(line(-0.5, 60.0))
+
+    def test_s8_the_sirof_derating_cites_both_of_its_sources(self):
+        """Kane et al. (author manuscript p. 7): "reduced by a factor of 2-3"; Cogan 2016
+        (author manuscript p. 8): "a factor of four lower with SIROF microelectrodes". The
+        range stays 2-4, with the 4 attributed to the review."""
+        from neurostim.data import cogan2016 as c
+
+        d = c.derating_for("SIROF")
+        assert (d.factor_low, d.factor_high) == (2.0, 4.0)
+        assert "factor of 2-3" in d.evidence and "Kane" in d.evidence
+        assert "Cogan et al. 2016" in d.evidence and "factor of four" in d.evidence
+        # The PDF prints an en dash.
+        assert "factorof2\u20133" in _pdf_page_text("papers_stim_calc_ref/nihms-1619003.pdf", 7)
+        assert "afactoroffourlowerwithSIROF" in _pdf_page_text(
+            "papers_stim_calc_ref/nihms854736.pdf", 8
+        )
