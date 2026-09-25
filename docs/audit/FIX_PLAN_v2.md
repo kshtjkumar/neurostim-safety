@@ -1176,6 +1176,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 149 | LOW | — (found at C4.0a) | **C4.4** | **FIXED** `889b525`; the audit record's JSON strict, with the protocol's null duration explained as report_to_json does, and old records' digests still reproducible |
 | 150 | HIGH | — (found at C4.1b) | **C4.1b** | **FIXED** `55afec4`; the water-window seed reads the result's own window, not the material looked up by key |
 | 151 | LOW | — (found at C4.6) | **C4.6** | **FIXED** `a879ef9`; attribute the 316LVM 1.2 V reversible limit to Riedy & Walter's ref. [5], as their p. 662 does |
+| 152 | LOW | — (found at the C4.6 follow-up) | **C4.6b** | name Riedy & Walter's refs [5] and [8] as via-citation attributions; primaries not in the library (gap stays open, like 124's Weiland 2002) |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING

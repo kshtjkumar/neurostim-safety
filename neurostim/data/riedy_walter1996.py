@@ -19,6 +19,17 @@ anyone in this paper measured.
 The quotations are stored below as the PDF's text layer prints them: its OCR renders
 the micro sign as "p", so "pC/cm2" is uC/cm^2.
 
+The two cited sources, by position in their reference list (p. 663, read from the page
+image and counted in list order, matching the citation order in the text):
+
+- ref. [5], for the 40 uC/cm^2 and the 1.2 V limit: Lan, Daroux & Mortimer, "Pitting corrosion of high strength alloy stimulation electrodes under dynamic conditions", J Electrochem Soc 136:947-954 (printed as 1981);
+- ref. [8], for the 20 uC/cm^2 and the "reversible charge injection limit" term:
+  Robblee & Rose, "Electrochemical guidelines for selection of protocols and electrode materials for neural stimulation", in Agnew & McCreery (eds), Neural Prostheses: Fundamental Studies, Prentice-Hall 1990, pp. 25-66.
+
+Neither is in the package's library, so both are attributions via Riedy & Walter, not
+verified primaries (ledger 152). J Electrochem Soc volume 136 suggests 1989 rather than
+the printed 1981; that is not checked here.
+
 Two findings that reverse received wisdom
 -----------------------------------------
 **Anodic-first is not the dangerous polarity here.** The prior literature held that

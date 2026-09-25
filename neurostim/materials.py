@@ -722,7 +722,9 @@ _MATERIAL_LIST: tuple[Material, ...] = (
                 "pulsing studies (their ref. [5], p. 662). The 20 uC/cm^2 they endorse is "
                 "not their own measurement: 'Based on this report, 20 uC/cm2 appears to "
                 "be the maximum charge injection density feasible for FNS application', "
-                "the report being a cited tissue-damage figure, their ref. [8] (p. 663). "
+                "the report being a cited tissue-damage figure, their ref. [8], Robblee & "
+                "Rose 1990 (a chapter in Neural Prostheses: Fundamental Studies; not in "
+                "the library, so cited via Riedy & Walter) (p. 663). "
                 "Their own year of pulsing at 20 is consistent with it (p. 662). Applying "
                 "40 applies the number the paper disputes"
             ),
@@ -748,7 +750,9 @@ _MATERIAL_LIST: tuple[Material, ...] = (
             scale="of polarisation from rest (measured vs SCE)",
             note=(
                 "Not a water window: this is the reported reversible charge-injection "
-                "limit for 316LVM, which Riedy & Walter cite from their ref. [5] (p. 662; "
+                "limit for 316LVM, which Riedy & Walter cite from their ref. [5], Lan, "
+                "Daroux & Mortimer (J Electrochem Soc 136:947-954; not in the library, so "
+                "cited via Riedy & Walter) (p. 662; "
                 "ledger 151), 1.2 V of polarisation in either direction, restated "
                 "as a symmetric window so the polarisation check can run. It is a "
                 "magnitude relative to the resting potential, not an absolute potential "

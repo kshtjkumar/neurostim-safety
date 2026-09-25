@@ -83,11 +83,11 @@ def effective_capacitance_uF_cm2(
     if mat.water_window is None:
         return DOUBLE_LAYER_CAPACITANCE_uF_cm2
     if anodic_first is None:
-        # Polarity unknown: the smaller of the two capacitances, which gives the larger
-        # excursion (ledger 8). The narrower half-window used to be taken, and it sits in
-        # the denominator of C = limit / available_V, so it enlarged C and understated the
-        # excursion. Where the CIC is not resolved by polarity this is the wider
-        # half-window; for Pt it is the anodic-first 100 uC/cm^2 over 0.8 V.
+        # Polarity unknown: the smallest C over the two polarities, each a real
+        # polarity's capacitance, which gives the larger excursion (ledger 8). The
+        # narrower half-window used to be taken, and it sits in the denominator of
+        # C = limit / available_V, so it enlarged C and understated the excursion. For Pt
+        # the smallest is the anodic-first 100 uC/cm^2 over 0.8 V.
         return min(
             effective_capacitance_uF_cm2(mat, anodic_first=True),
             effective_capacitance_uF_cm2(mat, anodic_first=False),

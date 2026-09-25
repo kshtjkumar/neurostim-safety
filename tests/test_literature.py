@@ -1669,3 +1669,25 @@ class TestLedger78LowerSeverityCorrections:
         design = next(d for d in ta.DESIGNS if "etched Ti, best reported" in d.label)
         assert "5-10x" not in design.note
         assert "as much as 4" in design.note and "2.4x" in design.note
+
+
+class TestRiedyAndWaltersCitedSourcesAreNamedAsCited:
+    """Ledger 152, the C4.6 follow-up. Their ref. [8] (the 20 uC/cm^2) is Robblee & Rose
+    1990 and ref. [5] (the 1.2 V limit) is Lan, Daroux & Mortimer, by position in the
+    reference list on p. 663. Neither is in the library, so both are named as cited by
+    Riedy & Walter, never as verified primaries."""
+
+    def test_both_are_named_and_marked_as_via_citation(self):
+        from neurostim.data import riedy_walter1996 as rw
+
+        material = get_material("SS316LVM")
+        assert "Robblee & Rose 1990" in material.cic.recommendation_note
+        assert "cited via Riedy & Walter" in material.cic.recommendation_note
+        assert "Lan, Daroux & Mortimer" in material.water_window.note
+        assert "cited via Riedy & Walter" in material.water_window.note
+        assert "not verified primaries" in " ".join(rw.__doc__.split())
+
+    def test_the_list_positions_are_on_page_663(self):
+        page = _pdf_page_text("papers_stim_calc_ref/10.495287.pdf", 4)
+        assert "Pittingcorrosionofhighstrength" in page
+        assert "Electrochemicalguidelinesforselectionof" in page
