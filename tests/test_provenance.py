@@ -842,3 +842,73 @@ class TestThePackageVersionIsBumpedForPhasesOneToFour:
         assert pyproject is not None and pyproject.group(1) == neurostim.__version__
         assert "\nversion: 0.16.0\n" in (root / "CITATION.cff").read_text()
         assert "\n## 0.16.0 " in (root / "CHANGELOG.md").read_text()
+
+
+class TestTheFlatReportCarriesTheProvisionalAndIncompleteFlags:
+    """Ledger 158 (Phase 4 review M4), C4b.3. The PROVISIONAL marker reached describe, the
+    GUI, the PDF and the JSON checks list, but not report() or the batch CSV, where
+    limiting_current_uA is read by machine consumers; limits_incomplete was absent there
+    too."""
+
+    @staticmethod
+    def _provisional():
+        from neurostim.electrodes import electrode
+
+        return SafetyCalculator(
+            electrode("dbs_3389"), StimProtocol(3000.0, 60.0, 130.0, 1.0), compliance_V=10.0
+        )
+
+    @staticmethod
+    def _firm():
+        return SafetyCalculator(
+            DiscElectrode(2000.0, "SIROF"), StimProtocol(20, 400, 50, 3600), compliance_V=10.0
+        )
+
+    def test_report_carries_both_flags(self):
+        provisional = self._provisional()
+        report = provisional.report()
+        assert report["limit_is_provisional"] is True
+        assert report["limits_incomplete"] is provisional.assess().limits_incomplete
+        firm = self._firm()
+        assert firm.assess().limiting_current_uA is not None
+        assert firm.report()["limit_is_provisional"] is firm.assess().limit_is_provisional
+
+    def test_no_limit_means_no_provisional_flag(self):
+        monophasic = SafetyCalculator(
+            DiscElectrode(200.0, "Pt"), StimProtocol(50, 200, 130, 1, waveform="monophasic")
+        )
+        assert monophasic.assess().limiting_current_uA is None
+        assert monophasic.report()["limit_is_provisional"] is None
+
+    def test_the_batch_csv_has_the_columns(self, tmp_path):
+        from neurostim.io.tabular import assess_batch
+
+        rows = [
+            {"shape": "disc", "diameter_um": 200.0, "material": "Pt", "current_uA": 50,
+             "pulse_width_us": 200, "frequency_hz": 130, "train_duration_s": 1},
+            {"shape": "disc", "diameter_um": 200.0, "material": "Pt", "current_uA": 50,
+             "pulse_width_us": 200, "frequency_hz": 130, "train_duration_s": 1,
+             "waveform": "monophasic"},
+            {"shape": "disc", "diameter_um": -1.0, "material": "Pt", "current_uA": 50,
+             "pulse_width_us": 200, "frequency_hz": 130, "train_duration_s": 1},
+        ]
+        frame = assess_batch(rows)
+        assert {"limit_is_provisional", "limits_incomplete"} <= set(frame.columns)
+        flags = frame["limit_is_provisional"].tolist()
+        assert isinstance(flags[0], bool)
+        # No limit, and a row that failed to build: None, not NaN (ledgers 147, 158).
+        assert flags[1] is None and flags[2] is None
+        assert frame["status"].tolist()[2] == "ERROR"
+        path = tmp_path / "batch.csv"
+        frame.to_csv(path, index=False)
+        header = path.read_text().splitlines()[0].split(",")
+        assert "limit_is_provisional" in header and "limits_incomplete" in header
+
+    def test_the_json_results_carry_them(self):
+        import json
+
+        from neurostim.io.tabular import report_to_json
+
+        body = json.loads(report_to_json(self._provisional()))
+        assert body["results"]["limit_is_provisional"] is True
+        assert body["results"]["limits_incomplete"] == body["limits_incomplete"]

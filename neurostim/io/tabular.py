@@ -190,8 +190,9 @@ def assess_batch(
     return _frame(results)
 
 
-NULLABLE_COLUMNS = ("limiting_current_uA", "required_compliance_V")
-"""Result columns that are ``None`` where no number exists (ledgers 84, 143, 147)."""
+NULLABLE_COLUMNS = ("limiting_current_uA", "required_compliance_V", "limit_is_provisional")
+"""Result columns that are ``None`` where no number exists (ledgers 84, 143, 147), or where
+there is no limit for a flag to qualify (ledger 158)."""
 
 
 def _frame(records: list[dict[str, Any]]) -> pd.DataFrame:

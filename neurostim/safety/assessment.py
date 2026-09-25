@@ -2348,6 +2348,15 @@ class SafetyCalculator:
             # live here; it now lives in the attribute, so this cannot disagree with it.
             "limiting_current_uA": assessment.limiting_current_uA,
             "limiting_mechanism": unsafe or assessment.limiting_mechanism,
+            # The two qualifiers of that number, for the reader who sees only this dict
+            # (ledger 158): the headline's PROVISIONAL marker, None where there is no limit
+            # to qualify, and whether the candidate set was missing a check.
+            "limit_is_provisional": (
+                None
+                if assessment.limiting_current_uA is None
+                else assessment.limit_is_provisional
+            ),
+            "limits_incomplete": assessment.limits_incomplete,
             "status": assessment.status.value,
         }
 

@@ -72,7 +72,12 @@ JSON (no `Infinity`), and a `null` that stands for an unbounded quantity is expl
 to `math.inf`. `protocol_from_dict` refuses a bare `null` duration by name rather than
 guessing that it means a continuous train. In `assess_batch` and `current_sweep` frames,
 `limiting_current_uA` and `required_compliance_V` hold a float or `None` in every row
-(object dtype), as `report()` does.
+(object dtype), as `report()` does. Two columns qualify the limit:
+- `limit_is_provisional` is true when the binding check rests on an unconfirmed constant
+  or model, the same condition as the PROVISIONAL headline, and `None` when there is no
+  limit;
+- `limits_incomplete` is true when a limit-bearing check did not run, so the true limit
+  may be lower.
 
 The JSON's `provenance` object gives each applied constant's reference key, `verified`
 and `peer_reviewed` flags, stored note and `inherited_from` (`cic`, `water_window`,

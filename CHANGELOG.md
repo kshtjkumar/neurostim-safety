@@ -13,6 +13,16 @@ bump is where incompatible changes go, and these are incompatible:
 `pyproject.toml` and `CITATION.cff` had stayed at 0.13.0 while `__version__` said
 0.15.0. All three now say 0.16.0.
 
+### The flat report says when its limit is provisional
+
+The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,
+but not `report()` or the batch and sweep CSVs. Those are where a machine reads
+`limiting_current_uA`. `report()` now carries two new keys, and so every CSV row does
+too:
+- `limit_is_provisional`: `None` when there is no limit, and `None` in a row that failed
+  to build;
+- `limits_incomplete`.
+
 ### An audit record certifies the answer, not only the inputs
 
 `audit.reproduces` said a record reproduced when the answer had moved. Take a record of a
