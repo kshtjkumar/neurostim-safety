@@ -293,6 +293,11 @@ count is below saturation.
   and the note says that rather than presenting them as read from it.
 - The DBS lead's contact diameter is not stated in Elwassif et al. It is the
   manufacturer's figure, and the docstring names it as such.
+- Elwassif et al. state no source radius either. The 1.3803 mm that
+  `elwassif2006.implied_power_W()` inverts at, now `SOURCE_RADIUS_M`, is one contact's
+  equal-area disc radius. That is also, numerically, the equal-area sphere of four
+  contacts, though their protocol energises two. The value is kept, and the docstring
+  gives the two-contact alternative (0.976 mm: 5.30 mW and 459 Ω, not 7.50 mW and 325 Ω).
 - Four sources the package cites but does not hold are now in `references.py` as
   entries of their own, each with a note naming the paper it was cited through: Wang &
   Weiland 2012 and McCreery 2008 (via Cogan 2016), and Robblee & Rose 1990 and Lan,

@@ -1889,3 +1889,43 @@ class TestLedger77SmallElectrodeAnchor:
         many = b.compare(0.1, 600.0, 100.0).describe()
         assert "not measured below 200 um" in few
         assert "not measured below 200 um" not in many
+
+
+class TestLedger78SourceRadius:
+    """Ledger 78, S-23, the radius half, per the user's decision (a): keep 1.3803 mm and
+    document where it comes from."""
+
+    ELWASSIF = "papers_stim_calc_ref/elwassif2006.pdf"
+
+    def test_the_paper_states_no_radius_or_diameter(self):
+        for page in (1, 2, 3, 4):
+            text = _pdf_page_text(self.ELWASSIF, page).lower()
+            assert "radius" not in text and "diameter" not in text, page
+
+    def test_the_default_is_one_contacts_equal_area_disc_radius(self):
+        """pi a^2 = pi x 1.27 mm x 1.5 mm gives a = 1.38022 mm; the same a solves
+        4 pi a^2 = 4 x that area, so it is also the equal-area sphere of four contacts."""
+        import inspect
+
+        from neurostim.data import elwassif2006 as e
+
+        contact = CylindricalBandElectrode(
+            e.LEAD_3389_CONTACT_DIAMETER_UM, e.LEAD_3389_CONTACT_HEIGHT_UM, "PtIr"
+        )
+        default = inspect.signature(e.implied_power_W).parameters["source_radius_m"].default
+        assert default == e.SOURCE_RADIUS_M
+        assert abs(e.SOURCE_RADIUS_M - contact.equivalent_radius_um * 1e-6) < 1e-7
+        four_sphere = math.sqrt(4 * contact.area_um2 / (4 * math.pi)) * 1e-6
+        assert abs(e.SOURCE_RADIUS_M - four_sphere) < 1e-7
+
+    def test_the_docstring_names_the_derivation_and_the_two_contact_alternative(self):
+        """Their protocol energises two contacts; their equal-area sphere is 0.976 mm,
+        which would give 5.30 mW and 459 ohm at 1.56 V RMS instead of 7.50 mW and 325."""
+        from neurostim.data import elwassif2006 as e
+
+        doc = " ".join(e.implied_power_W.__doc__.split())
+        assert "equal-area disc" in doc and "not stated in the paper" in doc
+        assert "four contacts" in doc and "0.976 mm" in doc and "459 ohm" in doc
+        two = e.implied_power_W(source_radius_m=0.9759610647971567e-3)
+        assert two == pytest.approx(5.30e-3, rel=1e-3)
+        assert e.V_RMS**2 / two == pytest.approx(459.2, rel=1e-3)

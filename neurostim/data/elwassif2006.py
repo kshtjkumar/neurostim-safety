@@ -169,15 +169,29 @@ def perfusion_block() -> tuple[ThermalPoint, ...]:
     return TABLE_I[8:12]
 
 
+SOURCE_RADIUS_M = 1.3803e-3
+"""The source radius :func:`implied_power_W` inverts at: one contact's equal-area disc
+radius, not a figure from the paper (ledger 78, S-23)."""
+
+
 def implied_power_W(
     rise_K: float = PEAK_RISE_K,
     thermal_conductivity_W_per_mK: float = 0.527,
-    source_radius_m: float = 1.3803e-3,
+    source_radius_m: float = SOURCE_RADIUS_M,
 ) -> float:
     """Continuous power that the analytic unperfused solution needs for a given rise.
 
     Inverts ``dT = P / (4 pi kappa a)``. For their peak 0.82 K this returns about
     7.5 mW, which at 1.56 V RMS implies roughly 325 ohm between the energised contacts.
+
+    The source radius, :data:`SOURCE_RADIUS_M` = 1.3803 mm, is not stated in the paper,
+    which gives neither a radius nor a diameter. It is this package's choice: the
+    equal-area disc radius of one 3389 contact, ``pi a^2 = pi x 1.27 mm x 1.5 mm``
+    (1.38022 mm, the band's ``equivalent_radius_um``, rounded). The same ``a`` solves
+    ``4 pi a^2 = 4 x`` that area, so it is also the equal-area sphere of four contacts,
+    though their protocol energises two. The two energised contacts' equal-area sphere,
+    0.976 mm, would give 5.30 mW and 459 ohm instead of 7.50 mW and 325 ohm (ledger 78,
+    S-23; kept by decision (a)).
     """
     import math
 
