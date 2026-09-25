@@ -1098,7 +1098,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 77/S-10 | MED | OK | C4.7b | **FIXED** `7bf8cdf`; `audit.py` digest omits nine condition fields |
 | 77/S-11 | MED | OK | C4.7a | **FIXED** `3a31f3a`; two Ta2O5 designs measured by different methods |
 | 77/S-12 | MED | OK | C4.7a | **FIXED** `3a31f3a`; McCreery 2010's four defining conditions; damage radius |
-| 77/S-13 | MED | OK | C4.7c (stopped: CAM anchor contradicts the retina line; options reported) | Butterwick d⁻² measured on single pulses |
+| 77/S-13 | MED | OK | C4.7c | **FIXED** `ba711e5` (C4.7c, option (b′)): d⁻² kept, no number moves; measured 139/55 µA anchor and t^−0.29 recorded; model below every measured point checked (0.169 vs 0.44 A/cm² at 600 µs, 200 µm). The earlier "~1.55× anti-conservative" was wrong (slope-only comparison) |
 | 78/S-14 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); zero-width `separating_k_range()` — changes a computed value |
 | 78/S-15 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); |
 | 78/S-16 | LOW | OK | C4.9 | **FIXED** `4bc5d24` (C4.9a); κ range excludes Elwassif's 0.45 |
@@ -1180,6 +1180,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 150 | HIGH | — (found at C4.1b) | **C4.1b** | **FIXED** `55afec4`; the water-window seed reads the result's own window, not the material looked up by key |
 | 151 | LOW | — (found at C4.6) | **C4.6** | **FIXED** `a879ef9`; attribute the 316LVM 1.2 V reversible limit to Riedy & Walter's ref. [5], as their p. 662 does |
 | 152 | LOW | — (found at the C4.6 follow-up) | **C4.6b** | name Riedy & Walter's refs [5] and [8] as via-citation attributions; primaries not in the library (gap stays open, like 124's Weiland 2002) |
+| 153 | LOW | — (found at C4.7c) | **decision** | Current density's "never a bare PASS" docstrings against a verdict that returns PASS at margin ≥ 2; fix the text or the verdict, per the lead's call |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
