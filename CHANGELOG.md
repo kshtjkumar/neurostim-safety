@@ -268,8 +268,18 @@ measured line is not adopted, because the CAM and retina anchors disagree under 
 package's CAM rule (about 90 µA predicted, 55 µA measured). The comparison holds at the
 saturated pulse count. Below it, the single-pulse relief is applied on top of d⁻², which
 was not measured on small electrodes. The Current density check was already provisional
-at every size. Its detail now says so for this regime, and says it again when the pulse
-count is below saturation.
+at every size. Its detail now says so for this regime.
+
+**Short trains on small electrodes get no single-pulse relief.** Below 200 µm the
+threshold is now the saturated (50-pulse) one whatever the pulse count. Butterwick
+measured the pulse-count dependence only with a 1 mm pipette (p. 2263, Fig. 3). Applying
+it on top of d⁻² put one pulse on a 100 µm retina disc at 2.7× the density the paper
+measured on small electrodes. This tightens the threshold for trains of fewer than 50
+pulses below 200 µm, by up to 7× on retina and 14× on CAM (n = 1). On the three
+microelectrode presets (`mccreery_microelectrode`, `mccreery2010_chronic`, `weiland_tin`),
+the Current density ceiling at one pulse falls from 822.4 µA to 117.5 µA. None of their
+limiting currents move, because Microelectrode charge/phase binds first. At and above
+200 µm nothing changes.
 
 ### Five smaller corrections to the data modules
 

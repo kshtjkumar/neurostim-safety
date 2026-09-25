@@ -40,14 +40,17 @@ CAM, and the paper gives no small-electrode slope for CAM. And the text says Fig
 measured with "only one pulse", while its caption calls the exposures sustained; its
 large-electrode values sit at the sustained level of Fig. 4.
 
-The comparison above is at the saturated pulse count, this module's default. Below it
-the single-pulse relief is applied on top of d^-2, a combination that was
-not measured below 200 um. The current-density check is provisional at every size, and its
+The comparison above is at the saturated pulse count. Below 200 um it is the only
+count: the single-pulse relief is not applied there, whatever ``n_pulses`` is, because
+the pulse-count dependence was measured only with the 1 mm pipette (p. 2263, Fig. 3
+caption), never below 200 um (ledger 154). Applying it on top of d^-2 put one pulse on
+a 100 um retina disc at 2.7x the measured small-electrode density. The current-density check is provisional at every size, and its
 detail says so for this regime.
 
 **Pulse count.** The threshold drops steeply over the first pulses and then *saturates*:
 by a factor of about 7 on retina and 14 on chorioallantoic membrane between 1 and 50
-pulses, and is constant thereafter. A protocol is therefore either a single-shot case or
+pulses, and is constant thereafter. Measured on a 1 mm pipette, and applied here only at
+and above 200 um (ledger 154). A protocol is therefore either a single-shot case or
 a repeated-exposure case, with little in between.
 
 Independent agreement with McCreery
@@ -165,7 +168,8 @@ def threshold_A_per_cm2(
         size has no effect. ``None`` assumes the large-electrode regime.
     n_pulses:
         Number of pulses. Defaults to the saturated repeated-exposure case, which is
-        the conservative choice for any train.
+        the conservative choice for any train. Ignored below 200 um, where the
+        saturated threshold is used whatever the count (ledger 154).
     exponent:
         Duration exponent. By default the authors' published fit,
         :data:`PUBLISHED_EXPONENT_RETINA_SUSTAINED` (-0.48), anchored at 6 ms and taken as
@@ -194,8 +198,10 @@ def threshold_A_per_cm2(
         # Their CAM thresholds run about threefold below retina at matched settings.
         base /= 3.0
 
-    # Single-pulse exposure tolerates more than the saturated repeated case.
-    if n_pulses < PULSE_COUNT_SATURATION:
+    small = diameter_um is not None and diameter_um < CONSTANT_CURRENT_BELOW_UM
+    # Single-pulse exposure tolerates more than the saturated repeated case -- measured
+    # on the 1 mm pipette only, so not applied below 200 um (ledger 154).
+    if n_pulses < PULSE_COUNT_SATURATION and not small:
         factor = (
             REPEATED_EXPOSURE_FACTOR_RETINA
             if tissue == "retina"
@@ -299,8 +305,8 @@ class ThresholdComparison:
         )
         if small and self.n_pulses < PULSE_COUNT_SATURATION:
             regime_lines.append(
-                "              the single-pulse relief on top of d^-2 was not measured "
-                "below 200 um"
+                "              single-pulse relief not applied below 200 um: the pulse-count "
+                "dependence was never measured there, so the saturated threshold is used"
             )
         return "\n".join(
             [

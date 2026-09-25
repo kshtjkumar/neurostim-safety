@@ -19,7 +19,8 @@ The threshold
 ``t^-0.5`` with pulse width, is independent of electrode size above 300 um, rises as
 ``d^-2`` below 200 um, and saturates after about 50 pulses. Below 200 um the ``d^-2``
 extension sits under the small-electrode currents the paper measured, and the module
-records both (ledger 77, S-13).
+records both (ledger 77, S-13). The pulse-count relief was measured on a 1 mm pipette, so
+below 200 um the saturated threshold is used at every count (ledger 154).
 
 That threshold was measured on chick chorioallantoic membrane and chick retina, verified
 on porcine retina. Applying it to cortex is an extrapolation **across preparation**, so

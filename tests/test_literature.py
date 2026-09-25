@@ -1861,9 +1861,10 @@ class TestLedger77SmallElectrodeAnchor:
         assert "90 uA" in doc
         cam_predicted_uA = 139.0 * 10**0.29 / 3.0
         assert 90.3 < cam_predicted_uA < 90.5
-        # The comparison holds at the saturated default; below it the single-pulse relief
-        # is applied on top of d^-2, and that was not measured below 200 um.
-        assert "saturated" in doc and "not measured below 200 um" in doc
+        # G12, changed at C4.7d (ledger 154): the docstring used to say the single-pulse
+        # relief was applied on top of d^-2 below 200 um without having been measured
+        # there; it is no longer applied there, so the comparison holds at every count.
+        assert "saturated" in doc and "never below 200 um" in doc and "ledger 154" in doc
 
     def test_a_small_electrode_renders_the_anchor_and_is_provisional(self):
         from neurostim import SafetyCalculator, StimProtocol
@@ -1882,13 +1883,74 @@ class TestLedger77SmallElectrodeAnchor:
         detail = next(c for c in big.checks if c.name == "Current density").detail
         assert "provisional below 200 um" not in detail
 
-    def test_below_saturation_the_line_says_the_relief_was_not_measured(self):
+    def test_below_saturation_the_line_says_why_no_relief_is_applied(self):
+        """G12, changed at C4.7d (ledger 154): the line used to say the relief applied on
+        top of d^-2 was not measured; by the user's decision it is no longer applied below
+        200 um, and the line says that instead."""
         from neurostim.data import butterwick2007 as b
 
         few = b.compare(0.1, 600.0, 100.0, n_pulses=5).describe()
         many = b.compare(0.1, 600.0, 100.0).describe()
-        assert "not measured below 200 um" in few
-        assert "not measured below 200 um" not in many
+        assert "single-pulse relief not applied below 200 um" in few
+        assert "never measured there" in few
+        assert "relief not applied" not in many
+        assert "relief not applied" not in b.compare(0.1, 600.0, 250.0, n_pulses=5).describe()
+
+
+class TestLedger154NoSinglePulseReliefOnSmallElectrodes:
+    """Ledger 154, C4.7d, per the user's decision: below 200 um the threshold is the
+    saturated (n >= 50) one whatever n_pulses is, because Butterwick measured the pulse-count
+    dependence only on the 1 mm pipette (p. 2263, Fig. 3 caption: "A pipette of 1 mm in
+    diameter was used in these measurements"). At and above 200 um nothing changes."""
+
+    BUTTERWICK = "papers_stim_calc_ref/Tissue_Damage_by_Pulsed_Electrical_Stimulation.pdf"
+
+    def test_the_pulse_count_data_are_from_the_1mm_pipette(self):
+        page = _pdf_page_text(self.BUTTERWICK, 3)
+        assert "Apipetteof1mmindiameterwasusedinthesemeasurements" in page
+
+    def test_one_pulse_on_a_100um_retina_disc_is_at_or_below_the_measured_anchor(self):
+        from neurostim.data import butterwick2007 as b
+
+        single = b.threshold_A_per_cm2(600.0, 100.0, n_pulses=1)
+        assert single <= b.measured_small_electrode_A_per_cm2(100.0)
+        assert single == b.threshold_A_per_cm2(600.0, 100.0)
+
+    def test_below_200um_n_pulses_does_not_move_the_threshold(self):
+        from neurostim.data import butterwick2007 as b
+
+        for tissue in ("retina", "cam"):
+            for d in (20.0, 100.0, 199.9):
+                saturated = b.threshold_A_per_cm2(200.0, d, tissue=tissue)
+                for n in (1, 2, 10, 49, 50, 500):
+                    assert b.threshold_A_per_cm2(
+                        200.0, d, n_pulses=n, tissue=tissue
+                    ) == saturated, (tissue, d, n)
+
+    def test_at_and_above_200um_the_relief_is_unchanged(self):
+        from neurostim.data import butterwick2007 as b
+
+        for d in (None, 200.0, 250.0, 1000.0):
+            saturated = b.threshold_A_per_cm2(600.0, d)
+            assert b.threshold_A_per_cm2(600.0, d, n_pulses=1) == pytest.approx(
+                7.0 * saturated, rel=1e-12
+            ), d
+            assert b.threshold_A_per_cm2(
+                60.0, d, n_pulses=1, tissue="cam"
+            ) == pytest.approx(14.0 * b.threshold_A_per_cm2(60.0, d, tissue="cam"), rel=1e-12)
+
+    def test_the_assessment_tightens_a_short_train_on_a_small_disc(self):
+        """A 100 um Pt disc, 5 uA, 200 us, 2 pulses: the Current density ceiling is the
+        saturated one, not 7^(1 - ln2/ln50) = 5.5x above it."""
+        from neurostim import SafetyCalculator, StimProtocol
+        from neurostim.data import butterwick2007 as b
+
+        electrode = DiscElectrode(100.0, "Pt")
+        short = SafetyCalculator(electrode, StimProtocol(5, 200, 2, 1)).assess()
+        check = next(c for c in short.checks if c.name == "Current density")
+        expected = b.threshold_A_per_cm2(200.0, 2.0 * electrode.equivalent_radius_um)
+        assert check.ceiling_uA <= expected * electrode.area_cm2 * 1e6
+        assert "single-pulse relief not applied below 200 um" in check.detail
 
 
 class TestLedger78SourceRadius:
