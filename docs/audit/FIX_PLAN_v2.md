@@ -1190,7 +1190,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 153 | LOW | — (found at C4.7c) | **C4.7e** | **FIXED** `3f76340`; docstring and caveat comment corrected (PASS possible, always provisional); no verdict change, by decision |
 | 154 | MED | — (found at C4.7c) | **C4.7d** | **FIXED** `1f542fd`; no single-pulse relief below 200 µm (anti-conservative for short trains on small electrodes) |
 | 155 | HIGH | — (Phase 4 review M1) | **C4b.1** | **FIXED** `48dc70e`; payload v3 (answer + per-module model-constant hashes), results compared at every version, 0.16.0 |
-| 156 | HIGH | — (Phase 4 review M2) | **C4b.2** | pulse-width-dependent Pt/PtIr in-vivo derating from Leung's Fig. 4; provisional below 100 µs |
+| 156 | HIGH | — (Phase 4 review M2) | **C4b.2** | **FIXED** `ba1fd6f`; user decision (D): flat 35/3.84 = 9.11× at every width, provisional below 100 µs; per-width curve declined |
 | 157 | HIGH | — (Phase 4 review M3) | C5.5 | with 114: `max_current_cic_uA` ignores `medium` |
 | 158 | LOW | — (Phase 4 review M4) | **C4b.3** | **FIXED** `9df0401`; `report()`, CSV and JSON results carry `limit_is_provisional` and `limits_incomplete` |
 | 159 | LOW | — (Phase 4 review M5) | **C4b.4** | **FIXED** `888305f`; both sizes named (text 0.115 mm, Fig. 6 caption 0.12 mm) |
