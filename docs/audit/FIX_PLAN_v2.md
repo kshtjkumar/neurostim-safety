@@ -1065,7 +1065,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 45 | LOW | DOC | C4.8 | **FIXED** `a91b5d8`; discrepancy recorded |
 | 46 | HIGH | OK | C7.3 | ledger row repaired at C0.5 |
 | 47 | HIGH | OK | C7.2 | |
-| 48 | CRIT | PARTIAL | C5.1 | candidate set rebuilt from the assessment |
+| 48 | CRIT | PARTIAL | C5.1 | **FIXED** `fa01e26` (C5.1 pulled forward into Phase 1; the refusal edge checked again at Phase 5, nothing remained); candidate set rebuilt from the assessment |
 | 49 | CRIT | PARTIAL | C1.3 | GUI, figure and `Interval.describe` added to scope |
 | 50 | HIGH | OK | C5.6 | **FIXED** `707f7c7`; applied reads above its bound |
 | 51 | HIGH | OK | C5.5 | **FIXED** `0aedc2d`; header-only raises naming the file; empty keeps the schema |
@@ -1132,7 +1132,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 78/S-23 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b, contact diameter attributed to the manufacturer) and `17bd45f` (C4.9c, decision (a): 1.3803 mm kept as `SOURCE_RADIUS_M`, equal-area derivation documented, not stated in the paper) |
 | 78/S-24 | LOW | OK | C7.4 | six stale README claims |
 | 78/S-25 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b); four via-citation reference entries |
-| 84 | HIGH | — (found in Phase 0) | C1.5 | D3(i) restated; `unsafe_at_any_amplitude` + the rendering contract. Interacts with C2.1, C2.3 and C5.1, each of which carries an assertion |
+| 84 | HIGH | — (found in Phase 0) | C1.5 | **FIXED** `e704d8a` (row marked at Phase 5); D3(i) restated; `unsafe_at_any_amplitude` + the rendering contract. Interacts with C2.1, C2.3 and C5.1, each of which carries an assertion |
 | 85 | MED | — (found in Phase 0) | C0.3 | **FIXED** — `datetime.now` removed from the PDF byline |
 | 86 | HIGH | — (found in Phase 0) | C0.4 | **FIXED** — transcript generated between markers from one script, gated in CI |
 | 87 | LOW | — (found in Phase 0) | C5.9 | **FIXED** `7f9798d`; LZW RGB TIFF |
