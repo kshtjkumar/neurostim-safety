@@ -1060,7 +1060,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 47 | HIGH | OK | C7.2 | |
 | 48 | CRIT | PARTIAL | C5.1 | candidate set rebuilt from the assessment |
 | 49 | CRIT | PARTIAL | C1.3 | GUI, figure and `Interval.describe` added to scope |
-| 50 | HIGH | OK | C5.6 | |
+| 50 | HIGH | OK | C5.6 | **FIXED** `707f7c7`; applied reads above its bound |
 | 51 | HIGH | OK | C5.5 | **FIXED** `0aedc2d`; header-only raises naming the file; empty keeps the schema |
 | 52 | HIGH | OK | C1.9 | |
 | 53 | HIGH | OK | C5.7 | |
