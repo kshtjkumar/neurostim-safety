@@ -180,14 +180,25 @@ def shannon_safe_operating_area(
             label="protocol",
         )
         if annotate:
+            # Up and right of the point, unless the point sits in the upper half of the
+            # axes, where that runs into the upper-right legend: then down and left
+            # (ledger 162). The fraction is read on the log axis the point is drawn on.
+            low, high = (math.log10(v) for v in ax.get_ylim())
+            height = (math.log10(status.charge_density_uC_cm2) - low) / (high - low)
+            below = height > 0.5
             ax.annotate(
                 f"k = {status.k_metric:.2f}",
                 xy=(status.charge_per_phase_uC, status.charge_density_uC_cm2),
-                xytext=(8, 8),
+                xytext=(-8, -8) if below else (8, 8),
                 textcoords="offset points",
+                ha="right" if below else "left",
+                va="top" if below else "bottom",
                 fontsize=6.5,
                 color=colour,
                 fontweight="bold",
+                # A white backing, since the label can now cross a separatrix.
+                bbox={"boxstyle": "round,pad=0.15", "fc": "white", "ec": "none",
+                      "alpha": 0.85},
             )
 
     ax.set_xlabel("Charge per phase, $Q$ (µC per phase)")

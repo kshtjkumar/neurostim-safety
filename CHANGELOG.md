@@ -161,6 +161,14 @@ The example printed two fixed paragraphs that contradicted the assessment above 
 Both paragraphs are now read off the assessment. `compare_with_point_source` refuses a
 current other than the one the field was solved at; rescale the field first.
 
+### The operating-point label clears the legend
+
+The Shannon panel's "k = …" label sat up and to the right of the point. For a point high
+in the panel, that put it on the upper-right legend: a 1000 µm Pt disc at 8000 µA printed
+"k = 3.31" across the legend entries. A point in the upper half of the axes now has its
+label below and to the left, on a white backing so it stays legible where it crosses a
+separatrix.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

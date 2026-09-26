@@ -625,3 +625,31 @@ class TestTheFiguresMeetTheirOwnStyleContract:
         assert "Water window" not in [str(line.get_label()) for line in ax.get_lines()]
         assert any("Water window permits no current" in t for t in texts(ax)), texts(ax)
         plt.close("all")
+
+
+class TestTheOperatingPointLabelClearsTheLegend:
+    """Ledger 162, C5.11d. The "k = ..." label sat at a fixed (8, 8) pt offset up and right
+    of the operating point, under the upper-right legend for a high point: a 1000 um Pt
+    disc at 8000 uA / 500 us / 50 Hz printed "k = 3.31" across the legend entries."""
+
+    @pytest.mark.parametrize(
+        "calc",
+        [
+            SafetyCalculator(DiscElectrode(1000, "Pt"), StimProtocol(8000, 500, 50, 1)),
+            SafetyCalculator(DiscElectrode(500, "Pt"), StimProtocol(3000, 500, 50, 1)),
+            SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1)),
+            SafetyCalculator(DiscElectrode(200, "Pt"), StimProtocol(400, 300, 50, 1)),
+        ],
+    )
+    def test_the_label_and_the_legend_do_not_intersect(self, calc):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        ax = shannon_safe_operating_area(calc)
+        fig = ax.figure
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        [label] = [t for t in ax.texts if t.get_text().startswith("k = ")]
+        box = label.get_window_extent(renderer)
+        legend = ax.get_legend().get_window_extent(renderer)
+        assert not box.overlaps(legend), (label.get_text(), box, legend)
+        plt.close("all")
