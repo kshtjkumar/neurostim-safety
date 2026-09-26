@@ -433,7 +433,10 @@ class TestTheSeparatrixThatDecidedTheVerdictIsDrawn:
     def test_the_assessments_k_is_drawn_and_named(self, k):
         from neurostim.viz.plots import shannon_safe_operating_area
 
-        calc = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1), k=k)
+        # G12, changed at C5b.4 (ledger 166): a 1 mm disc, not the 330/270 ring. The ring is
+        # a microelectrode, where Shannon does not run and the line now reads "this k, not
+        # applied"; this test is about the line that decides.
+        calc = SafetyCalculator(DiscElectrode(1000, "Pt"), StimProtocol(80, 200, 130, 1), k=k)
         ax = shannon_safe_operating_area(calc)
         lines = self._separatrix(ax, k)
         assert len(lines) == 1, (k, [line.get_label() for line in lines])
@@ -652,4 +655,116 @@ class TestTheOperatingPointLabelClearsTheLegend:
         box = label.get_window_extent(renderer)
         legend = ax.get_legend().get_window_extent(renderer)
         assert not box.overlaps(legend), (label.get_text(), box, legend)
+        plt.close("all")
+
+
+class TestNoTextCollides:
+    """Ledger 166 (Phase 5 review P4), C5b.4: text that sat on lines, bars or other text in
+    the rendered summary figures."""
+
+    @staticmethod
+    def _draw(ax):
+        ax.figure.canvas.draw()
+        return ax.figure.canvas.get_renderer()
+
+    @staticmethod
+    def _dbs():
+        from neurostim.electrodes import electrode
+
+        return SafetyCalculator(electrode("dbs_3389"), StimProtocol(3000, 60, 130, 1),
+                                compliance_V=10.0)
+
+    @staticmethod
+    def _refusal():
+        return SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9),
+        )
+
+    def test_a_the_sweep_legend_sits_outside_the_plot(self):
+        for calc in (self._dbs(), self._refusal()):
+            ax = current_limit_sweep(calc.e, calc.p, compliance_V=calc.compliance_V)
+            renderer = self._draw(ax)
+            legend = ax.get_legend().get_window_extent(renderer)
+            assert not legend.overlaps(ax.get_window_extent(renderer)), calc.e
+            for text in ax.texts:
+                assert not text.get_window_extent(renderer).overlaps(legend)
+            plt.close("all")
+
+    def test_b_the_binding_annotation_crosses_no_other_ceiling(self):
+        calc = self._dbs()
+        ax = current_limit_sweep(calc.e, calc.p, compliance_V=10.0)
+        renderer = self._draw(ax)
+        [note] = [t for t in ax.texts if t.get_text().startswith(BINDING_PREFIX)]
+        box = note.get_window_extent(renderer)
+        binding = calc.assess().limiting_current_uA
+        for line in ax.get_lines():
+            y = [float(v) for v in line.get_ydata()]
+            if not _is_flat(line) or y[0] == binding:
+                continue
+            _, display_y = ax.transData.transform((ax.get_xlim()[0], y[0]))
+            assert not (box.y0 <= display_y <= box.y1), (line.get_label(), note.get_text())
+        plt.close("all")
+
+    def test_c_the_applied_value_is_not_written_on_a_bar(self):
+        from neurostim.viz.plots import material_comparison
+
+        calc = self._dbs()
+        ax = material_comparison(calc.e, calc.p)
+        renderer = self._draw(ax)
+        for text in ax.texts:
+            box = text.get_window_extent(renderer)
+            for bar in ax.patches:
+                assert not box.overlaps(bar.get_window_extent(renderer)), text.get_text()
+        legend = ax.get_legend()
+        assert legend is not None and any("applied" in t.get_text() for t in legend.get_texts())
+        plt.close("all")
+
+    def test_d_the_slope_labels_do_not_sit_on_any_line(self):
+        """Each label against every line on both axes of the panel, since the potential
+        and field curves share it."""
+        import numpy as np
+
+        from neurostim import RingElectrode
+        from neurostim.viz.plots import radial_field_profile
+
+        for current, electrode in ((3000.0, self._dbs().e), (80.0, DiscElectrode(500.0, "Pt")),
+                                   (80.0, RingElectrode(330, 270, "Pt"))):
+            ax = radial_field_profile(current, electrode)
+            renderer = self._draw(ax)
+            axes = [a for a in ax.figure.axes if a.bbox.bounds == ax.bbox.bounds]
+            texts = [t for a in axes for t in a.texts if "falls as" in t.get_text()]
+            assert len(texts) == 2
+            for text in texts:
+                box = text.get_window_extent(renderer)
+                for a in axes:
+                    for line in a.get_lines():
+                        pts = a.transData.transform(np.column_stack(line.get_data()))
+                        inside = (pts[:, 0] >= box.x0) & (pts[:, 0] <= box.x1) & (
+                            pts[:, 1] >= box.y0) & (pts[:, 1] <= box.y1)
+                        assert not inside.any(), (electrode, text.get_text())
+            plt.close("all")
+
+    def test_f_the_shannon_legend_sits_outside_the_plot(self):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        ax = shannon_safe_operating_area(self._dbs())
+        renderer = self._draw(ax)
+        assert not ax.get_legend().get_window_extent(renderer).overlaps(
+            ax.get_window_extent(renderer)
+        )
+        plt.close("all")
+
+    def test_e_a_shannon_panel_says_when_shannon_does_not_apply(self):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        micro = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1))
+        assert micro.assess().shannon is not None
+        ax = shannon_safe_operating_area(micro)
+        labels = [str(line.get_label()) for line in ax.get_lines()]
+        assert any("this k, not applied" in label for label in labels), labels
+        assert any("Shannon not applied" in t.get_text() for t in ax.texts)
+        macro = SafetyCalculator(DiscElectrode(1000, "Pt"), StimProtocol(80, 200, 130, 1))
+        ax = shannon_safe_operating_area(macro)
+        assert not any("not applied" in str(line.get_label()) for line in ax.get_lines())
         plt.close("all")

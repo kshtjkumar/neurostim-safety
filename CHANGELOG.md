@@ -186,6 +186,20 @@ below it in a PASS. This covers the check summary, its detail, the PDF row, the 
 legend and the k warning. At two-decimal k values away from the boundary the text is
 unchanged.
 
+### No figure text sits on a line, a bar or another label
+
+- The legends of the Shannon and amplitude-limit panels sit below their axes. Inside,
+  they covered ceiling lines and data points, and on a refusal they clipped the sentence
+  that replaces the limit. The summary figure is 125 mm tall rather than 115, so the four
+  plotting areas keep their size.
+- The binding-limit note sits below its line, in the empty safe region. Above the line,
+  it crossed the cluster of ceilings on a DBS contact.
+- The applied charge density in the material panel is a legend entry. It used to be
+  written across the bottom bar.
+- "V falls as 1/r" sits below its line. It used to sit on the line.
+- On a microelectrode the Shannon panel reads "k = 1.50 (this k, not applied)" and says
+  "Shannon not applied (microelectrode)".
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

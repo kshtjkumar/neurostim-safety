@@ -135,6 +135,12 @@ def shannon_safe_operating_area(
     # panel drew only the module constants, so at calc.k = 2.0 a point above the solid
     # k = 1.5 line was coloured as passing, and the line it passed against was not there.
     decided = calc.k if calc is not None else None
+    # When the Shannon check does not run -- a microelectrode -- its line is still the
+    # assessment's k, but it decides nothing, and the panel says so (ledger 166).
+    shannon_off = calc is not None and any(
+        c.name == "Shannon criterion" and c.status.value == "NOT_EVALUATED"
+        for c in calc.assess().checks
+    )
     solid = decided if decided is not None else shannon_mod.K_SHANNON
     # Every requested k is drawn, the greys cycling: zip against the three greys used to
     # drop a fourth and later k silently (ledger 62/L1).
@@ -148,7 +154,10 @@ def shannon_safe_operating_area(
             note
             for note, applies in (
                 ("damage seen", damaging),
-                ("this assessment", decided is not None and math.isclose(k, decided)),
+                (
+                    "this k, not applied" if shannon_off else "this assessment",
+                    decided is not None and math.isclose(k, decided),
+                ),
             )
             if applies
         ]
@@ -206,7 +215,20 @@ def shannon_safe_operating_area(
     # base size, below the 5 pt journal floor, and in a second typeface (ledger 61/M11).
     ax.set_ylabel("Charge density, $Q/A$ (µC/cm² per phase)")
     ax.set_title("Shannon safe operating area", pad=4)
-    ax.legend(loc="upper right", handlelength=1.6, fontsize=5.4, ncol=1)
+    # Below the axes, as panel (b)'s is: inside, it sat on the damage points and the
+    # separatrices (ledger 166).
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.30), ncol=3, handlelength=1.6,
+              fontsize=5.4, frameon=False, columnspacing=1.0)
+    if shannon_off:
+        ax.text(
+            0.03,
+            0.17,
+            "Shannon not applied (microelectrode)",
+            transform=ax.transAxes,
+            fontsize=6,
+            color=PALETTE["grey"],
+            va="bottom",
+        )
     ax.text(
         0.03,
         0.04,
@@ -315,13 +337,17 @@ def current_limit_sweep(
                         alpha=0.07, linewidth=0, zorder=0)
         ax.axhline(binding_uA, color=PALETTE["fail"], linewidth=0.7, linestyle="-",
                    alpha=0.6)
+        # Below its line, in the shaded region where no ceiling runs: above it, the note
+        # was drawn across the cluster of ceilings just over the binding one
+        # (ledger 166).
         ax.annotate(
             f"binding limit {format_limit(binding_uA)} µA\n"
             f"({assessment.limiting_mechanism})"
             + (", provisional" if assessment.limit_is_provisional else ""),
             xy=(currents[0], binding_uA),
-            xytext=(2, 3),
+            xytext=(2, -3),
             textcoords="offset points",
+            va="top",
             fontsize=6,
             color=PALETTE["fail"],
         )
@@ -329,11 +355,11 @@ def current_limit_sweep(
     ax.set_xlabel("Requested current (µA)")
     ax.set_ylabel("Permitted current (µA)")
     ax.set_title(f"Amplitude limits, {electrode.material}", pad=4)
-    # Every candidate is a horizontal line spanning the full width, so an unframed legend
-    # sits on top of several of them and neither reads. This is the one legend in the
-    # module that needs to occlude rather than float.
-    ax.legend(loc="lower right", handlelength=1.6, fontsize=5.4, frameon=True,
-              framealpha=0.92, facecolor="white", edgecolor="none")
+    # Below the axes: every candidate is a horizontal line spanning the full width, so a
+    # legend inside the plot covered some of them, and on a refusal it clipped the
+    # sentence that replaces the limit (ledger 166).
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.30), ncol=3, handlelength=1.6,
+              fontsize=5.4, frameon=False, columnspacing=1.0)
     return ax
 
 
@@ -453,7 +479,11 @@ def radial_field_profile(
     ax.annotate(
         "V falls as 1/r",
         xy=(profile.distance_um[v_at], potential_mV[v_at]),
-        xytext=(3, -12),
+        # Below and left of a falling line, where nothing else is drawn: below-right sat
+        # on the line itself, and above-right can meet the field curve (ledger 166).
+        xytext=(-4, -6),
+        ha="right",
+        va="top",
         textcoords="offset points",
         fontsize=6,
         color=PALETTE["signal"],
@@ -578,16 +608,11 @@ def material_comparison(
         if limit < applied:
             bar.set_hatch("////")
             bar.set_edgecolor("white")
-    ax.axvline(applied, color=PALETTE["ink"], linewidth=1.0)
-    ax.annotate(
-        f"applied {applied:.3g} µC/cm²",
-        xy=(applied, len(mats) - 0.4),
-        xytext=(4, 0),
-        textcoords="offset points",
-        fontsize=6,
-        fontweight="bold",
-        color=PALETTE["ink"],
-    )
+    # Named in a legend in the lower-right corner, where the short bars leave room: as
+    # an annotation it was written across the bottom bar (ledger 166).
+    ax.axvline(applied, color=PALETTE["ink"], linewidth=1.0,
+               label=f"applied {applied:.3g} µC/cm²")
+    ax.legend(loc="lower right", handlelength=1.4, fontsize=6)
     for i, m in enumerate(mats):
         if not m.cic.verified:
             ax.annotate(
@@ -629,7 +654,9 @@ def safety_summary(
     rather than a list, so a setting added later cannot be forgotten here.
     """
     apply_style()
-    fig, axes = subplots(2, 2, width_mm=width_mm, height_mm=115.0)
+    # 125 mm, not 115: panel (b)'s legend sits below its axes (ledger 166), and the extra
+    # height keeps the four plotting areas the size they were.
+    fig, axes = subplots(2, 2, width_mm=width_mm, height_mm=125.0)
     (ax_a, ax_b), (ax_c, ax_d) = axes
 
     shannon_safe_operating_area(calc, ax=ax_a)
