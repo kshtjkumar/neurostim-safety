@@ -159,6 +159,10 @@ def distance_for_potential_um(
     """Invert :func:`potential_V`: the radius at which the potential equals a target."""
     if target_V <= 0:
         raise ValueError(f"target_V must be > 0, got {target_V!r}")
+    # The check its two siblings make: a negative sigma returned a negative distance
+    # (ledger 43).
+    if not math.isfinite(sigma_S_per_m) or sigma_S_per_m <= 0:
+        raise ValueError(f"sigma_S_per_m must be finite and > 0, got {sigma_S_per_m!r}")
     i_A = current_uA * 1e-6
     r_m = i_A / (_geometry_factor(electrode) * sigma_S_per_m * target_V)
     return r_m * 1e6

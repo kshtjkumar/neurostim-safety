@@ -344,8 +344,9 @@ def ohmic_power_W(rms_current_uA: float, resistance_ohm: float) -> float:
     For a *current*-controlled stimulator. Use :func:`voltage_driven_power_W` when the
     stimulator is voltage-controlled.
     """
-    if resistance_ohm < 0 or not math.isfinite(resistance_ohm):
-        raise ValueError(f"resistance_ohm must be finite and >= 0, got {resistance_ohm!r}")
+    # > 0, as voltage_driven_power_W requires; R = 0 was accepted here (ledger 44).
+    if resistance_ohm <= 0 or not math.isfinite(resistance_ohm):
+        raise ValueError(f"resistance_ohm must be finite and > 0, got {resistance_ohm!r}")
     return (rms_current_uA * 1e-6) ** 2 * resistance_ohm
 
 

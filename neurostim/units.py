@@ -25,6 +25,8 @@ so that a reader can audit every conversion in a report without installing anyth
 
 from __future__ import annotations
 
+import math
+
 # --- scale factors (multiply to convert FROM key TO the canonical unit) -----------
 
 CHARGE_TO_UC: dict[str, float] = {
@@ -76,6 +78,7 @@ CHARGE_DENSITY_TO_UC_CM2: dict[str, float] = {
 
 
 def _convert(value: float, unit: str, table: dict[str, float], kind: str) -> float:
+    _check_finite(kind, value)
     try:
         return value * table[unit]
     except KeyError:
@@ -147,14 +150,28 @@ def charge_uC(current_uA: float, pulse_width_us: float) -> float:
     ``Q[uC] = I[uA] * W[us] * 1e-6`` because uA*us = picocoulomb*1e6... explicitly:
     1 uA * 1 us = 1e-6 A * 1e-6 s = 1e-12 C = 1e-6 uC.
     """
+    _check_finite("current_uA", current_uA)
+    _check_finite("pulse_width_us", pulse_width_us)
+    # charge_uC(100, -200) returned -0.02 uC (ledger 27). Zero is allowed: a phase of
+    # no width carries no charge, as a monophasic pulse's return phase does.
+    if pulse_width_us < 0:
+        raise ValueError(f"pulse_width_us must be >= 0, got {pulse_width_us!r}")
     return current_uA * pulse_width_us * 1e-6
 
 
 def current_uA_from_charge(charge_uC_value: float, pulse_width_us: float) -> float:
     """Invert :func:`charge_uC`: the constant current delivering a charge in a window."""
+    _check_finite("charge_uC_value", charge_uC_value)
+    _check_finite("pulse_width_us", pulse_width_us)
     if pulse_width_us <= 0:
-        raise ValueError("pulse_width_us must be > 0")
+        raise ValueError(f"pulse_width_us must be > 0, got {pulse_width_us!r}")
     return charge_uC_value / (pulse_width_us * 1e-6)
+
+
+def _check_finite(name: str, value: float) -> None:
+    """NaN and infinity were passed through every converter (ledger 27)."""
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite, got {value!r}")
 
 
 # --- physical constants -----------------------------------------------------------
@@ -164,10 +181,16 @@ KELVIN_OFFSET = 273.15
 
 
 def celsius_to_kelvin(t_c: float) -> float:
-    """Degrees Celsius to kelvin."""
+    """Degrees Celsius to kelvin; below absolute zero raises (-300 C gave -26.85 K)."""
+    _check_finite("t_c", t_c)
+    if t_c < -KELVIN_OFFSET:
+        raise ValueError(f"{t_c!r} C is below absolute zero")
     return t_c + KELVIN_OFFSET
 
 
 def kelvin_to_celsius(t_k: float) -> float:
-    """Kelvin to degrees Celsius."""
+    """Kelvin to degrees Celsius; a negative kelvin temperature is below absolute zero."""
+    _check_finite("t_k", t_k)
+    if t_k < 0:
+        raise ValueError(f"{t_k!r} K is below absolute zero")
     return t_k - KELVIN_OFFSET

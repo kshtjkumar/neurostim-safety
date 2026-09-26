@@ -268,6 +268,22 @@ helping.
 - The sensitivity module no longer claims to cover every limit. It says the thermal and
   activation estimates are not varied there, and where their spreads are reported.
 
+### Intervals round outward, and the small converters refuse nonsense
+
+- Interval arithmetic widens a result by one ulp at each end when floating point had to
+  round it, so an interval contains every possible result. Before, `Interval(0.1, 0.1) *
+  3` excluded 0.3. Exact results stay exact.
+- `Interval.square()` and `** n` know a square is non-negative: `[-1, 1]` squared is
+  `[0, 1]`, where `x * x` gave `[-1, 1]`.
+- `Interval.from_mean_sd` refuses an infinite sd, and a negative `k` with its own message.
+- The unit converters refuse NaN and infinity. `charge_uC` refuses a negative pulse
+  width, and the temperature converters refuse anything below
+  absolute zero.
+- `field.distance_for_potential_um` checks σ > 0, as its siblings do, and
+  `thermal.ohmic_power_W` refuses R = 0, as `voltage_driven_power_W` does.
+- No package output moves: the package builds its intervals directly and does no
+  arithmetic on them.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

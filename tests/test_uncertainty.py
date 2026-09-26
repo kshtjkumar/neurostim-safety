@@ -185,3 +185,67 @@ class TestPropagationIntoAssessment:
 
     def test_interval_appears_in_the_report_text(self, assessment):
         assert "across published ranges" in assessment.describe()
+
+
+class TestC66OutwardRoundingAndGuards:
+    """C6.6: ledgers 23, 26, 27, 31, 43 and 44."""
+
+    def test_26_an_exact_decimal_is_contained(self):
+        import math
+
+        from neurostim.uncertainty import Interval
+
+        tripled = Interval(0.1, 0.1) * 3
+        assert tripled.contains(0.3)
+        summed = Interval(0.1, 0.2) + Interval(0.2, 0.3)
+        assert summed.contains(0.3) and summed.contains(0.5)
+        assert summed.low == math.nextafter(0.1 + 0.2, -math.inf)
+        assert (Interval(1.0, 2.0) / 3).contains(1 / 3)
+
+    def test_23_squares_know_they_are_non_negative(self):
+        from neurostim.uncertainty import Interval
+
+        assert Interval(-1.0, 1.0).square() == Interval(0.0, 1.0)
+        assert (Interval(-1.0, 1.0) ** 2) == Interval(0.0, 1.0)
+        sq = Interval(-2.0, 3.0).square()
+        assert sq.low == 0.0 and sq.contains(9.0) and sq.high < 9.0 + 1e-12
+        cube = Interval(-2.0, 3.0) ** 3
+        assert cube.contains(-8.0) and cube.contains(27.0)
+        assert Interval(2.0, 3.0).square().contains(4.0)
+
+    def test_31_from_mean_sd_refuses_what_it_cannot_mean(self):
+        from neurostim.uncertainty import Interval
+
+        with pytest.raises(ValueError, match="sd must be finite"):
+            Interval.from_mean_sd(1.0, float("inf"))
+        with pytest.raises(ValueError, match="k must be finite and >= 0"):
+            Interval.from_mean_sd(1.0, 0.1, k=-1.0)
+
+    def test_27_units_refuse_non_finite_and_unphysical(self):
+        from neurostim import units
+
+        for bad in (float("nan"), float("inf")):
+            with pytest.raises(ValueError, match="finite"):
+                units.to_uA(bad, "mA")
+            with pytest.raises(ValueError, match="finite"):
+                units.charge_uC(bad, 100.0)
+            with pytest.raises(ValueError):
+                units.current_uA_from_charge(1.0, bad)
+        with pytest.raises(ValueError, match="pulse_width_us"):
+            units.charge_uC(100.0, -200.0)
+        with pytest.raises(ValueError, match="absolute zero"):
+            units.celsius_to_kelvin(-300.0)
+        with pytest.raises(ValueError, match="absolute zero"):
+            units.kelvin_to_celsius(-1.0)
+
+    def test_43_distance_for_potential_checks_sigma(self):
+        from neurostim.models import field
+
+        with pytest.raises(ValueError, match="sigma"):
+            field.distance_for_potential_um(100.0, 1.0, -0.35)
+
+    def test_44_ohmic_power_refuses_zero_resistance(self):
+        from neurostim.models import thermal
+
+        with pytest.raises(ValueError, match="> 0"):
+            thermal.ohmic_power_W(100.0, 0.0)

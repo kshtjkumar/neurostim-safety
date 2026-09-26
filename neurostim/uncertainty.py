@@ -23,12 +23,25 @@ deviations and sample sizes recorded on the source data (for example
 Interval arithmetic also suffers the dependency problem: ``x - x`` is not zero when
 computed as an interval, because each occurrence is treated as independent. Nothing here
 subtracts an interval from itself, but keep it in mind before extending this module.
+``x * x`` is the same problem, and :meth:`Interval.square` (``x ** 2``) is the answer to
+it: the product of an interval with itself returned [-1, 1] for [-1, 1] (ledger 23).
+General dependency tracking is out of scope.
+
+Outward rounding
+----------------
+Every arithmetic result that floating point had to round is widened by one unit in the
+last place, down at the low end and up at the high end, so the interval does contain
+every possible result: ``Interval(0.1, 0.1) * 3`` used to be exactly 0.30000000000000004,
+which excludes 0.3 (ledger 26). A result the floats represent exactly -- checked with
+:class:`fractions.Fraction` -- is left as it is, so exact inputs give exact outputs.
 """
 
 from __future__ import annotations
 
 import math
+import operator
 from dataclasses import dataclass
+from fractions import Fraction
 
 
 @dataclass(frozen=True)
@@ -56,8 +69,11 @@ class Interval:
     @classmethod
     def from_mean_sd(cls, mean: float, sd: float, k: float = 1.0) -> Interval:
         """``mean +/- k*sd``. ``k=1`` is roughly 68 % for a normal spread, ``k=2`` 95 %."""
-        if sd < 0:
-            raise ValueError(f"sd must be >= 0, got {sd}")
+        if not math.isfinite(sd) or sd < 0:
+            raise ValueError(f"sd must be finite and >= 0, got {sd!r}")
+        # Its own message: a negative k used to fail on bound ordering (ledger 31).
+        if not math.isfinite(k) or k < 0:
+            raise ValueError(f"k must be finite and >= 0, got {k!r}")
         return cls(mean - k * sd, mean + k * sd)
 
     # --- properties -----------------------------------------------------------
@@ -98,30 +114,32 @@ class Interval:
     # --- arithmetic -----------------------------------------------------------
 
     def _binary(self, other, op) -> Interval:
-        if isinstance(other, Interval):
-            candidates = [
-                op(self.low, other.low),
-                op(self.low, other.high),
-                op(self.high, other.low),
-                op(self.high, other.high),
-            ]
-        else:
-            candidates = [op(self.low, other), op(self.high, other)]
-        return Interval(min(candidates), max(candidates))
+        pairs = (
+            [(a, b) for a in (self.low, self.high) for b in (other.low, other.high)]
+            if isinstance(other, Interval)
+            else [(self.low, other), (self.high, other)]
+        )
+        results = [(op(a, b), a, b) for a, b in pairs]
+        low = min(results, key=lambda item: item[0])
+        high = max(results, key=lambda item: item[0])
+        return Interval(
+            _outward(low[0], op, low[1], low[2], down=True),
+            _outward(high[0], op, high[1], high[2], down=False),
+        )
 
     def __add__(self, other) -> Interval:
-        return self._binary(other, lambda a, b: a + b)
+        return self._binary(other, operator.add)
 
     __radd__ = __add__
 
     def __sub__(self, other) -> Interval:
-        return self._binary(other, lambda a, b: a - b)
+        return self._binary(other, operator.sub)
 
     def __rsub__(self, other) -> Interval:
         return Interval.exact(other) - self
 
     def __mul__(self, other) -> Interval:
-        return self._binary(other, lambda a, b: a * b)
+        return self._binary(other, operator.mul)
 
     __rmul__ = __mul__
 
@@ -132,7 +150,7 @@ class Interval:
                 f"cannot divide by an interval spanning zero: "
                 f"[{divisor.low}, {divisor.high}]"
             )
-        return self._binary(other, lambda a, b: a / b)
+        return self._binary(other, operator.truediv)
 
     def __rtruediv__(self, other) -> Interval:
         return Interval.exact(other) / self
@@ -143,6 +161,41 @@ class Interval:
     def scaled(self, factor: float) -> Interval:
         """Multiply both bounds by a scalar."""
         return self * factor
+
+    def square(self) -> Interval:
+        """``x ** 2`` over the interval: ``[0, max^2]`` when it spans zero.
+
+        Not ``self * self``, which treats the two factors as independent and gave
+        [-1, 1] for [-1, 1] -- a negative lower bound on a square (ledger 23).
+        """
+        return self._power(2)
+
+    def __pow__(self, exponent: int) -> Interval:
+        """A non-negative integer power, with the dependency of the factors respected."""
+        if not isinstance(exponent, int) or exponent < 0:
+            raise ValueError(f"only non-negative integer powers, got {exponent!r}")
+        if exponent == 0:
+            return Interval.exact(1.0)
+        return self._power(exponent)
+
+    def _power(self, exponent: int) -> Interval:
+        """Odd powers are monotone, so the ends map to the ends; an even power of an
+        interval spanning zero has zero as its minimum. Both ends rounded outward."""
+
+        def raised(x: float, *, down: bool) -> float:
+            value = x**exponent
+            if not math.isfinite(value) or Fraction(x) ** exponent == Fraction(value):
+                return value
+            return math.nextafter(value, -math.inf if down else math.inf)
+
+        if exponent % 2:
+            return Interval(raised(self.low, down=True), raised(self.high, down=False))
+        if self.low <= 0.0 <= self.high:
+            return Interval(
+                0.0, max(raised(self.low, down=False), raised(self.high, down=False))
+            )
+        near, far = sorted((self.low, self.high), key=abs)
+        return Interval(raised(near, down=True), raised(far, down=False))
 
     def sqrt(self) -> Interval:
         """Element-wise square root; requires a non-negative interval."""
@@ -181,6 +234,15 @@ class Interval:
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return self.describe()
+
+
+def _outward(value: float, op, a: float, b: float, *, down: bool) -> float:
+    """``value`` = ``op(a, b)`` in floats, one ulp outward if floats rounded it."""
+    if not math.isfinite(value) or not (math.isfinite(a) and math.isfinite(b)):
+        return value
+    if op(Fraction(a), Fraction(b)) == Fraction(value):
+        return value
+    return math.nextafter(value, -math.inf if down else math.inf)
 
 
 def combine(intervals: list[Interval]) -> Interval:
