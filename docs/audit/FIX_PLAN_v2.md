@@ -1154,19 +1154,19 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 111 | LOW | — (found in Phase 2 review, F9) | **unscheduled** | test-only. Run the oracle over the whole sweep with the set written literally; first Phase 3 commit |
 | 112 | LOW | — (found in Phase 2 review, F10) | C2.8 | **FIXED** `f4f08b8`; removed by the exact-linear net: the balance test becomes amplitude-independent |
 | 113 | LOW | — (found in Phase 2 review, F11) | **P2b docs commit** (docstring narrowed; ledger 123) | **FIXED** `96ccae5`; documentation-only today (not rendered); fix with the next change to the interval, or narrow the docstring |
-| 114 | LOW | — (found in Phase 2 review, F12) | C5.5 | batch CSV columns; with 157 (Phase 4 review M3): 500 µm Pt in vivo reports `max_current_cic_uA` 981.75 against the check ceiling 112.84 |
+| 114 | LOW | — (found in Phase 2 review, F12) | C5.5 | **FIXED** `94e742e`; None when the check did not run; with 157 |
 | 115 | LOW | — (found in Phase 2 review, F13) | C2.8 | **FIXED** `f4f08b8`; one sentence in D2 point 2 |
 | 116 | LOW | — (found in Phase 2 review, F14) | C5.11 | viz |
 | 117 | LOW | — (found in Phase 2 review, F15; extended by Phase 2b review G1 = ledger 119) | C2.8, C4.2 | **FIXED** `76ffd06` (contract and charge interval; nan term earlier); the nan term closes at C2.8; water_window.evaluate's argument contract at C4.2, which already reworks its polarity arguments; the charge-interval fallback at C4.2 — nan term **FIXED** at `f4f08b8` |
 | 118 | LOW | — (found in Phase 2 review, F16) | C4.3 | **FIXED** `8520d84`; provisional propagation: set provisional on Water window whenever drift binds, and say 'no-leak bound' |
 | 119 | LOW | — (found in Phase 2b review, G1) | C4.2 (folded into 117) | **FIXED** `76ffd06`; the public `water_window.evaluate` keeps both old behaviours: no balance gate, and `recovered_charge_uC` defaults to 0.0. C4.2 makes the drift inputs one object, or makes the riding charge required with the DC, and applies the balance tolerance inside the function |
-| 120 | LOW | — (found in Phase 2b review, G2) | C5.5 | `report()["net_dc_current_uA"]` (a batch column) carries the raw 1.04e-12 residue for a pulse both checks call balanced; report 0.0 when balanced or document it as the raw residue |
+| 120 | LOW | — (found in Phase 2b review, G2) | C5.5 | **FIXED** `94e742e`; 0.0 for a balanced pulse |
 | 121 | LOW | — (found in Phase 2b review, G3) | **P2b docs commit** | **FIXED** `96ccae5`; mislabelled fixture in the section 6 C2.2 [106] row; relabelled |
 | 122 | LOW | — (found in Phase 2b review, G4) | **P2b docs commit** | **FIXED** `96ccae5`; the README water-window limitation described a pure double-layer capacitance; rewritten to the CIC-derived `C_eff` |
 | 123 | LOW | — (found in Phase 2b review, G5) | **P2b docs commit** | **FIXED** `96ccae5`; scheduling: 108 moved to its own commit before C3.1; 113 closed by narrowing the docstring |
 | 124 | LOW | — (found at C3.1) | C4.8 | **FIXED** `a91b5d8` (C4.8; McCreery 2010 is in the library, Weiland 2002 still absent); obtain Weiland 2002 and McCreery 2010 for papers_stim_calc_ref/ and verify the two presets' geometry and tags against them; C4.8 already verifies citations against the PDFs in the library |
 | 125 | LOW | — (found at C3.2) | C5.11 | condition charge.describe()'s perimeter-peak note on the geometry, using `current_density.primary_distribution` |
-| 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | **JSON and audit FIXED** `889b525` (CSV at C5.5, GUI at C5.8); the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
+| 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | **JSON and audit FIXED** `889b525`; **CSV FIXED** `94e742e` (counter_ columns); GUI at C5.8; the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
 | 127 | HIGH | — (found in Phase 3 review, H1) | **C3.7** | **FIXED** `f2b6a0a`; regenerate the FD band table with radial resolution tied to band height, show convergence, cross-check against an independent solve, restate the sphere's accuracy everywhere. MUST land before Phase 4 closes (review condition) |
 | 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | **FIXED** `8520d84`; render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
 | 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | **FIXED** `f072907`; flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
@@ -1197,7 +1197,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 154 | MED | — (found at C4.7c) | **C4.7d** | **FIXED** `1f542fd`; no single-pulse relief below 200 µm (anti-conservative for short trains on small electrodes) |
 | 155 | HIGH | — (Phase 4 review M1) | **C4b.1** | **FIXED** `48dc70e`; payload v3 (answer + per-module model-constant hashes), results compared at every version, 0.16.0 |
 | 156 | HIGH | — (Phase 4 review M2) | **C4b.2** | **FIXED** `ba1fd6f`; user decision (D): flat 35/3.84 = 9.11× at every width, provisional below 100 µs; per-width curve declined |
-| 157 | HIGH | — (Phase 4 review M3) | C5.5 | with 114: `max_current_cic_uA` ignores `medium` |
+| 157 | HIGH | — (Phase 4 review M3) | C5.5 | **FIXED** `94e742e`; max_current_cic_uA honours medium |
 | 158 | LOW | — (Phase 4 review M4) | **C4b.3** | **FIXED** `9df0401`; `report()`, CSV and JSON results carry `limit_is_provisional` and `limits_incomplete` |
 | 159 | LOW | — (Phase 4 review M5) | **C4b.4** | **FIXED** `888305f`; both sizes named (text 0.115 mm, Fig. 6 caption 0.12 mm) |
 | 160 | LOW | — (Phase 4b review N1) | **C5.0** | **FIXED** `c57b479`; payload v4 answer carries the interval and the per-kind limits |
