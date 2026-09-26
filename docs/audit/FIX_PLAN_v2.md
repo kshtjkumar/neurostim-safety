@@ -1212,6 +1212,11 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 160 | LOW | — (Phase 4b review N1) | **C5.0** | **FIXED** `c57b479`; payload v4 answer carries the interval and the per-kind limits |
 | 161 | LOW | — (Phase 4b review N2) | **C5.0** | **FIXED** `c57b479`; `reproduces` docstring states the v1/v2 limit |
 | 162 | LOW | — (found at C5.3) | **C5.11d** | **FIXED** `e2d0050`; label clears the legend |
+| 163 | HIGH | — (Phase 5 review P1) | **C5b.1** | Shannon threshold printed at its own precision; applied reads above it at every k |
+| 164 | HIGH | — (Phase 5 review P2) | **C5b.2** | GUI counter takes the active electrode's geometry type, so environments match |
+| 165 | LOW | — (Phase 5 review P3) | **C5b.3** | FEM scale check robust to grounded boundaries on regular grids |
+| 166 | LOW | — (Phase 5 review P4) | **C5b.4** | figure text collisions (legend/refusal, DBS annotation, applied label, 1/r label, NOT_EVALUATED Shannon) |
+| 167 | LOW | — (Phase 5 review P5) | **C5b.5** | failed-row information persists in the CSV |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
