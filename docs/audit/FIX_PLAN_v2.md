@@ -1061,9 +1061,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 29 | LOW | LISTED-ONLY | C3.4 | **FIXED** `d5136df`; own commit |
 | 30 | LOW | LISTED-ONLY | C4.1 | **FIXED** `53a0713`; `verified` field + provenance rollup named |
 | 31 | LOW | OK | C6.6 | |
-| 32 | HIGH | TEST-WEAK | C6.3 | pinned to Elwassif 0.8200 K, not to itself; booked once |
+| 32 | HIGH | TEST-WEAK | C6.3 | **FIXED** `d787c06`; electro-thermal radius; pinned to Elwassif, not itself |
 | 33 | HIGH | OK | C6.1 | **FIXED** `7be04fb`; negative chronaxie refused |
-| 34 | MED | OK | C6.3 | |
+| 34 | MED | OK | C6.3 | **FIXED** `d787c06`; two-sphere power and impedance; S-23 (a) reversed |
 | 35 | MED | OK | C6.4 | **FIXED** `52c254f`; time grid set by the physics |
 | 36 | MED | DOC | C6.4 | **FIXED** `52c254f`; clamp warns; saturation documented |
 | 37 | MED | OK | C6.1 | **FIXED** `7be04fb`; SE and CI reach the caller |
@@ -1141,7 +1141,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 78/S-20 | LOW | OK | C4.8 | **NOT DONE**: the IT'IS spreadsheet is not in the library, so the year cannot be checked against its source (reported at C4.8); itis2025 is v4.2, 2024 |
 | 78/S-21 | LOW | OK | C4.9 | **FIXED** `889b525` (C4.4, found independently there); |
 | 78/S-22 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b); derived AIROF area and Schaldach figures named as derived |
-| 78/S-23 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b, contact diameter attributed to the manufacturer) and `17bd45f` (C4.9c, decision (a): 1.3803 mm kept as `SOURCE_RADIUS_M`, equal-area derivation documented, not stated in the paper) |
+| 78/S-23 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b, contact diameter attributed to the manufacturer) and `17bd45f` (C4.9c, decision (a): 1.3803 mm kept as `SOURCE_RADIUS_M`, equal-area derivation documented, not stated in the paper); **decision (a) reversed** at `d787c06` (C6.3, user decision (B)): `SOURCE_RADIUS_M` is the equal-area sphere, 690.11 µm |
 | 78/S-24 | LOW | OK | C7.4 | six stale README claims |
 | 78/S-25 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b); four via-citation reference entries |
 | 84 | HIGH | — (found in Phase 0) | C1.5 | **FIXED** `e704d8a` (row marked at Phase 5); D3(i) restated; `unsafe_at_any_amplitude` + the rendering contract. Interacts with C2.1, C2.3 and C5.1, each of which carries an assertion |
