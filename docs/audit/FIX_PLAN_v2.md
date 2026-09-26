@@ -1059,7 +1059,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 48 | CRIT | PARTIAL | C5.1 | candidate set rebuilt from the assessment |
 | 49 | CRIT | PARTIAL | C1.3 | GUI, figure and `Interval.describe` added to scope |
 | 50 | HIGH | OK | C5.6 | |
-| 51 | HIGH | OK | C5.5 | row-error contract landed at C1.9 |
+| 51 | HIGH | OK | C5.5 | **FIXED** `0aedc2d`; header-only raises naming the file; empty keeps the schema |
 | 52 | HIGH | OK | C1.9 | |
 | 53 | HIGH | OK | C5.7 | |
 | 54 | HIGH | OK | C4.4 | **FIXED** `889b525`; also carries `counter_electrode` |
@@ -1072,7 +1072,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 61/M1 | MED | OK | C1.1 + C5.11 | headline caveat pulled forward ~30 commits |
 | 61/M2 | MED | OK | C5.11 | |
 | 61/M3 | MED | OK | C5.11 | |
-| 61/M4 | MED | OK | C5.5 | |
+| 61/M4 | MED | OK | C5.5 | **FIXED** `0aedc2d`; failed rows None, BatchRowsFailedWarning, attrs rows_failed |
 | 61/M5 | MED | OK | C5.10 | unbundled; also C3.1's electrode threading |
 | 61/M6 | MED | OK | C5.10 | |
 | 61/M7 | MED | OK | C5.10 | |
@@ -1082,7 +1082,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 61/M11 | MED | OK | C5.11 | |
 | 61/M12 | MED | OK | C0.4, C5.9 | TIFF 47 001 446 bytes |
 | 61/M13 | MED | OK | C5.9 | test must force a NaN |
-| 61/M14 | MED | OK | C5.5 | mapping label corrected from v1's `62/L-M14` |
+| 61/M14 | MED | OK | C5.5 | **FIXED** `0aedc2d`; read errors name the file |
 | 62/L1 | LOW | OK | C5.11 | |
 | 62/L2 | LOW | OK | C5.11 | |
 | 62/L3 | LOW | OK | C5.8 | |
