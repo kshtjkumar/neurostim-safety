@@ -1082,7 +1082,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 43 | LOW | OK | C6.6 | **FIXED** `c2de844`; sigma checked |
 | 44 | LOW | OK | C6.6 | **FIXED** `c2de844`; R > 0 in both |
 | 45 | LOW | DOC | C4.8 | **FIXED** `a91b5d8`; discrepancy recorded |
-| 46 | HIGH | OK | C7.3 | ledger row repaired at C0.5 |
+| 46 | HIGH | OK | C7.3 | **FIXED** `1619d5f`; reproduction, not validation; cause corrected |
 | 47 | HIGH | OK | C7.2 | **FIXED** `6287453`; version single-sourced |
 | 48 | CRIT | PARTIAL | C5.1 | **FIXED** `fa01e26` (C5.1 pulled forward into Phase 1; the refusal edge checked again at Phase 5, nothing remained); candidate set rebuilt from the assessment |
 | 49 | CRIT | PARTIAL | C1.3 | GUI, figure and `Interval.describe` added to scope |
@@ -1240,7 +1240,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 170 | LOW | — (Phase 6 review R1) | **C7.0** | **FIXED** `a691d37`; Lapicque under-coverage documented |
 | 171 | LOW | — (Phase 6 review R2) | **C7.0** | **FIXED** `447c20c`; warns below the resolved tau |
 | 172 | LOW | — (Phase 6 review R3) | **C7.0** | **FIXED** `e33bbbc`; sqrt and from_mean_sd round outward |
-| 173 | LOW | — (Phase 6 review R4) | C7.3 | CITATION.cff "validated" wording |
+| 173 | LOW | — (Phase 6 review R4) | C7.3 | **FIXED** `1619d5f`; CITATION wording corrected |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
