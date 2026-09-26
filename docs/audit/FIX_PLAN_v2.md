@@ -1062,7 +1062,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 53 | HIGH | OK | C5.7 | |
 | 54 | HIGH | OK | C4.4 | **FIXED** `889b525`; also carries `counter_electrode` |
 | 55 | HIGH | OK | C5.2 | **FIXED** `6d5ce49`; the calculator's k drawn and named |
-| 56 | HIGH | OK | C5.3 | |
+| 56 | HIGH | OK | C5.3 | **FIXED** `2fa4120`; shape and hatch carry pass/fail |
 | 57 | HIGH | OK | C5.8 | |
 | 58 | HIGH | OK | C5.4 | |
 | 59 | HIGH | OK | C4.4 | **FIXED** `889b525` |
