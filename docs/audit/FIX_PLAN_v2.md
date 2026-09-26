@@ -1054,15 +1054,15 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 20 | MED | BLOCKED | C3.1 | **FIXED** `a010103`; equal-area sphere |
 | 21 | MED | OK | C3.1 | **FIXED** `a010103` |
 | 22 | MED | DOC | — | §8 |
-| 23 | MED | DOC | C6.6 | `square()`/`__pow__` only |
+| 23 | MED | DOC | C6.6 | **FIXED** `c2de844`; square and pow |
 | 24 | MED | OK | C4.1 | **FIXED** `53a0713` |
 | 25 | MED | OK | C4.1 (C4.1b) | **FIXED** `55afec4`; option (c), inherited constants labelled |
-| 26 | LOW | OK | C6.6 | |
-| 27 | LOW | OK | C6.6 | |
+| 26 | LOW | OK | C6.6 | **FIXED** `c2de844`; outward rounding |
+| 27 | LOW | OK | C6.6 | **FIXED** `c2de844`; converters guarded |
 | 28 | LOW | LISTED-ONLY | C3.4 | **FIXED** `d5136df`; own commit |
 | 29 | LOW | LISTED-ONLY | C3.4 | **FIXED** `d5136df`; own commit |
 | 30 | LOW | LISTED-ONLY | C4.1 | **FIXED** `53a0713`; `verified` field + provenance rollup named |
-| 31 | LOW | OK | C6.6 | |
+| 31 | LOW | OK | C6.6 | **FIXED** `c2de844`; sd and k guarded |
 | 32 | HIGH | TEST-WEAK | C6.3 | **FIXED** `d787c06`; electro-thermal radius; pinned to Elwassif, not itself |
 | 33 | HIGH | OK | C6.1 | **FIXED** `7be04fb`; negative chronaxie refused |
 | 34 | MED | OK | C6.3 | **FIXED** `d787c06`; two-sphere power and impedance; S-23 (a) reversed |
@@ -1074,8 +1074,8 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 40 | MED | OK | C6.5 | **FIXED** `2ccf0dd`; claim narrowed |
 | 41 | MED | LISTED-ONLY | C6.5 | **FIXED** `2ccf0dd`; negative offset refused |
 | 42 | LOW | OK | C6.4 | **FIXED** `52c254f`; clamp is loud |
-| 43 | LOW | OK | C6.6 | |
-| 44 | LOW | OK | C6.6 | |
+| 43 | LOW | OK | C6.6 | **FIXED** `c2de844`; sigma checked |
+| 44 | LOW | OK | C6.6 | **FIXED** `c2de844`; R > 0 in both |
 | 45 | LOW | DOC | C4.8 | **FIXED** `a91b5d8`; discrepancy recorded |
 | 46 | HIGH | OK | C7.3 | ledger row repaired at C0.5 |
 | 47 | HIGH | OK | C7.2 | |
