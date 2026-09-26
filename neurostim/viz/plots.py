@@ -23,7 +23,7 @@ from ..models import thermal as thermal_mod
 from ..protocol import StimProtocol
 from ..safety import LIMIT_BEARING, SafetyCalculator
 from ..safety import shannon as shannon_mod
-from ..safety._limits import format_limit
+from ..safety._limits import format_limit, format_setting
 from .style import (
     CATEGORICAL,
     DOUBLE_COLUMN_MM,
@@ -158,7 +158,7 @@ def shannon_safe_operating_area(
             color=STATUS_COLOURS["FAIL"] if damaging else colour,
             linewidth=1.0,
             linestyle="-" if math.isclose(k, solid) else "--",
-            label=f"k = {k:.2f}" + (f" ({', '.join(notes)})" if notes else ""),
+            label=f"k = {format_setting(k)}" + (f" ({', '.join(notes)})" if notes else ""),
             zorder=2,
         )
 

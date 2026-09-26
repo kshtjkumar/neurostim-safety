@@ -343,3 +343,36 @@ def format_exceeding(applied: float, bound_text: str, sig: int = 4) -> str:
             return text
     return repr(applied)
 
+
+def format_setting(value: float, decimals: int = 2) -> str:
+    """A user's setting -- a threshold such as Shannon's ``k`` -- exactly as given.
+
+    At least ``decimals`` places, and as many more as it takes for the text to parse back
+    to the value: ``1.5`` prints "1.50", ``1.749`` prints "1.749". ``:.2f`` printed 1.749
+    as "1.75", a threshold rounded up past the one applied (ledger 163).
+    """
+    if not math.isfinite(value):
+        return repr(value)
+    for places in range(decimals, 18):
+        text = f"{value:.{places}f}"
+        if float(text) == value:
+            return text
+    return repr(value)
+
+
+def format_against(applied: float, bound_text: str, *, exceeds: bool, decimals: int = 2) -> str:
+    """An applied value beside a printed bound, on the side of it the verdict is on.
+
+    ``decimals`` places, more as needed, until the text parses strictly above
+    ``bound_text`` when ``exceeds`` and at or below it otherwise (ledgers 50, 163). Called
+    only where ``applied`` truly is on that side, so enough places always do.
+    """
+    if not math.isfinite(applied):
+        return repr(applied)
+    bound = float(bound_text)
+    for places in range(decimals, 18):
+        text = f"{applied:.{places}f}"
+        if (float(text) > bound) if exceeds else (float(text) <= bound):
+            return text
+    return repr(applied)
+

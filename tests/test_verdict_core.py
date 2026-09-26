@@ -4020,3 +4020,70 @@ class TestEachRowSaysWhatItRestsOn:
         derating = cogan2016.PT_IN_VIVO_DERATING
         assert f"applies {format_limit(100.0 / derating)} uC/cm^2" in result.policy_warning
         assert f"end at {format_limit(50.0 / derating)} uC/cm^2" in result.policy_warning
+
+
+class TestTheShannonThresholdPrintsAtItsOwnPrecision:
+    """Ledger 163 (Phase 5 review P1), C5b.1. The threshold was printed ``:.2f``, which
+    rounds a three-decimal k up: k = 1.749 at the boundary printed "k = 1.7490173716055608
+    exceeds the 1.75 threshold". The threshold must print as the value given, and the
+    applied k must read above it in a FAIL and at or below it in a PASS -- in the summary,
+    the detail and the PDF row -- at every k."""
+
+    @staticmethod
+    def _numbers(text, pattern):
+        import re
+
+        m = re.search(pattern, text)
+        assert m, (pattern, text)
+        return float(m.group(1)), float(m.group(2)), m.group(2)
+
+    def test_sweep_k_at_the_boundary(self):
+        import math
+
+        from neurostim.safety import shannon as shannon_mod
+        from neurostim.safety.assessment import _shannon_check
+
+        area = 7.853981633974483e-3
+        wrong = []
+        for step in range(1501):
+            k = round(1.0 + step * 0.001, 3)
+            q = math.sqrt(10.0**k * area)
+            for q_i in (q * (1 + 1e-9), q * (1 - 1e-9)):
+                result = shannon_mod.evaluate(q_i, area, 200.0, k)
+                summary = _shannon_check(result, k).summary
+                if result.passes:
+                    a, b, _ = self._numbers(summary, r"k = (\S+) at threshold (\S+),")
+                    ok = a <= b
+                else:
+                    a, b, _ = self._numbers(summary, r"k = (\S+) exceeds the (\S+) threshold")
+                    ok = a > b
+                da, db, _ = self._numbers(result.describe(), r"Shannon k = (\S+) vs threshold (\S+) ")
+                ok = ok and b == k and db == k and (da > db) != result.passes
+                if not ok:
+                    wrong.append((k, summary, result.describe().splitlines()[0]))
+        assert not wrong, (len(wrong), wrong[:3])
+
+    def test_the_k_warning_prints_k_as_given(self):
+        """The same flaw in the one other print of k: ``:g`` made 1.5000004 read "k = 1.5
+        exceeds the 1.5"."""
+        from neurostim.safety import shannon as shannon_mod
+
+        assert shannon_mod.k_warning(1.5000004).startswith("k = 1.5000004 exceeds the 1.5")
+        assert shannon_mod.k_warning(1.749).startswith("k = 1.749 exceeds")
+
+    def test_the_pdf_row(self):
+        from neurostim.io.report import _computed_rows
+
+        disc = DiscElectrode(1000.0, "Pt")
+        wrong = []
+        for k in (1.0, 1.25, 1.5, 1.749, 1.75, 1.751, 1.8, 1.999, 2.2):
+            probe = SafetyCalculator(disc, StimProtocol(1000, 200, 50, 1), k=k)
+            boundary = probe.max_current_shannon_uA
+            for current in (boundary * (1 + 1e-9), boundary):
+                calc = SafetyCalculator(disc, StimProtocol(current, 200, 50, 1), k=k)
+                a = calc.assess()
+                row = dict(_computed_rows(calc, a))["Shannon k"]
+                applied, bound, _ = self._numbers(row, r"^(\S+) \(threshold (\S+);")
+                if bound != k or (applied > bound) == a.shannon.passes:
+                    wrong.append((k, current, row))
+        assert not wrong, wrong

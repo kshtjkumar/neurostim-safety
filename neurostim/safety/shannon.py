@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..units import charge_uC
-from ._limits import floor_to_pass, format_limit
+from ._limits import floor_to_pass, format_against, format_limit, format_setting
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle avoidance
     from ..geometry.base import Electrode
@@ -182,12 +182,12 @@ def k_warning(k: float) -> str:
     excess = 10 ** ((k - K_SHANNON) / 2.0)
     if k >= K_DAMAGE_OBSERVED:
         return (
-            f"k = {k:g} is at or above 2.0, where Shannon (1992) states damage was "
+            f"k = {format_setting(k)} is at or above 2.0, where Shannon (1992) states damage was "
             f"observed; it permits {excess:.2f}x the charge of his recommended 1.5 "
             f"line and is not a safety limit"
         )
     return (
-        f"k = {k:g} exceeds the 1.5 that Shannon (1992) recommends and uses "
+        f"k = {format_setting(k)} exceeds the 1.5 that Shannon (1992) recommends and uses "
         f"throughout; it permits {excess:.2f}x the charge of that line"
     )
 
@@ -364,10 +364,14 @@ class ShannonResult:
     def describe(self) -> str:
         """Multi-line summary."""
         verdict = "PASS" if self.passes else "EXCEEDS"
+        # The threshold as given and the metric on its side of it (ledger 163).
+        threshold = format_setting(self.k_threshold)
+        applied = format_against(
+            self.k_metric, threshold, exceeds=not self.passes, decimals=3
+        )
         return "\n".join(
             [
-                f"Shannon k = {self.k_metric:.3f} vs threshold {self.k_threshold:.2f} "
-                f"-> {verdict}",
+                f"Shannon k = {applied} vs threshold {threshold} -> {verdict}",
                 f"  charge/phase    {self.charge_per_phase_uC:.4g} uC "
                 f"(limit {format_limit(self.max_charge_uC)} uC)",
                 f"  charge density  {self.charge_density_uC_cm2:.4g} uC/cm^2",

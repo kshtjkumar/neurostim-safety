@@ -41,7 +41,14 @@ from . import current_density as jd_mod
 from . import envelope as envelope_mod
 from . import shannon as shannon_mod
 from . import water_window as ww_mod
-from ._limits import LimitDidNotSettle, floor_to_pass, format_exceeding, format_limit
+from ._limits import (
+    LimitDidNotSettle,
+    floor_to_pass,
+    format_against,
+    format_exceeding,
+    format_limit,
+    format_setting,
+)
 from .shannon import K_BOUNDS
 
 CAUTION_MARGIN = 2.0
@@ -1334,8 +1341,8 @@ def _shannon_check(
             name="Shannon criterion",
             status=Status.FAIL,
             summary=(
-                f"k = {format_exceeding(result.k_metric, f'{k:.2f}', sig=3)} exceeds the "
-                f"{k:.2f} threshold; "
+                f"k = {format_against(result.k_metric, format_setting(k), exceeds=True)} "
+                f"exceeds the {format_setting(k)} threshold; "
                 f"max {format_limit(result.max_current_uA)} uA"
             ),
             detail=detail,
@@ -1369,7 +1376,8 @@ def _shannon_check(
         name="Shannon criterion",
         status=status,
         summary=(
-            f"k = {result.k_metric:.2f} at threshold {k:.2f}, "
+            f"k = {format_against(result.k_metric, format_setting(k), exceeds=False)} "
+            f"at threshold {format_setting(k)}, "
             f"{result.current_margin:.2f}x headroom{suffix}"
         ),
         detail=detail,

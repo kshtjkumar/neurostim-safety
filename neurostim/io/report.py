@@ -32,7 +32,7 @@ from reportlab.platypus import (
 from .. import _repro
 from ..references import cite
 from ..safety import SafetyCalculator
-from ..safety._limits import format_exceeding, format_limit
+from ..safety._limits import format_against, format_exceeding, format_limit, format_setting
 from ..safety.assessment import SafetyAssessment, Status
 from ..safety.compliance import ComplianceResult
 
@@ -400,9 +400,15 @@ def _computed_rows(
         if shannon_check.status is Status.NOT_EVALUATED
         else ""
     )
-    k_text = f"{assessment.shannon.k_metric:.3f}"
-    if assessment.shannon.k_metric > calc.k and float(k_text) <= float(f"{calc.k:.2f}"):
-        k_text = format_exceeding(assessment.shannon.k_metric, f"{calc.k:.2f}")
+    # The threshold as given, and k on its side of it (ledger 163): ":.2f" printed a
+    # k of 1.749 as "1.75", above the metric it was failing.
+    k_threshold = format_setting(calc.k)
+    k_text = format_against(
+        assessment.shannon.k_metric,
+        k_threshold,
+        exceeds=not assessment.shannon.passes,
+        decimals=3,
+    )
     rows: list[tuple[str, str]] = [
         (
             "Charge density",
@@ -411,7 +417,7 @@ def _computed_rows(
         (
             "Shannon k",
             f"{k_text} "
-            f"(threshold {calc.k:.2f}; Shannon 1992, Merrill 2005 eq. 5.1){shannon_off}",
+            f"(threshold {k_threshold}; Shannon 1992, Merrill 2005 eq. 5.1){shannon_off}",
         ),
         (
             "Shannon current limit",

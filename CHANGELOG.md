@@ -169,6 +169,17 @@ in the panel, that put it on the upper-right legend: a 1000 µm Pt disc at 8000 
 label below and to the left, on a white backing so it stays legible where it crosses a
 separatrix.
 
+### Shannon's k prints as given
+
+The Shannon threshold was printed with two decimals, which rounds a three-decimal k up.
+The GUI's k box has taken three decimals since this release, and the API always did.
+At k = 1.749 a FAIL read "k = 1.7490173716055608 exceeds the 1.75 threshold". The
+threshold now prints exactly as given (1.749 prints "1.749", 1.5 still prints "1.50").
+The computed k gains places only until it reads above the threshold in a FAIL, and at or
+below it in a PASS. This covers the check summary, its detail, the PDF row, the figure
+legend and the k warning. At two-decimal k values away from the boundary the text is
+unchanged.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,
