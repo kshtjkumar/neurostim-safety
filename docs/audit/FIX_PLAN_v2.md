@@ -1211,7 +1211,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 159 | LOW | — (Phase 4 review M5) | **C4b.4** | **FIXED** `888305f`; both sizes named (text 0.115 mm, Fig. 6 caption 0.12 mm) |
 | 160 | LOW | — (Phase 4b review N1) | **C5.0** | **FIXED** `c57b479`; payload v4 answer carries the interval and the per-kind limits |
 | 161 | LOW | — (Phase 4b review N2) | **C5.0** | **FIXED** `c57b479`; `reproduces` docstring states the v1/v2 limit |
-| 162 | LOW | — (found at C5.3) | **C5.11d** | Shannon panel's operating-point annotation overlaps the legend for a high point ("k = 3.31"); C5.11 closed before it was logged, so its own slot |
+| 162 | LOW | — (found at C5.3) | **C5.11d** | **FIXED** `e2d0050`; label clears the legend |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
