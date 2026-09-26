@@ -1085,8 +1085,8 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 61/M9 | MED | OK | C5.10 | unbundled |
 | 61/M10 | MED | OK | C5.11 | |
 | 61/M11 | MED | OK | C5.11 | |
-| 61/M12 | MED | OK | C0.4, C5.9 | TIFF 47 001 446 bytes |
-| 61/M13 | MED | OK | C5.9 | test must force a NaN |
+| 61/M12 | MED | OK | C0.4, C5.9 | **FIXED** `7f9798d`; LZW RGB TIFF, 0.93 MB |
+| 61/M13 | MED | OK | C5.9 | **FIXED** `362752e`; strict JSON (allow_nan=False) landed with ledger 143; pinned by strict-parser and forced-NaN tests at 7f9798d |
 | 61/M14 | MED | OK | C5.5 | **FIXED** `0aedc2d`; read errors name the file |
 | 62/L1 | LOW | OK | C5.11 | |
 | 62/L2 | LOW | OK | C5.11 | |
@@ -1131,7 +1131,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 84 | HIGH | — (found in Phase 0) | C1.5 | D3(i) restated; `unsafe_at_any_amplitude` + the rendering contract. Interacts with C2.1, C2.3 and C5.1, each of which carries an assertion |
 | 85 | MED | — (found in Phase 0) | C0.3 | **FIXED** — `datetime.now` removed from the PDF byline |
 | 86 | HIGH | — (found in Phase 0) | C0.4 | **FIXED** — transcript generated between markers from one script, gated in CI |
-| 87 | LOW | — (found in Phase 0) | C5.9 | deferred out of Phase 0 because it changes package output bytes |
+| 87 | LOW | — (found in Phase 0) | C5.9 | **FIXED** `7f9798d`; LZW RGB TIFF |
 | 88 | HIGH | — (found in the Phase 1 review) | C1.10 | **FIXED** — `_climb_to_boundary`'s relative bound is joined by a caller-declared absolute `plateau` (D2 point 3); `assess()` stopped raising on the 6.3 % of edge-clustered valid inputs that used to crash |
 | 89 | CRIT | — (found in the Phase 1 review) | C1.3, C1.5 | **FIXED** — `sensitivity.py` and `examples/worked_example.py` were byte-untouched by Phase 1 and are render surfaces for both conventions; §6 had no row for either file |
 | 90 | MED | — (found in the Phase 1 review) | C1.9 | **FIXED** — the `UNCONSTRUCTIBLE` guard was one-sided; a *lower* amplitude bound crashed the bisection where an upper bound was handled. No package number moves: the defect is in `tests/oracles/fail_ceiling.py` |
