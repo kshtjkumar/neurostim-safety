@@ -48,6 +48,20 @@ and `fig.pdf`.
 - A Latin-1 or empty file raised pandas' own error, which gave a byte offset and no path.
   It now raises `ValueError` naming the file.
 
+### The batch columns say what the checks say
+
+- `max_current_cic_uA` ignored `medium`, so every in-vivo row carried the saline figure.
+  A 500 µm Pt disc read 981.75 µA beside a Charge injection ceiling of 107.71. The column
+  and the `SafetyCalculator.max_current_cic_uA` property are now the check's own
+  back-solve, derated in vivo.
+- `max_current_cic_uA` and `cic_limit_uC_cm2` are now `None` where the Charge injection
+  check did not run (a monophasic pulse). Before, they printed a limit nothing applied.
+  The JSON explains each `null`.
+- `net_dc_current_uA` is 0.0 for a pulse that Charge balance calls balanced. Before, it
+  carried a rounding residue of about 1e-12 µA.
+- A batch row can take a counter electrode: the electrode columns prefixed `counter_`,
+  plus `counter_separation_um`.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

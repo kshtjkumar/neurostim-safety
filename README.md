@@ -85,6 +85,9 @@ the failed labels in `frame.attrs["rows_failed"]`, because pandas skips missing 
 when it aggregates: exclude those rows before taking a minimum. `read_batch_csv` raises
 `ValueError` naming the file when it cannot parse the file, or when the file has a header
 and no rows.
+A batch row can specify a counter electrode with the same electrode columns prefixed
+`counter_`, plus `counter_separation_um`. `max_current_cic_uA` is derated in vivo, as the
+Charge injection check is, and is `None` when that check does not run.
 
 The JSON's `provenance` object gives each applied constant's reference key, `verified`
 and `peer_reviewed` flags, stored note and `inherited_from` (`cic`, `water_window`,

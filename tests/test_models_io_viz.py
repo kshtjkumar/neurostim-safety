@@ -482,3 +482,79 @@ class TestAnEmptyBatchIsNotACleanBatch:
         path.write_bytes(content)
         with pytest.raises(ValueError, match=r"bad_input\.csv"):
             read_batch_csv(path)
+
+
+class TestTheBatchColumnsSayWhatTheChecksSay:
+    """Ledgers 114, 157, 120 and 126 (CSV part), C5.5b. max_current_cic_uA ignored medium
+    (981.7477042468105 against the in-vivo check ceiling for a 500 um Pt disc) and was a
+    number beside a Charge injection check NOT_EVALUATED for a monophasic pulse;
+    net_dc_current_uA carried a 1.04e-12 residue for a pulse Charge balance calls balanced;
+    and the batch could not take a counter electrode."""
+
+    BASE = {"shape": "disc", "diameter_um": 500.0, "material": "Pt", "current_uA": 50,
+            "pulse_width_us": 200, "frequency_hz": 130, "train_duration_s": 1}
+
+    @staticmethod
+    def _cic_check(assessment):
+        return next(c for c in assessment.checks if c.name == "Charge injection limit")
+
+    def test_the_cic_column_honours_the_medium(self):
+        e, p = DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1)
+        in_vivo = SafetyCalculator(e, p, medium="in_vivo")
+        ceiling = self._cic_check(in_vivo.assess()).ceiling_uA
+        assert ceiling == pytest.approx(107.71174812307864, rel=1e-12)
+        assert in_vivo.report()["max_current_cic_uA"] == ceiling
+        assert in_vivo.max_current_cic_uA == ceiling
+        saline = SafetyCalculator(e, p)
+        assert saline.report()["max_current_cic_uA"] == pytest.approx(981.7477042468105, rel=1e-12)
+        assert saline.report()["max_current_cic_uA"] == self._cic_check(saline.assess()).ceiling_uA
+
+    def test_a_not_evaluated_check_gives_no_number(self):
+        import json
+
+        from neurostim.io.tabular import report_to_json
+
+        mono = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1, waveform="monophasic")
+        )
+        assert self._cic_check(mono.assess()).status.value == "NOT_EVALUATED"
+        report = mono.report()
+        assert report["max_current_cic_uA"] is None and report["cic_limit_uC_cm2"] is None
+        body = json.loads(report_to_json(mono))
+        assert "results.max_current_cic_uA" in body["null_reasons"]
+        assert "results.cic_limit_uC_cm2" in body["null_reasons"]
+
+    def test_a_balanced_pulse_reports_no_dc(self):
+        balanced = StimProtocol(50, 200, 130, 1, charge_recovery_ratio=1 - 5e-13)
+        assert balanced.is_charge_balanced and balanced.net_dc_current_uA != 0.0  # premise
+        calc = SafetyCalculator(DiscElectrode(500.0, "Pt"), balanced)
+        assert calc.report()["net_dc_current_uA"] == 0.0
+        partial = StimProtocol(50, 200, 130, 1, charge_recovery_ratio=0.9)
+        assert SafetyCalculator(DiscElectrode(500.0, "Pt"), partial).report()[
+            "net_dc_current_uA"
+        ] == partial.net_dc_current_uA
+
+    def test_the_batch_takes_a_counter_electrode(self):
+        from neurostim.io.tabular import assess_batch
+
+        row = {**self.BASE, "counter_shape": "disc", "counter_diameter_um": 2000.0,
+               "counter_material": "Pt", "counter_separation_um": 3000.0}
+        frame = assess_batch([row])
+        assert frame.loc[0, "status"] != "ERROR", frame.loc[0, "error"]
+        expected = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1),
+            counter_electrode=DiscElectrode(2000.0, "Pt"), counter_separation_um=3000.0,
+        ).report()
+        monopolar = SafetyCalculator(DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1)).report()
+        assert expected["required_compliance_V"] != monopolar["required_compliance_V"]  # premise
+        assert frame.loc[0, "required_compliance_V"] == expected["required_compliance_V"]
+
+    def test_a_counter_without_its_separation_is_a_row_error(self):
+        from neurostim.io.tabular import assess_batch
+
+        row = {**self.BASE, "counter_shape": "disc", "counter_diameter_um": 2000.0,
+               "counter_material": "Pt"}
+        with pytest.warns(UserWarning, match="rows failed to build"):
+            frame = assess_batch([row])
+        assert frame.loc[0, "status"] == "ERROR"
+        assert "counter_separation_um" in frame.loc[0, "error"]

@@ -2027,14 +2027,22 @@ class SafetyCalculator:
 
     @property
     def max_current_cic_uA(self) -> float:
-        """Material charge-injection-permitted leading-phase current."""
-        return charge_mod.cic_max_current_uA(
+        """Material charge-injection-permitted leading-phase current, in this medium.
+
+        The Charge injection check's own back-solve, derated in vivo. It used to call
+        :func:`~neurostim.safety.charge.cic_max_current_uA`, which takes no medium, so
+        every in-vivo batch row carried the saline figure -- 981.7477042468105 uA for a
+        500 um Pt disc beside a check ceiling of 107.71 (ledgers 114, 157).
+        """
+        return charge_mod.evaluate(
             self.material,
+            self.charge_uC,
             self.e.area_cm2,
             self.p.pulse_width_us,
             self.policy,
+            self.medium,
             self.p.anodic_first,
-        )
+        ).max_current_uA
 
     # --- full assessment ------------------------------------------------------
 
@@ -2316,10 +2324,18 @@ class SafetyCalculator:
         """Flat dictionary of results.
 
         The six keys returned by the 0.1.0 prototype are preserved with the same
-        meanings; everything else is additive.
+        meanings; everything else is additive. ``max_current_cic_uA`` is the Charge
+        injection check's own back-solve, derated in vivo, and it and ``cic_limit_uC_cm2``
+        are ``None`` when that check did not run (ledgers 114, 157).
         """
         assessment = self.assess()
         unsafe = assessment.no_safe_amplitude_note()
+        # None beside a Charge injection check that did not run -- a monophasic pulse, where
+        # charge injection is not the criterion -- rather than a limit nothing applies
+        # (ledger 114).
+        cic_ran = next(
+            c for c in assessment.checks if c.name == "Charge injection limit"
+        ).status is not Status.NOT_EVALUATED
         return {
             # --- 0.1.0 keys ---
             "area_cm2": self.e.area_cm2,
@@ -2327,12 +2343,12 @@ class SafetyCalculator:
             "charge_density_uC_cm2": self.charge_density,
             "shannon_metric": self.shannon_metric,
             "max_current_shannon_uA": self.max_current_shannon_uA,
-            "max_current_cic_uA": self.max_current_cic_uA,
+            "max_current_cic_uA": assessment.charge.max_current_uA if cic_ran else None,
             # --- added ---
             "material": self.material.key,
             "shannon_k_threshold": self.k,
             "cic_policy": self.policy,
-            "cic_limit_uC_cm2": assessment.charge.cic_limit_uC_cm2,
+            "cic_limit_uC_cm2": assessment.charge.cic_limit_uC_cm2 if cic_ran else None,
             "max_charge_shannon_uC": self.max_charge_uC,
             "access_resistance_ohm": assessment.compliance.access_resistance_ohm,
             # None, not inf, when no finite voltage suffices, with the reason beside it: a
@@ -2345,7 +2361,10 @@ class SafetyCalculator:
             "required_compliance_note": assessment.compliance.unbounded_reason,
             "peak_electrode_potential_V": assessment.water_window.peak_potential_V,
             "duty_cycle": self.p.duty_cycle,
-            "net_dc_current_uA": self.p.net_dc_current_uA,
+            # 0.0 for a pulse Charge balance calls balanced: the raw product carries a
+            # rounding residue (1.04e-12 uA for r_a = 1 - 5e-13) that no check sees
+            # (ledger 120).
+            "net_dc_current_uA": 0.0 if self.p.is_charge_balanced else self.p.net_dc_current_uA,
             # None, not a number, when no amplitude is safe. A machine consumer is the
             # one that cannot read the caveat in the prose beside it, and this dict is
             # what becomes the columns of a batch CSV (ledger 84). The conditional used to

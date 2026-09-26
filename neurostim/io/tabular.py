@@ -148,6 +148,10 @@ def assess_batch(
     ``stop_on_error`` is set -- a sweep of 200 currents should not be lost because one
     of them was mistyped.
 
+    A counter electrode is given by the same electrode columns prefixed ``counter_``
+    (``counter_shape``, ``counter_diameter_um``, ``counter_material``, ...) plus
+    ``counter_separation_um``; blank cells mean none (ledger 126).
+
     A failed row has status ``"ERROR"`` and ``None`` in every result column, and the batch
     emits :class:`BatchRowsFailedWarning` naming how many failed; their labels are in
     ``frame.attrs["rows_failed"]``. pandas skips missing values when it aggregates, so
@@ -159,7 +163,8 @@ def assess_batch(
     for cls in _ELECTRODE_TYPES.values():
         electrode_fields |= set(cls.__dataclass_fields__)  # type: ignore[attr-defined]
     protocol_fields = set(StimProtocol.__dataclass_fields__)
-    control_fields = {"k", "policy", "compliance_V", "label"}
+    control_fields = {"k", "policy", "compliance_V", "label", "counter_separation_um"}
+    counter_fields = {f"counter_{field}" for field in electrode_fields | {"shape"}}
 
     results: list[dict[str, Any]] = []
     for index, row in enumerate(rows):
@@ -176,18 +181,37 @@ def assess_batch(
                 for key, value in clean.items()
                 if key in protocol_fields and key not in electrode_fields
             }
-            unknown = set(clean) - electrode_fields - protocol_fields - control_fields - {"shape"}
+            unknown = (
+                set(clean)
+                - electrode_fields
+                - protocol_fields
+                - control_fields
+                - counter_fields
+                - {"shape"}
+            )
             if unknown:
                 raise ValueError(f"unrecognised column(s): {sorted(unknown)}")
 
             electrode = electrode_from_dict(e_spec)
             protocol = protocol_from_dict(p_spec)
+            # A counter electrode is the counter_-prefixed electrode columns, plus its
+            # centre-to-centre separation; blank cells mean none (ledger 126).
+            c_spec = {
+                key[len("counter_"):]: value
+                for key, value in clean.items()
+                if key in counter_fields and not _blank(value)
+            }
+            separation = clean.get("counter_separation_um")
             calc = SafetyCalculator(
                 electrode,
                 protocol,
                 k=float(row_k) if (row_k := clean.get("k", k)) is not None else K_DEFAULT,
                 policy=str(clean.get("policy", policy)),  # type: ignore[arg-type]
                 compliance_V=clean.get("compliance_V", compliance_V),
+                counter_electrode=electrode_from_dict(c_spec) if c_spec else None,
+                counter_separation_um=(
+                    None if separation is None or _blank(separation) else float(separation)
+                ),
             )
             record = {"label": label, **calc.report(), "error": ""}
         except Exception as exc:
@@ -213,6 +237,11 @@ def assess_batch(
     return frame
 
 
+def _blank(value: Any) -> bool:
+    """An absent cell: ``None``, or the NaN pandas reads for an empty CSV cell."""
+    return value is None or (isinstance(value, float) and math.isnan(value))
+
+
 class BatchRowsFailedWarning(UserWarning):
     """Some rows of a batch failed to build and carry no results (ledger 61/M4)."""
 
@@ -230,9 +259,16 @@ def _result_columns() -> tuple[str, ...]:
     return tuple(sample.report())
 
 
-NULLABLE_COLUMNS = ("limiting_current_uA", "required_compliance_V", "limit_is_provisional")
-"""Result columns that are ``None`` where no number exists (ledgers 84, 143, 147), or where
-there is no limit for a flag to qualify (ledger 158)."""
+NULLABLE_COLUMNS = (
+    "limiting_current_uA",
+    "required_compliance_V",
+    "limit_is_provisional",
+    "max_current_cic_uA",
+    "cic_limit_uC_cm2",
+)
+"""Result columns that are ``None`` where no number exists (ledgers 84, 143, 147), where
+there is no limit for a flag to qualify (ledger 158), or where the check that would give
+the number did not run (ledger 114)."""
 
 
 def _frame(
@@ -310,6 +346,11 @@ def report_to_json(
         null_reasons["protocol.train_duration_s"] = "continuous stimulation: the train has no end"
     if results["required_compliance_V"] is None:
         null_reasons["results.required_compliance_V"] = results["required_compliance_note"]
+    if results["max_current_cic_uA"] is None:
+        cic = next(c for c in assessment.checks if c.name == "Charge injection limit")
+        reason = f"Charge injection limit not evaluated: {cic.summary}"
+        null_reasons["results.max_current_cic_uA"] = reason
+        null_reasons["results.cic_limit_uC_cm2"] = reason
     payload = {
         "electrode": electrode_to_dict(calc.e),
         "protocol": protocol,
