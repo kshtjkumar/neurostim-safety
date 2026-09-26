@@ -87,6 +87,19 @@ source shares the first author. A surname right after "&" is a second author, so
 Robblee (1990)" does not also cite Robblee & Rose's 1990 chapter. Pt reports gain
 Brummer & Turner 1977; no entry is lost.
 
+### The window survives a failing plot, and takes a counter electrode
+
+- The plot was drawn outside the error handling, so an exception from it aborted the
+  whole application (SIGABRT). By then the headline, table and text already described
+  the new protocol while the canvas still showed the old one. Everything is now computed
+  and drawn first, and the widgets change only when all of it succeeds. Otherwise every
+  view shows one failure state, with the traceback in the results pane.
+- The k box has three decimals, so a typed 1.749 is no longer rounded up to 1.75, the
+  less conservative direction. The pulse-width box accepts 0.001 µs; a typed 0.02 used
+  to become 0.1.
+- A "Counter electrode" group (a disc diameter, a material and the separation) makes the
+  assessment two-terminal, as the library can.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

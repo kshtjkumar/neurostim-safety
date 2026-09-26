@@ -7,12 +7,16 @@ visible without a run button.
 
 The window never hides a failure. Invalid input (a ring with inner >= outer, a pulse
 that does not fit its period) surfaces the exception text in the results pane rather
-than silently reverting to a previous valid state.
+than silently reverting to a previous valid state, and so does any other exception on
+the way to the view, the plot included, with its traceback. The view changes as one:
+every result is computed and drawn before any widget shows it, so the text never
+describes a protocol the canvas does not (ledger 57).
 """
 
 from __future__ import annotations
 
 import sys
+import traceback
 from pathlib import Path
 from typing import cast
 
@@ -205,7 +209,8 @@ class SafetyWindow(QMainWindow):
         p_box = QGroupBox("Protocol")
         p_form = QFormLayout(p_box)
         self.current = _spin(0.001, 1e7, 80.0)
-        self.pulse_width = _spin(0.1, 1e6, 200.0)
+        # 0.001 us, not 0.1: a typed 0.02 was clamped to 0.1 (ledger 62/L3).
+        self.pulse_width = _spin(0.001, 1e6, 200.0)
         self.frequency = _spin(0.01, 1e6, 130.0)
         self.train = _spin(0.001, 1e6, 1.0)
         self.waveform = QComboBox()
@@ -240,7 +245,9 @@ class SafetyWindow(QMainWindow):
         # different answer depending on how they were entered, and a higher k is the
         # *less* conservative direction. This drifted to 1.7 once already, when the
         # library default moved to Shannon's own recommended 1.5.
-        self.k_value = _spin(0.5, 3.0, shannon.K_SHANNON, decimals=2)
+        # Three decimals: with two, a typed 1.749 became 1.75, rounding k up -- the less
+        # conservative direction (ledger 62/L3).
+        self.k_value = _spin(0.5, 3.0, shannon.K_SHANNON, decimals=3)
         self.policy = QComboBox()
         self.policy.addItems(["conservative", "nominal", "optimistic"])
         self.sigma = _spin(0.01, 5.0, 0.35, decimals=3)
@@ -254,15 +261,32 @@ class SafetyWindow(QMainWindow):
         s_form.addRow("", self.use_compliance)
         layout.addWidget(s_box)
 
+        # A counter electrode, as a disc of its own material, so the window can assess a
+        # two-terminal pair as the library does; off, the budget is monopolar
+        # (ledger 126).
+        c_box = QGroupBox("Counter electrode")
+        c_form = QFormLayout(c_box)
+        self.use_counter = QCheckBox("Two-terminal (counter disc)")
+        self.counter_diameter = _spin(0.1, 1e6, 2000.0)
+        self.counter_material = QComboBox()
+        for material in list_materials():
+            self.counter_material.addItem(f"{material.key} - {material.name}", material.key)
+        self.counter_separation = _spin(0.1, 1e7, 3000.0)
+        c_form.addRow("", self.use_counter)
+        c_form.addRow("Counter diameter (um)", self.counter_diameter)
+        c_form.addRow("Counter material", self.counter_material)
+        c_form.addRow("Separation, centre to centre (um)", self.counter_separation)
+        layout.addWidget(c_box)
+
         for spin in (
             self.current, self.pulse_width, self.frequency, self.train,
             self.interphase, self.charge_recovery, self.train_duty, self.k_value, self.sigma,
-            self.compliance,
+            self.compliance, self.counter_diameter, self.counter_separation,
         ):
             spin.valueChanged.connect(self.recompute)
-        for combo in (self.waveform, self.policy):
+        for combo in (self.waveform, self.policy, self.counter_material):
             combo.currentIndexChanged.connect(self.recompute)
-        for check in (self.anodic_first, self.use_compliance):
+        for check in (self.anodic_first, self.use_compliance, self.use_counter):
             check.stateChanged.connect(self.recompute)
 
         buttons = QHBoxLayout()
@@ -357,6 +381,7 @@ class SafetyWindow(QMainWindow):
             charge_recovery_ratio=self.charge_recovery.value(),
             train_duty_cycle=self.train_duty.value(),
         )
+        counter = self.use_counter.isChecked()
         return SafetyCalculator(
             electrode,
             protocol,
@@ -364,27 +389,45 @@ class SafetyWindow(QMainWindow):
             policy=cast(Policy, self.policy.currentText()),
             tissue_conductivity_S_per_m=self.sigma.value(),
             compliance_V=self.compliance.value() if self.use_compliance.isChecked() else None,
+            counter_electrode=(
+                DiscElectrode(
+                    self.counter_diameter.value(), self.counter_material.currentData()
+                )
+                if counter
+                else None
+            ),
+            counter_separation_um=self.counter_separation.value() if counter else None,
         )
 
     def recompute(self) -> None:
-        """Rebuild the calculator and refresh every result view."""
+        """Rebuild the calculator and refresh every result view, as one change.
+
+        Invalid input shows its message; any other exception -- the plot's included --
+        shows its traceback. Either way nothing escapes the Qt slot: the plot used to be
+        drawn outside the ``try``, and an exception there aborted the process with
+        SIGABRT, after the headline, table and text had already been rewritten for a
+        protocol the canvas did not show (ledger 57). Everything is now computed and
+        drawn first, and the widgets change only once all of it has succeeded.
+        """
         try:
-            self._calc = self._build_calculator()
-            assessment = self._calc.assess()
+            calc = self._build_calculator()
+            assessment = calc.assess()
         except Exception as exc:
-            self._calc = None
-            self.headline.setText("Invalid input")
-            self.headline.setStyleSheet(f"color: {STATUS_COLOURS['FAIL']};")
-            self.table.setRowCount(0)
-            self.detail.setPlainText(f"{type(exc).__name__}: {exc}")
+            self._show_failure("Invalid input", f"{type(exc).__name__}: {exc}")
+            return
+        try:
+            headline = headline_text(assessment)
+            describe = assessment.describe()
             self.figure.clear()
-            self.canvas.draw_idle()
+            ax = self.figure.add_subplot(111)
+            shannon_safe_operating_area(calc, ax=ax)
+        except Exception:
+            self._show_failure("Assessment view failed", traceback.format_exc())
             return
 
-        colour = STATUS_COLOURS[assessment.status.value]
-        self.headline.setText(headline_text(assessment))
-        self.headline.setStyleSheet(f"color: {colour};")
-
+        self._calc = calc
+        self.headline.setText(headline)
+        self.headline.setStyleSheet(f"color: {STATUS_COLOURS[assessment.status.value]};")
         self.table.setRowCount(len(assessment.checks))
         for row, check in enumerate(assessment.checks):
             self.table.setItem(row, 0, QTableWidgetItem(check.name))
@@ -394,12 +437,17 @@ class SafetyWindow(QMainWindow):
             status_item.setFont(font)
             self.table.setItem(row, 1, status_item)
             self.table.setItem(row, 2, QTableWidgetItem(check.summary))
+        self.detail.setPlainText(describe)
+        self.canvas.draw_idle()
 
-        self.detail.setPlainText(assessment.describe())
-
+    def _show_failure(self, headline: str, detail: str) -> None:
+        """Put every view into one failure state: the message, no table, no plot."""
+        self._calc = None
+        self.headline.setText(headline)
+        self.headline.setStyleSheet(f"color: {STATUS_COLOURS['FAIL']};")
+        self.table.setRowCount(0)
+        self.detail.setPlainText(detail)
         self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        shannon_safe_operating_area(self._calc, ax=ax)
         self.canvas.draw_idle()
 
     # --- exports -------------------------------------------------------------

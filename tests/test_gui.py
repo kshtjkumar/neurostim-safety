@@ -624,3 +624,76 @@ class TestTheProtocolFormCanExpressPhase2Faults:
         )
         assert balance.status is Status.CAUTION
         assert balance.summary in detail
+
+
+class TestEveryExceptionIsSurfacedAndTheViewIsAtomic:
+    """Ledger 57 (io-gui H8), C5.8. The plot was rebuilt outside the try/except, so an
+    exception from it escaped the Qt slot and aborted the process (exit 134, SIGABRT), and
+    the headline, table and text were already rewritten for the new protocol while the
+    canvas still held the old one."""
+
+    def test_a_raising_plot_leaves_the_window_alive_with_the_traceback(self, window, monkeypatch):
+        from neurostim.gui import app
+
+        def broken(*args, **kwargs):
+            raise RuntimeError("plot exploded")
+
+        monkeypatch.setattr(app, "shannon_safe_operating_area", broken)
+        window.current.setValue(123.0)  # triggers recompute through the slot
+        window.recompute()
+        detail = window.detail.toPlainText()
+        assert "Traceback" in detail and "RuntimeError: plot exploded" in detail
+        assert "failed" in window.headline.text().lower()
+        assert window.table.rowCount() == 0
+        assert not window.figure.axes
+
+    def test_a_good_update_after_a_failure_restores_everything(self, window, monkeypatch):
+        from neurostim.gui import app
+
+        real = app.shannon_safe_operating_area
+        monkeypatch.setattr(app, "shannon_safe_operating_area", lambda *a, **k: 1 / 0)
+        window.recompute()
+        monkeypatch.setattr(app, "shannon_safe_operating_area", real)
+        window.recompute()
+        assert window.table.rowCount() > 0 and window.figure.axes
+        assert "Traceback" not in window.detail.toPlainText()
+
+
+class TestSpinBoxesDoNotRoundTowardsPermissive:
+    """Ledger 62/L3, C5.8. The k box had two decimals, so a typed 1.749 became 1.75 -- up,
+    the less conservative direction; the pulse-width box clamped 0.02 us to 0.1."""
+
+    def test_k_keeps_three_decimals(self, window):
+        window.k_value.setValue(1.749)
+        assert window.k_value.value() == pytest.approx(1.749)
+        window.recompute()
+        assert window._calc is not None and window._calc.k == pytest.approx(1.749)
+
+    def test_a_short_pulse_is_not_clamped(self, window):
+        window.pulse_width.setValue(0.02)
+        assert window.pulse_width.value() == pytest.approx(0.02)
+
+
+class TestTheWindowTakesACounterElectrode:
+    """Ledger 126 (GUI part), C5.8. The counter electrode reached the calculator, the JSON
+    and the PDF but had no input in the window, which could only assess monopolar."""
+
+    def test_the_counter_reaches_the_calculator(self, window):
+        from neurostim import DiscElectrode
+
+        window.counter_diameter.setValue(2000.0)
+        window.counter_separation.setValue(3000.0)
+        window.use_counter.setChecked(True)
+        window.recompute()
+        calc = window._calc
+        assert calc is not None
+        assert isinstance(calc.counter_electrode, DiscElectrode)
+        assert calc.counter_electrode.diameter_um == 2000.0
+        assert calc.counter_separation_um == 3000.0
+        check = next(c for c in calc.assess().checks if c.name == "Counter charge injection")
+        assert check.status is not Status.NOT_EVALUATED
+
+    def test_off_means_monopolar(self, window):
+        window.use_counter.setChecked(False)
+        window.recompute()
+        assert window._calc is not None and window._calc.counter_electrode is None

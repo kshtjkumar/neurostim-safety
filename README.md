@@ -103,7 +103,10 @@ neurostim-gui          # or: python -m neurostim.gui
 
 Electrode and protocol inputs on the left, live results on the right: status table, full
 text assessment, and an embedded Shannon safe-operating-area plot. Recomputes on every
-change. Exports the PDF report and the four-panel summary figure.
+change. An optional counter electrode, a disc of its own material at a stated separation,
+makes the assessment two-terminal. Any error on the way to the view, the plot included,
+is shown in the results pane with its traceback, and the view never shows half an
+update. Exports the PDF report and the four-panel summary figure.
 
 ## What it computes
 
