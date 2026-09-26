@@ -907,3 +907,21 @@ class TestTheActivationEstimateCarriesItsSpread:
             vta.fit_current_distance(r, i)
         fitted = vta.fit_current_distance(r, i, fit_offset=False)
         assert fitted.threshold_offset_uA == 0.0
+
+
+class TestTheLapicqueIntervalSaysWhereItUnderCovers:
+    """Ledger 170 (Phase 6 review R1), C7.0a. The Lapicque CI comes from curve_fit's local
+    covariance and under-covers on weakly informative designs (0.82 at 20 % noise with
+    widths 50-200 us, 0.85 with 400-3200 us only, 0.90 at 10 %), while the docstring
+    quoted Weiss's 94 % for the result generally."""
+
+    def test_the_docstring_scopes_the_figures(self):
+        doc = " ".join(f"{sd.StrengthDurationFit.__doc__} {sd.fit_lapicque.__doc__}".split())
+        assert "Weiss" in doc and "94 %" in doc
+        assert "Lapicque" in doc and "0.82" in doc and "0.85" in doc and "under-cover" in doc
+
+    def test_a_lapicque_fit_says_so_in_describe(self):
+        widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
+        thresholds = np.array([82.0, 50.0, 34.0, 26.0, 22.0])
+        assert "under-cover" in sd.fit_lapicque(widths, thresholds).describe()
+        assert "under-cover" not in sd.fit_weiss(widths, thresholds).describe()

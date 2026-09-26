@@ -130,7 +130,9 @@ Plus models, each documenting its own validity range:
   an insulating plane, full-space (`4π`) for immersed ones, read from the electrode's
   `environment`. Exact for a sphere; the far-field limit for a disc
 - **Thermal** — Pennes bioheat, analytic steady state plus an implicit transient solver
-- **Strength–duration** — Lapicque and Weiss forms, with fitting routines
+- **Strength–duration** — Lapicque and Weiss forms, with fitting routines that report a
+  95 % interval on the chronaxie (calibrated for Weiss; Lapicque's can under-cover on
+  designs whose widths do not span the chronaxie)
 - **VTA** — current–distance activation radius (the weakest model here; read its docstring)
 
 Geometries: disc, ring, rectangle, cylindrical band, microwire (flat/hemispherical/conical

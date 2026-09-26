@@ -118,7 +118,17 @@ def tau_from_chronaxie_us(chronaxie_us: float) -> float:
 
 @dataclass(frozen=True)
 class StrengthDurationFit:
-    """Parameters recovered from measured threshold data."""
+    """Parameters recovered from measured threshold data.
+
+    How far to trust the interval depends on the form (ledger 170). **Weiss**: the
+    least-squares interval is calibrated -- 94 % coverage at 5 % threshold noise over
+    widths 50-800 us, and 0.94-0.98 across every noise level and design the Phase 6
+    review tried. **Lapicque**: the interval comes from ``curve_fit``'s local covariance
+    and can under-cover on weakly informative designs -- 0.82 at 20 % noise with widths
+    only 50-200 us, 0.85 with widths only 400-3200 us, 0.90 at 10 % noise on 50-200 us --
+    and on such designs up to 29 % of noisy replicates are refused outright, so coverage
+    is conditional on the fit being accepted. Spread the widths across the chronaxie.
+    """
 
     model: str
     rheobase_uA: float
@@ -160,6 +170,11 @@ class StrengthDurationFit:
                 f"  chronaxie SE {self.chronaxie_se_us:.3g} us, 95 % CI "
                 f"{low:.4g}-{high:.4g} us",
             ]
+            if self.model == "lapicque":
+                spread.append(
+                    "  (local-covariance interval: can under-cover on narrow or long-only "
+                    "width designs)"
+                )
         return "\n".join(
             [
                 f"{self.model.capitalize()} fit to {self.n_points} points",
@@ -266,7 +281,11 @@ def fit_lapicque(
     *,
     max_iter: int = 200,
 ) -> StrengthDurationFit:
-    """Fit the Lapicque form by Levenberg-Marquardt, seeded from the Weiss fit."""
+    """Fit the Lapicque form by Levenberg-Marquardt, seeded from the Weiss fit.
+
+    The interval is ``curve_fit``'s local covariance; it can under-cover on weakly
+    informative designs (0.82 and 0.85 in the cases :class:`StrengthDurationFit` lists).
+    """
     from scipy.optimize import curve_fit
 
     w = np.asarray(pulse_widths_us, dtype=float)

@@ -216,7 +216,10 @@ unchanged.
 - Both fits report standard errors for rheobase and chronaxie and a 95 % confidence
   interval for the chronaxie. Weiss uses the least-squares covariance and the delta
   method; Lapicque uses `curve_fit`'s covariance, which was computed and discarded.
-- At 5 % threshold noise the interval covers about 94 % of synthetic replicates.
+- At 5 % threshold noise the Weiss interval covers about 94 % of synthetic replicates.
+  The Lapicque interval, from `curve_fit`'s local covariance, can under-cover on designs
+  whose widths do not span the chronaxie: 0.82–0.90 at 10–20 % noise. Its `describe()`
+  says so.
 - A two-point fit says its uncertainty is not estimable.
 - The fitted values themselves are unchanged.
 - A design with every pulse width equal raises. It used to return a rheobase and a
