@@ -1237,7 +1237,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 169 | LOW | — (Phase 5b review Q2) | **C6.0** | **FIXED** `76e1f7e`; label clear of data and caption |
 | 170 | LOW | — (Phase 6 review R1) | **C7.0** | **FIXED** `a691d37`; Lapicque under-coverage documented |
 | 171 | LOW | — (Phase 6 review R2) | **C7.0** | **FIXED** `447c20c`; warns below the resolved tau |
-| 172 | LOW | — (Phase 6 review R3) | **C7.0** | outward rounding for sqrt and from_mean_sd |
+| 172 | LOW | — (Phase 6 review R3) | **C7.0** | **FIXED** `e33bbbc`; sqrt and from_mean_sd round outward |
 | 173 | LOW | — (Phase 6 review R4) | C7.3 | CITATION.cff "validated" wording |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
