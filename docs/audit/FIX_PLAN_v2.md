@@ -1194,6 +1194,8 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 157 | HIGH | — (Phase 4 review M3) | C5.5 | with 114: `max_current_cic_uA` ignores `medium` |
 | 158 | LOW | — (Phase 4 review M4) | **C4b.3** | **FIXED** `9df0401`; `report()`, CSV and JSON results carry `limit_is_provisional` and `limits_incomplete` |
 | 159 | LOW | — (Phase 4 review M5) | **C4b.4** | **FIXED** `888305f`; both sizes named (text 0.115 mm, Fig. 6 caption 0.12 mm) |
+| 160 | LOW | — (Phase 4b review N1) | **C5.0** | `answer_of` gains `limiting_current_interval_uA` and `limiting_current_by_kind` |
+| 161 | LOW | — (Phase 4b review N2) | **C5.0** | `reproduces` docstring: v1/v2 records cannot see a single-check status change |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
