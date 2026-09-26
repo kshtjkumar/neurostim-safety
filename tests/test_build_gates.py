@@ -668,3 +668,27 @@ class TestLedgerGate:
     def test_a_missing_ledger_is_an_error_not_a_pass(self, tmp_path: Path) -> None:
         result = _run_ledger(tmp_path / "absent.md", tmp_path / "also-absent.md")
         assert result.returncode == 2, result.stdout + result.stderr
+
+
+class TestTheThermalClaimIsTheReproductionNotAValidation:
+    """Ledgers 46 and 173, C7.3. CITATION.cff said the Pennes modelling was "validated
+    against a published finite element model", and README and the worked example blamed the
+    gap to Elwassif on "lead and electrode self-heating". What holds is a reproduction:
+    given Elwassif's own drive the model returns 0.83 K against their 0.82 K; their shaft
+    is insulated and their source is tissue Joule heating alone."""
+
+    DOCS = ("README.md", "CITATION.cff", "examples/worked_example.py")
+
+    def test_the_documents_state_the_reproduction(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[1]
+        for name in self.DOCS:
+            text = " ".join((root / name).read_text().split())
+            # The cause they blamed; "omits electrode and lead self-heating" is a true
+            # limitation of this model and stays.
+            assert "includes lead and electrode self-heating" not in text, name
+            assert "not reconciled" not in text, name
+            assert "0.83 K" in text and "0.82 K" in text, name
+        citation = (root / "CITATION.cff").read_text()
+        assert "validated" not in citation.lower()

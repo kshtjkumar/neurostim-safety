@@ -259,8 +259,9 @@ raise `cells_per_radius`, or read those samples as lower bounds.
   returned 7.5 mW, "roughly 325 Ω": both 2× off, compensating.
   `SOURCE_RADIUS_M` is 690.11 µm. **This reverses S-23 decision (a)**, which kept
   1.3803 mm, on the new evidence of the compensating errors.
-- The README and the worked example no longer call the gap to Elwassif "not
-  reconciled", or attribute it to lead self-heating. It is the protocol's power. The
+- The README, the worked example and `CITATION.cff` no longer call the gap to Elwassif
+  "not reconciled", attribute it to lead self-heating, or call the thermal model
+  "validated". They state the reproduction: 0.83 K against 0.82 K. It is the protocol's power. The
   perfusion-scaling agreement is now 2.7–7.7 % (was 7.1–7.8 % at the disc radius).
 
 ### The activation estimate carries its spread

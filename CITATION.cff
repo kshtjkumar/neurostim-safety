@@ -15,11 +15,12 @@ abstract: >-
   under which it was measured; charge-injection limits are pulse-width,
   polarity, electrolyte and temperature dependent, and the package records
   those conditions rather than discarding them. Includes the Shannon
-  tissue-damage criterion with its validated envelope enforced, material
-  charge-injection limits, water-window and chronic-degradation checks, the
-  microelectrode charge-per-phase regime, Pennes bioheat modelling validated
-  against a published finite element model, and a suite that reproduces
-  published results from published inputs.
+  tissue-damage criterion with the envelope of its fitting data enforced,
+  material charge-injection limits, water-window and chronic-degradation
+  checks, the microelectrode charge-per-phase regime, Pennes bioheat modelling
+  that, given the drive of Elwassif et al. (2006), returns a peak rise of
+  0.83 K against the 0.82 K of their finite element model, and a suite that
+  reproduces published results from published inputs.
 keywords:
   - neurostimulation
   - electrode
