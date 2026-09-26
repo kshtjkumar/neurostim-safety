@@ -234,7 +234,10 @@ set by the diffusion time alone, so a sample reads the same whatever else is ask
 The earliest point of the thermal figure's default grid (0.1 s) rises by 15 % to its
 converged value. A grid clamped to `max_cells` now raises `ThermalResolutionWarning`
 instead of silently coarsening; that clamp is why a larger `domain_extent_factor` stopped
-helping.
+helping. The earliest samples are limited by the grid rather than the step: with 20
+cells per radius a sample reads −20 % at τ = αt/a² = 10⁻³. Below `thermal.resolved_tau`
+(0.01 at 20 cells, falling as the square of the cell count to 0.003) the solver warns;
+raise `cells_per_radius`, or read those samples as lower bounds.
 
 ### Tissue heating uses the electrode's own thermal radius, and Elwassif is reproduced, not inverted
 

@@ -862,8 +862,12 @@ class TestTheTransientDependsOnlyOnTheTimeAsked:
     logspace(-3, 3.5, 60). max_cells clamped the grid silently."""
 
     def test_one_time_alone_and_among_others_agree(self):
-        alone = thermal.pennes_transient_sphere(1e-3, 500.0, np.array([1e-3]))[0]
-        among = thermal.pennes_transient_sphere(1e-3, 500.0, np.logspace(-3, 3.5, 60))[0]
+        # G12 (C7.0b, ledger 171): 1 ms at 500 um is tau ~ 6e-4, below the resolved tau,
+        # so both calls now warn; the test is about order independence, not accuracy.
+        with pytest.warns(thermal.ThermalResolutionWarning):
+            alone = thermal.pennes_transient_sphere(1e-3, 500.0, np.array([1e-3]))[0]
+        with pytest.warns(thermal.ThermalResolutionWarning):
+            among = thermal.pennes_transient_sphere(1e-3, 500.0, np.logspace(-3, 3.5, 60))[0]
         assert abs(among / alone - 1.0) < 0.01, (alone, among)
 
     def test_the_long_time_limit_is_the_steady_state(self):
@@ -925,3 +929,46 @@ class TestTheLapicqueIntervalSaysWhereItUnderCovers:
         thresholds = np.array([82.0, 50.0, 34.0, 26.0, 22.0])
         assert "under-cover" in sd.fit_lapicque(widths, thresholds).describe()
         assert "under-cover" not in sd.fit_weiss(widths, thresholds).describe()
+
+
+class TestAnUnresolvedEarlyTimeWarns:
+    """Ledger 171 (Phase 6 review R2), C7.0b. Early samples read low, limited by the grid:
+    against the analytic unperfused solution, -67 % at tau = alpha t / a^2 = 1e-4 and -20 %
+    at 1e-3 with 20 cells per radius; -1.4 % at 1e-2. Non-conservative. The solver now
+    warns below the resolved tau and says how to resolve it."""
+
+    @staticmethod
+    def _unperfused():
+        return thermal.TissueThermalProperties(
+            thermal_conductivity_W_per_mK=0.527, perfusion_rate_per_s=0.0,
+            verified_fields=(), uncertainty={},
+        )
+
+    def _time(self, tau):
+        return tau * (500e-6) ** 2 / self._unperfused().thermal_diffusivity_m2_per_s
+
+    def test_below_the_resolved_tau_it_warns(self):
+        with pytest.warns(thermal.ThermalResolutionWarning, match="cells_per_radius"):
+            thermal.pennes_transient_sphere(1e-3, 500.0, np.array([self._time(1e-3)]), self._unperfused())
+
+    def test_resolved_times_are_silent(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            thermal.pennes_transient_sphere(1e-3, 500.0, np.array([self._time(0.02)]), self._unperfused())
+            thermal.pennes_transient_sphere(
+                1e-3, 500.0, np.array([self._time(5e-3)]), self._unperfused(), cells_per_radius=40
+            )
+
+    def test_the_resolved_limit_is_accurate(self):
+        """At the threshold for 20 cells per radius the error is under 1.5 %."""
+        import math
+
+        from scipy.special import erfcx
+
+        tau = thermal.resolved_tau(20)
+        t = self._time(tau)
+        exact = 1e-3 / (4 * math.pi * 0.527 * 500e-6) * (1 - erfcx(math.sqrt(tau)))
+        num = thermal.pennes_transient_sphere(1e-3, 500.0, np.array([t]), self._unperfused())[0]
+        assert abs(num / exact - 1) < 0.015

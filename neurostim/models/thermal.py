@@ -447,7 +447,9 @@ def pennes_transient_sphere(
     solution, which assumes an unbounded medium.
 
     The time step is set by the physics, not by the other times requested: a sample at
-    ``t`` is the same whatever else is asked for (ledger 35).
+    ``t`` is the same whatever else is asked for (ledger 35). The earliest samples are
+    limited by the grid instead: below :func:`resolved_tau` they read low, and a
+    :class:`ThermalResolutionWarning` says so (ledger 171).
     """
     from scipy.linalg import solve_banded
 
@@ -514,6 +516,22 @@ def pennes_transient_sphere(
     # step that would pass it.
     t0 = 0.01 * a**2 / alpha
 
+    # The grid, not the step, limits the earliest samples (ledger 171): with 20 cells per
+    # radius a sample reads -20 % at tau = alpha t / a^2 = 1e-3 and -67 % at 1e-4 against
+    # the analytic solution, low, which is the non-conservative direction.
+    tau_min = resolved_tau(cells_per_radius)
+    early = times[(times > 0) & (alpha * times / a**2 < tau_min)]
+    if early.size:
+        warnings.warn(
+            f"{early.size} requested time(s) from {early.min():.3g} s lie below the resolved "
+            f"tau = alpha t / a^2 = {tau_min:.3g} for {cells_per_radius} cells per radius, "
+            f"where the rise reads low by more than about 1.5 % (-20 % at tau = 1e-3 with "
+            f"20 cells). Raise cells_per_radius (the threshold falls as its square, to "
+            f"0.003) or read these samples as lower bounds",
+            ThermalResolutionWarning,
+            stacklevel=2,
+        )
+
     def step_once(u: np.ndarray, step: float) -> np.ndarray:
         lam = alpha * step / dr**2
         ab = np.zeros((3, n))
@@ -547,6 +565,17 @@ def pennes_transient_sphere(
 
 STEP_FRACTION = 0.01
 """Backward-Euler step as a fraction of ``t + t0`` in :func:`pennes_transient_sphere`."""
+
+
+def resolved_tau(cells_per_radius: int) -> float:
+    """Earliest ``tau = alpha t / a^2`` the transient resolves to about 1.5 %.
+
+    ``0.01 (20 / cells_per_radius)^2``, measured against the analytic unperfused solution
+    ``P/(4 pi kappa a) [1 - e^tau erfc sqrt(tau)]`` (-1.44 % at 0.01 with 20 cells), with a
+    floor of 0.003 where the time step, not the grid, takes over (-1.66 % with 40 cells,
+    -1.23 % with 80). Below it :func:`pennes_transient_sphere` warns (ledger 171).
+    """
+    return max(0.01 * (20.0 / cells_per_radius) ** 2, 0.003)
 
 
 class ThermalResolutionWarning(UserWarning):
