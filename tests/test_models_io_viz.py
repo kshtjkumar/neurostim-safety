@@ -875,3 +875,35 @@ class TestTheTransientDependsOnlyOnTheTimeAsked:
         """a = 10 um in perfused brain asks for 79006 cells; max_cells is 20000."""
         with pytest.warns(thermal.ThermalResolutionWarning, match="max_cells"):
             thermal.pennes_transient_sphere(1e-3, 10.0, np.array([1.0]))
+
+
+class TestTheActivationEstimateCarriesItsSpread:
+    """Ledgers 39, 40 and 41, C6.5. evaluate(100).describe() printed a bare "radius 278.2
+    um, volume 0.0902 mm^3" though k spans 300-27000 uA/mm^2 across cortical elements,
+    854x in volume at 100 uA; sensitivity claimed to cover "every limit" without the
+    thermal or VTA inputs; and a negative fitted offset was clamped to 0 silently."""
+
+    def test_39_the_k_range_reaches_the_result_and_describe(self):
+        result = vta.evaluate(100.0)
+        low, high = result.radius_range_um
+        assert low == pytest.approx(60.858061, rel=1e-6) and high == pytest.approx(577.35027, rel=1e-6)
+        vlow, vhigh = result.volume_range_mm3
+        assert vhigh / vlow == pytest.approx(90.0**1.5, rel=1e-9)
+        assert 850 < vhigh / vlow < 860
+        text = " ".join(result.describe().split())
+        assert "300-27000 uA/mm^2" in text and "60.9-577.4 um" in text and "854x" in text
+
+    def test_40_sensitivity_says_what_it_does_not_cover(self):
+        import neurostim.sensitivity as sens
+
+        doc = " ".join(sens.__doc__.split())
+        assert "Every limit this package reports" not in doc
+        assert "thermal" in doc and "activation" in doc and "not varied here" in doc
+
+    def test_41_a_negative_offset_is_refused_not_clamped(self):
+        r = np.array([100.0, 200.0, 300.0, 400.0])
+        i = -5.0 + 1292.0 * (r * 1e-3) ** 2  # a true offset below zero
+        with pytest.raises(ValueError, match="fit_offset=False"):
+            vta.fit_current_distance(r, i)
+        fitted = vta.fit_current_distance(r, i, fit_offset=False)
+        assert fitted.threshold_offset_uA == 0.0

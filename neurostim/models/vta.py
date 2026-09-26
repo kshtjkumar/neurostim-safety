@@ -191,7 +191,15 @@ def fit_current_distance(
     r2_mm2 = (r * 1e-3) ** 2
     if fit_offset:
         slope, intercept = np.polyfit(r2_mm2, i, 1)
-        offset = max(float(intercept), 0.0)
+        # A negative offset is refused, not clamped: clamping the intercept to 0 while
+        # keeping the slope fitted with it gives a line that fits neither (ledger 41).
+        if intercept < 0:
+            raise ValueError(
+                f"fitted threshold offset is negative ({intercept:.4g} uA); a current "
+                f"needed at zero distance cannot be. Refit with fit_offset=False to force "
+                f"I_0 = 0, or check the data"
+            )
+        offset = float(intercept)
     else:
         slope = float(np.sum(r2_mm2 * i) / np.sum(r2_mm2**2))
         offset = 0.0
@@ -219,6 +227,12 @@ class VTAResult:
     volume_mm3: float
     model: CurrentDistanceModel
     electrode_radius_um: float | None = None
+    radius_range_um: tuple[float, float] = (math.nan, math.nan)
+    """Radius at the ends of :data:`K_RANGE_BY_ELEMENT_uA_PER_MM2`, the span of ``k``
+    across cortical elements: the honest uncertainty when the target element is not known
+    (ledger 39). Smallest radius first."""
+    volume_range_mm3: tuple[float, float] = (math.nan, math.nan)
+    """Volume at the same two ends; their ratio is ``90^1.5``, about 854."""
 
     @property
     def radius_exceeds_electrode(self) -> bool:
@@ -233,10 +247,18 @@ class VTAResult:
 
     def describe(self) -> str:
         """Multi-line summary."""
+        k_low, k_high = K_RANGE_BY_ELEMENT_uA_PER_MM2
+        r_low, r_high = self.radius_range_um
+        v_low, v_high = self.volume_range_mm3
+        fold = v_high / v_low if v_low > 0 else math.inf
         lines = [
             f"Activation estimate at {self.current_uA:g} uA",
             f"  radius  {self.radius_um:.1f} um",
             f"  volume  {self.volume_mm3:.4g} mm^3",
+            f"  across k = {k_low:g}-{k_high:g} uA/mm^2 (the span over cortical elements, "
+            f"the uncertainty when the target element is unknown): radius "
+            f"{r_low:.1f}-{r_high:.1f} um, volume {v_low:.3g}-{v_high:.3g} mm^3 "
+            f"({fold:.0f}x)",
             self.model.describe(),
         ]
         if not self.radius_exceeds_electrode:
@@ -257,10 +279,24 @@ def evaluate(
     """Estimate activation radius and volume for a stimulation current."""
     m = model if model is not None else CurrentDistanceModel()
     radius = float(m.activation_radius_um(current_uA))
+    # The same offset, each end of the element span of k (ledger 39): the largest k
+    # gives the smallest radius.
+    ends = [
+        CurrentDistanceModel(k_uA_per_mm2=k, threshold_offset_uA=m.threshold_offset_uA)
+        for k in reversed(K_RANGE_BY_ELEMENT_uA_PER_MM2)
+    ]
     return VTAResult(
         current_uA=current_uA,
         radius_um=radius,
         volume_mm3=float(m.activated_volume_mm3(current_uA)),
         model=m,
         electrode_radius_um=electrode_radius_um,
+        radius_range_um=(
+            float(ends[0].activation_radius_um(current_uA)),
+            float(ends[1].activation_radius_um(current_uA)),
+        ),
+        volume_range_mm3=(
+            float(ends[0].activated_volume_mm3(current_uA)),
+            float(ends[1].activated_volume_mm3(current_uA)),
+        ),
     )

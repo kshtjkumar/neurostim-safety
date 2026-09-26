@@ -256,6 +256,18 @@ helping.
   reconciled", or attribute it to lead self-heating. It is the protocol's power. The
   perfusion-scaling agreement is now 2.7–7.7 % (was 7.1–7.8 % at the disc radius).
 
+### The activation estimate carries its spread
+
+- `vta.evaluate(...)` reports the activated radius and volume across the full span of
+  the current-distance constant, 300–27 000 µA/mm² over cortical elements
+  (`radius_range_um`, `volume_range_mm3`), and `describe()` prints them. At 100 µA
+  that is 60.9–577.4 µm, a factor of 854 in volume, where the output used to show only
+  the single-k point.
+- `fit_current_distance` refuses a negative fitted offset. It used to clamp the offset
+  to 0 while keeping the slope fitted with it. Pass `fit_offset=False` to force I₀ = 0.
+- The sensitivity module no longer claims to cover every limit. It says the thermal and
+  activation estimates are not varied there, and where their spreads are reported.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

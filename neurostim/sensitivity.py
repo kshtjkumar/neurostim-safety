@@ -1,8 +1,8 @@
 """Which input actually decides the answer.
 
-Every limit this package reports rests on a handful of choices -- the Shannon ``k``, the
-end of a published charge-injection range, the tissue conductivity, whether the saline
-limit is derated for in vivo use. Some of those move the answer by a factor of ten and
+The binding current limit rests on a handful of choices -- the Shannon ``k``, the end of a
+published charge-injection range, the tissue conductivity, whether the saline limit is
+derated for in vivo use. Some of those move the answer by a factor of ten and
 some barely at all, and it is not obvious in advance which is which.
 
 This module varies each one over its defensible range while holding the rest fixed, and
@@ -16,6 +16,15 @@ These are not error bars. Each range is the span of *defensible choices* a user 
 make -- the published k band, the measured CIC interval, the spread between three
 sourced conductivity values. A wide result means the literature genuinely does not pin
 the answer down, which is a fact about the field rather than a defect in the calculation.
+
+What is not varied here
+-----------------------
+The thermal and activation estimates. Neither enters the binding current limit, so
+neither can move it: the thermal model's tissue properties carry their own uncertainty
+(``thermal.BRAIN``), and the activation estimate reports its radius and volume across
+the full span of the current-distance ``k`` (``vta.VTAResult.radius_range_um``), the
+widest spread in the package. This module used to say it covered "every limit this
+package reports" (ledger 40).
 """
 
 from __future__ import annotations
