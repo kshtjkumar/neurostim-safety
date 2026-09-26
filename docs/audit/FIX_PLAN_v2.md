@@ -1087,7 +1087,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 61/M7 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
 | 61/M8 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
 | 61/M9 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
-| 61/M10 | MED | OK | C5.11 | |
+| 61/M10 | MED | OK | C5.11 | **FIXED** `c3bc434`; narration read off the assessments |
 | 61/M11 | MED | OK | C5.11 | **FIXED** `88c523f`; no text below 5 pt; one typeface |
 | 61/M12 | MED | OK | C0.4, C5.9 | **FIXED** `7f9798d`; LZW RGB TIFF, 0.93 MB |
 | 61/M13 | MED | OK | C5.9 | **FIXED** `362752e`; strict JSON (allow_nan=False) landed with ledger 143; pinned by strict-parser and forced-NaN tests at 7f9798d |
@@ -1096,7 +1096,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 62/L2 | LOW | OK | C5.11 | **FIXED** `88c523f`; style note, no change: decade tick labels pinned |
 | 62/L3 | LOW | OK | C5.8 | **FIXED** `2450623`; k three decimals; pulse width to 0.001 us |
 | 62/L4 | LOW | OK | C5.11 | **FIXED** `fa01e26`; fixed with ledger 48 (is not None); pinned at 88c523f |
-| 62/L5 | LOW | OK | C5.11 | |
+| 62/L5 | LOW | OK | C5.11 | **FIXED** `c3bc434`; a different current is refused |
 | 63 | HIGH | PARTIAL | C0.1, C0.2, C1.10 | coverage sub-claims reconciled in §3; mutation gate in §10 |
 | 64 | HIGH | OK | C1.10 | |
 | 65 | HIGH | OK | C0.2 | |
