@@ -204,6 +204,13 @@ def fit_weiss(
         raise ValueError("need at least 2 points to fit a strength-duration curve")
     if np.any(w <= 0) or np.any(i <= 0):
         raise ValueError("pulse widths and thresholds must all be > 0")
+    # One width gives the charge-duration line no slope to fit: polyfit returned numbers
+    # behind a RankWarning (ledger 38).
+    if np.unique(w).size < 2:
+        raise ValueError(
+            f"need at least 2 distinct pulse widths to fit a strength-duration curve, "
+            f"got {np.unique(w).size}"
+        )
 
     charge = i * w  # proportional to threshold charge; units cancel in the ratio
     slope, intercept = np.polyfit(w, charge, 1)

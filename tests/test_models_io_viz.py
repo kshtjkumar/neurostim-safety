@@ -837,3 +837,19 @@ class TestAStrengthDurationFitIsPhysicalAndSaysHowSure:
         fit = sd.fit_weiss(np.array([100.0, 400.0]), np.array([40.0, 25.0]))
         assert fit.chronaxie_se_us is None and fit.chronaxie_ci95_us is None
         assert "not estimable" in fit.describe()
+
+
+class TestARankDeficientDesignIsRefused:
+    """Ledger 38, C6.2. With every pulse width equal the charge-duration line has no slope
+    to fit: fit_weiss([100, 100, 100], [40, 41, 39]) returned rheobase 20 and chronaxie
+    100 behind a bare numpy RankWarning."""
+
+    def test_equal_widths_raise(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            with pytest.raises(ValueError, match="distinct pulse widths"):
+                sd.fit_weiss(np.array([100.0, 100.0, 100.0]), np.array([40.0, 41.0, 39.0]))
+            with pytest.raises(ValueError, match="distinct pulse widths"):
+                sd.fit_lapicque(np.array([100.0, 100.0, 100.0]), np.array([40.0, 41.0, 39.0]))

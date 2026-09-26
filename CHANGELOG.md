@@ -219,6 +219,8 @@ unchanged.
 - At 5 % threshold noise the interval covers about 94 % of synthetic replicates.
 - A two-point fit says its uncertainty is not estimable.
 - The fitted values themselves are unchanged.
+- A design with every pulse width equal raises. It used to return a rheobase and a
+  chronaxie behind a numpy RankWarning.
 
 ### The flat report says when its limit is provisional
 
