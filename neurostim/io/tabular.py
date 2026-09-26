@@ -312,10 +312,28 @@ def read_batch_csv(path: str | Path, **kwargs: Any) -> pd.DataFrame:
 
 
 def write_csv(frame: pd.DataFrame, path: str | Path) -> Path:
-    """Write a results table to CSV."""
+    """Write a results table to CSV.
+
+    A failed row is written as it is held: status ``ERROR``, its message in ``error``,
+    empty result cells. Those two columns are the record that survives -- the frame's
+    ``attrs["rows_failed"]`` does not reach a CSV -- so a table with failed rows warns
+    again here, counting them from the status column (ledger 167). No comment header or
+    sidecar file is added: a leading ``#`` line breaks default CSV readers (pandas,
+    R's read.csv, spreadsheet import), and a sidecar can be separated from its table.
+    """
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(out, index=False)
+    if "status" in frame:
+        failed = int((frame["status"] == "ERROR").sum())
+        if failed:
+            warnings.warn(
+                f"{failed} of {len(frame)} rows in {out} failed to build; they are the "
+                f"rows with status 'ERROR' and a message in the error column, with no "
+                f"results -- exclude them before aggregating",
+                BatchRowsFailedWarning,
+                stacklevel=2,
+            )
     return out
 
 

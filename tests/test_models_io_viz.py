@@ -754,3 +754,41 @@ class TestTheFemScaleCheckToleratesAGroundedBoundary:
             compare_with_point_source(
                 self._grid(lambda k, r, big: k / r, position_scale=1e-3), 100.0, 0.35
             )
+
+
+class TestFailedRowsPersistInTheCsv:
+    """Ledger 167 (Phase 5 review P5), C5b.5. frame.attrs["rows_failed"] does not survive
+    write_csv or most pandas operations; the persistent signal is the status and error
+    columns, which write_csv must keep, and which it now also counts and warns about."""
+
+    ROWS = [
+        {"shape": "disc", "diameter_um": 200.0, "material": "Pt", "current_uA": 50,
+         "pulse_width_us": 200, "frequency_hz": 130, "train_duration_s": 1},
+        {"shape": "disc", "diameter_um": -1.0, "material": "Pt", "current_uA": 50,
+         "pulse_width_us": 200, "frequency_hz": 130, "train_duration_s": 1},
+    ]
+
+    def test_status_and_error_survive_the_round_trip(self, tmp_path):
+        import pandas as pd
+
+        from neurostim.io.tabular import BatchRowsFailedWarning, assess_batch, write_csv
+
+        with pytest.warns(BatchRowsFailedWarning):
+            frame = assess_batch(self.ROWS)
+        path = tmp_path / "out.csv"
+        with pytest.warns(BatchRowsFailedWarning, match=r"1 of 2 rows.*status"):
+            write_csv(frame, path)
+        back = pd.read_csv(path)
+        assert back.loc[1, "status"] == "ERROR"
+        assert "diameter_um" in back.loc[1, "error"]
+        assert path.read_text().splitlines()[0].startswith("label,")  # no comment header
+
+    def test_a_clean_frame_writes_silently(self, tmp_path):
+        import warnings
+
+        from neurostim.io.tabular import assess_batch, write_csv
+
+        frame = assess_batch(self.ROWS[:1])
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            write_csv(frame, tmp_path / "clean.csv")

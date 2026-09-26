@@ -47,6 +47,10 @@ and `fig.pdf`.
   and lists their labels in `frame.attrs["rows_failed"]`.
 - A Latin-1 or empty file raised pandas' own error, which gave a byte offset and no path.
   It now raises `ValueError` naming the file.
+- `frame.attrs["rows_failed"]` does not survive `write_csv`. The CSV's `status` (`ERROR`)
+  and `error` columns are the lasting record, and `write_csv` warns again when a table
+  holds failed rows. No comment header is added, because it would break default CSV
+  readers.
 
 ### The batch columns say what the checks say
 

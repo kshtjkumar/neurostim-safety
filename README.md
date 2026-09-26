@@ -82,7 +82,11 @@ guessing that it means a continuous train. In `assess_batch` and `current_sweep`
 In `assess_batch` a row that fails to build has status `ERROR`, its message in `error`,
 and `None` in every result column. The batch then emits `BatchRowsFailedWarning` and lists
 the failed labels in `frame.attrs["rows_failed"]`, because pandas skips missing values
-when it aggregates: exclude those rows before taking a minimum. `read_batch_csv` raises
+when it aggregates: exclude those rows before taking a minimum. The attribute does not
+survive `write_csv` or most pandas operations. The lasting record is the `status` column
+(`ERROR`) and the `error` text, which `write_csv` writes and warns about again. Count a
+failure as `status == "FAIL"`, and a pass as `status.isin(["PASS", "CAUTION"])`, not as
+`status != "FAIL"`, which counts `ERROR` rows as passing. `read_batch_csv` raises
 `ValueError` naming the file when it cannot parse the file, or when the file has a header
 and no rows.
 A batch row can specify a counter electrode with the same electrode columns prefixed
