@@ -302,7 +302,8 @@ def compare_with_point_source(
     full-space point source.
 
     With ``check_scale`` (the default) the comparison is also a verdict: when the median
-    ratio over the farther half of the points is off by more than a factor of
+    ratio over a mid-range band of distances (a thirtieth to a third of the largest) is
+    off by more than a factor of
     :data:`SCALE_TOLERANCE`, it raises, naming the likely unit mistake. It used to
     return a clean frame with every ratio at 1e6 for a potential column off by a million
     (ledger 61/M5). Pass ``check_scale=False`` when a large far-field deviation is what
@@ -340,8 +341,18 @@ def compare_with_point_source(
         }
     ).sort_values("distance_um", ignore_index=True)
     if check_scale:
-        far = table["ratio"].to_numpy()[len(table) // 2 :]
-        median = float(np.nanmedian(far)) if np.isfinite(far).any() else math.nan
+        # A band chosen by distance, not the farther half by count: a regular grid puts
+        # most of its points near the outer boundary, where a grounded solution falls to
+        # zero, and a correct export read 0.0931 there (ledger 165). The band runs from a
+        # thirtieth to a third of the largest distance -- clear of the electrode and of
+        # the boundary -- and falls back to every point when it holds too few.
+        distance = table["distance_um"].to_numpy()
+        ratios = table["ratio"].to_numpy()
+        top = float(distance.max())
+        band = ratios[(distance >= top / 30.0) & (distance <= top / 3.0)]
+        if np.count_nonzero(np.isfinite(band)) < MIN_BAND_POINTS:
+            band = ratios
+        median = float(np.nanmedian(band)) if np.isfinite(band).any() else math.nan
         if not (math.isfinite(median) and 1.0 / SCALE_TOLERANCE <= median <= SCALE_TOLERANCE):
             raise ValueError(
                 f"far-field FEM/point-source ratio has median {median:.3g}, outside "
@@ -352,6 +363,9 @@ def compare_with_point_source(
             )
     return table
 
+
+MIN_BAND_POINTS = 5
+"""Fewest finite ratios the mid-range band must hold before the check uses it alone."""
 
 SCALE_TOLERANCE = 10.0
 """How far the far-field median ratio may stray from 1 before :func:`compare_with_point_source`

@@ -115,7 +115,10 @@ A test also pins that the JSON export never emits `NaN`: a NaN raises instead.
 - `compare_with_point_source` is now a check as well as a table. A potential column off
   by 10⁶ used to return a clean frame with every ratio at 10⁶. It now raises when the
   far-field median ratio is off by more than a decade, naming the likely unit mistake.
-  `check_scale=False` waives the check.
+  `check_scale=False` waives the check. The median is taken over a band of distances,
+  from a thirtieth to a third of the largest. A median over the farther half of the
+  points by count sat on a regular grid's outer boundary, which raised on a correct
+  solution with a grounded boundary.
 - A file carrying two columns for one quantity (`x` and `x_um`) raises instead of
   silently taking the first.
 - Duplicate positions raise.

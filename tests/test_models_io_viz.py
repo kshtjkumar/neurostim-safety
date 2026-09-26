@@ -714,3 +714,43 @@ class TestTheExampleAndTheFemComparisonAgreeWithThemselves:
         with pytest.raises(ValueError, match="100"):
             compare_with_point_source(field, 999999.0)
         assert len(compare_with_point_source(field, 100.0)) == 40
+
+
+class TestTheFemScaleCheckToleratesAGroundedBoundary:
+    """Ledger 165 (Phase 5 review P3), C5b.3. The scale check took the median over the
+    farther half of the points by count, which a regular grid puts near the outer
+    boundary; a correctly scaled solution with a grounded boundary, V = I/(4 pi sigma)
+    (1/r - 1/R) on a 41^3 grid, read 0.0931 and raised."""
+
+    @staticmethod
+    def _grid(potential, position_scale=1.0):
+        from neurostim.io.fem import FEMField
+
+        radius = 20000.0
+        axis = np.linspace(-radius, radius, 41)
+        x, y, z = np.meshgrid(axis, axis, axis, indexing="ij")
+        points = np.column_stack([x.ravel(), y.ravel(), z.ravel()])
+        r = np.linalg.norm(points, axis=1)
+        keep = (r > 50.0) & (r < radius)
+        points, r = points[keep], r[keep]
+        k = 100e-6 / (4 * math.pi * 0.35)
+        return FEMField(points * position_scale, potential(k, r * 1e-6, radius * 1e-6),
+                        current_uA=100.0)
+
+    def test_a_grounded_boundary_passes(self):
+        from neurostim.io.fem import compare_with_point_source
+
+        grounded = self._grid(lambda k, r, big: k * (1 / r - 1 / big))
+        free = self._grid(lambda k, r, big: k / r)
+        assert len(compare_with_point_source(grounded, 100.0, 0.35)) > 0
+        assert len(compare_with_point_source(free, 100.0, 0.35)) > 0
+
+    def test_unit_mistakes_still_raise(self):
+        from neurostim.io.fem import compare_with_point_source
+
+        with pytest.raises(ValueError, match="unit"):
+            compare_with_point_source(self._grid(lambda k, r, big: k / r * 1e3), 100.0, 0.35)
+        with pytest.raises(ValueError, match="unit"):
+            compare_with_point_source(
+                self._grid(lambda k, r, big: k / r, position_scale=1e-3), 100.0, 0.35
+            )
