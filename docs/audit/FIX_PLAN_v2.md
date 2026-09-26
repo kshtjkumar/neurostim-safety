@@ -1079,11 +1079,11 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 61/M2 | MED | OK | C5.11 | |
 | 61/M3 | MED | OK | C5.11 | |
 | 61/M4 | MED | OK | C5.5 | **FIXED** `0aedc2d`; failed rows None, BatchRowsFailedWarning, attrs rows_failed |
-| 61/M5 | MED | OK | C5.10 | unbundled; also C3.1's electrode threading |
-| 61/M6 | MED | OK | C5.10 | |
-| 61/M7 | MED | OK | C5.10 | |
-| 61/M8 | MED | OK | C5.10 | |
-| 61/M9 | MED | OK | C5.10 | unbundled |
+| 61/M5 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
+| 61/M6 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
+| 61/M7 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
+| 61/M8 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
+| 61/M9 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
 | 61/M10 | MED | OK | C5.11 | |
 | 61/M11 | MED | OK | C5.11 | |
 | 61/M12 | MED | OK | C0.4, C5.9 | **FIXED** `7f9798d`; LZW RGB TIFF, 0.93 MB |
