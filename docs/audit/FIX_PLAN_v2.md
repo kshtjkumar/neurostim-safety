@@ -1069,9 +1069,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 36 | MED | DOC | C6.4 | **FIXED** `52c254f`; clamp warns; saturation documented |
 | 37 | MED | OK | C6.1 | **FIXED** `7be04fb`; SE and CI reach the caller |
 | 38 | MED | LISTED-ONLY | C6.2 | **FIXED** `be646bc`; rank-deficient design refused |
-| 39 | MED | OK | C6.5 | |
-| 40 | MED | OK | C6.5 | |
-| 41 | MED | LISTED-ONLY | C6.5 | moved to the VTA commit |
+| 39 | MED | OK | C6.5 | **FIXED** `2ccf0dd`; k spread reaches the result |
+| 40 | MED | OK | C6.5 | **FIXED** `2ccf0dd`; claim narrowed |
+| 41 | MED | LISTED-ONLY | C6.5 | **FIXED** `2ccf0dd`; negative offset refused |
 | 42 | LOW | OK | C6.4 | **FIXED** `52c254f`; clamp is loud |
 | 43 | LOW | OK | C6.6 | |
 | 44 | LOW | OK | C6.6 | |
