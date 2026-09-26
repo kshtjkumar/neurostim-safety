@@ -209,6 +209,17 @@ unchanged.
   On the DBS panel it used to cover the no-damage point at 1 µC. The not-applied note
   and the McCreery caption are one text block, so they cannot overlap.
 
+### A strength-duration fit refuses the unphysical and says how sure it is
+
+- `fit_weiss` raises on a non-positive fitted chronaxie. It used to return one, for
+  example −60 µs with τ = nan, and fail only when the curve was later evaluated.
+- Both fits report standard errors for rheobase and chronaxie and a 95 % confidence
+  interval for the chronaxie. Weiss uses the least-squares covariance and the delta
+  method; Lapicque uses `curve_fit`'s covariance, which was computed and discarded.
+- At 5 % threshold noise the interval covers about 94 % of synthetic replicates.
+- A two-point fit says its uncertainty is not estimable.
+- The fitted values themselves are unchanged.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

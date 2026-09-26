@@ -792,3 +792,48 @@ class TestFailedRowsPersistInTheCsv:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             write_csv(frame, tmp_path / "clean.csv")
+
+
+class TestAStrengthDurationFitIsPhysicalAndSaysHowSure:
+    """Ledgers 33 and 37, C6.1. fit_weiss returned a negative chronaxie (with tau = nan and
+    a residual near 1e-22) rather than refusing, and curve_fit's covariance, like the
+    Weiss fit's, never reached the caller: at 5 % noise and a true chronaxie of 200 us the
+    fitted value scatters with sd 27 us, and nothing said so."""
+
+    def test_t6_a_negative_chronaxie_design_is_refused(self):
+        widths = np.array([100.0, 200.0, 400.0])
+        # Generated from a known t_c = -60 us, so the rejection is a property of the input.
+        thresholds = 20.0 * (1.0 - 60.0 / widths)
+        with pytest.raises(ValueError, match=r"fitted chronaxie is non-positive \(-60"):
+            sd.fit_weiss(widths, thresholds)
+        with pytest.raises(ValueError, match=r"fitted chronaxie is non-positive \(-50"):
+            sd.fit_weiss(widths, np.array([10.0, 15.0, 17.5]))
+
+    def test_the_interval_is_calibrated(self):
+        """Against a synthetic recovery, not the fit's own formula: 2000 replicates at 5 %
+        multiplicative threshold noise, true chronaxie 200 us."""
+        rng = np.random.default_rng(37)
+        widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
+        truth = 20.0 * (1.0 + 200.0 / widths)
+        covered, estimates = 0, []
+        for _ in range(2000):
+            fit = sd.fit_weiss(widths, truth * (1.0 + 0.05 * rng.standard_normal(widths.size)))
+            low, high = fit.chronaxie_ci95_us
+            covered += low <= 200.0 <= high
+            estimates.append(fit.chronaxie_us)
+        assert 0.92 <= covered / 2000 <= 0.97, covered / 2000
+        assert 22.0 < float(np.std(estimates)) < 32.0
+
+    def test_se_reaches_the_caller_and_describe(self):
+        widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
+        thresholds = np.array([82.0, 50.0, 34.0, 26.0, 22.0])
+        for fit in (sd.fit_weiss(widths, thresholds), sd.fit_lapicque(widths, thresholds)):
+            assert fit.rheobase_se_uA > 0 and fit.chronaxie_se_us > 0
+            low, high = fit.chronaxie_ci95_us
+            assert low < fit.chronaxie_us < high
+            assert "95 % CI" in fit.describe()
+
+    def test_two_points_have_no_estimable_uncertainty(self):
+        fit = sd.fit_weiss(np.array([100.0, 400.0]), np.array([40.0, 25.0]))
+        assert fit.chronaxie_se_us is None and fit.chronaxie_ci95_us is None
+        assert "not estimable" in fit.describe()
