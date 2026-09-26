@@ -1442,7 +1442,7 @@ def _charge_check(result: charge_mod.ChargeResult, waveform: str) -> Check:
             f"{format_limit(result.cic_limit_uC_cm2)} uC/cm^2 "
             f"({result.utilisation * 100:.0f} % used)"
         ),
-        detail=result.describe(),
+        detail=result.describe(verdict=status.value),
         margin=result.margin,
     )
 
@@ -2079,6 +2079,7 @@ class SafetyCalculator:
             self.policy,
             self.medium,
             self.p.anodic_first,
+            electrode=self.e,
         )
         envelope_result = envelope_mod.evaluate(self.p, self.e.area_cm2)
         n_pulses = (
@@ -2141,6 +2142,7 @@ class SafetyCalculator:
                 self.policy,
                 self.medium,
                 not self.p.anodic_first,
+                electrode=self.counter_electrode,
             )
             counter_ceiling_uA = _counter_charge_ceiling_uA(
                 counter_result, self.p, self.counter_electrode.area_cm2

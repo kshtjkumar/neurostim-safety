@@ -355,6 +355,24 @@ def _reproducibility_rows(calc: SafetyCalculator) -> list[tuple[str, str]]:
     ]
 
 
+def _cic_provenance(calc: SafetyCalculator) -> str:
+    """The charge-injection record in uC/cm2, naming the polarity sub-range applied.
+
+    The row printed "0.05-0.15 mC/cm2" beside a limit of 100 uC/cm2; the cathodic-first
+    100-150 that produced it appeared only in prose further down (ledger 61/M2).
+    """
+    cic = calc.material.cic
+    text = cic.describe(in_uC_cm2=True)
+    low, high = cic.bounds(calc.p.anodic_first)
+    if (low, high) != (cic.low, cic.high):
+        scale = 1e3 if cic.units == "mC/cm2" else 1.0
+        text = (
+            f"{calc.p.leading_polarity}-first {low * scale:g}-{high * scale:g} uC/cm2 "
+            f"applied, of {text}"
+        )
+    return text
+
+
 def _computed_rows(
     calc: SafetyCalculator, assessment: SafetyAssessment
 ) -> list[tuple[str, str]]:
@@ -374,6 +392,14 @@ def _computed_rows(
         if charge.charge_density_uC_cm2 > charge.cic_limit_uC_cm2
         else f"{charge.charge_density_uC_cm2:.4g}"
     )
+    # A Shannon check that did not run -- a microelectrode, say -- says so beside its
+    # numbers, as the Safety checks table does (ledger 61/M1).
+    shannon_check = next(c for c in assessment.checks if c.name == "Shannon criterion")
+    shannon_off = (
+        f" &mdash; not applied: {shannon_check.summary}"
+        if shannon_check.status is Status.NOT_EVALUATED
+        else ""
+    )
     k_text = f"{assessment.shannon.k_metric:.3f}"
     if assessment.shannon.k_metric > calc.k and float(k_text) <= float(f"{calc.k:.2f}"):
         k_text = format_exceeding(assessment.shannon.k_metric, f"{calc.k:.2f}")
@@ -385,11 +411,11 @@ def _computed_rows(
         (
             "Shannon k",
             f"{k_text} "
-            f"(threshold {calc.k:.2f}; Shannon 1992, Merrill 2005 eq. 5.1)",
+            f"(threshold {calc.k:.2f}; Shannon 1992, Merrill 2005 eq. 5.1){shannon_off}",
         ),
         (
             "Shannon current limit",
-            f"{format_limit(assessment.shannon.max_current_uA)} &micro;A",
+            f"{format_limit(assessment.shannon.max_current_uA)} &micro;A{shannon_off}",
         ),
         (
             "Charge-injection limit",
@@ -430,7 +456,7 @@ def _provenance_rows(
     confirmed (ledger 30); it used to be applied with no provenance row at all.
     """
     prov: list[tuple[str, str]] = [
-        ("Charge-injection limit", calc.material.cic.describe()),
+        ("Charge-injection limit", _cic_provenance(calc)),
     ]
     if calc.material.water_window is not None:
         window = calc.material.water_window.describe()

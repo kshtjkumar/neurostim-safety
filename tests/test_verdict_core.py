@@ -3962,3 +3962,61 @@ class TestEveryCitationTheReportNamesResolves:
         # "Rose & Robblee (1990)" in the Pt note is rose_robblee1990, not the chapter.
         if calc.material.key == "Pt":
             assert "robblee_rose1990_chapter" not in listed and "rose_robblee1990" in listed
+
+
+class TestEachRowSaysWhatItRestsOn:
+    """C5.11a: ledgers 61/M1, M2, M3, 125 and 102."""
+
+    def test_m1_shannon_rows_say_not_applied_when_the_check_did_not_run(self):
+        from neurostim.io.report import _computed_rows
+
+        micro = SafetyCalculator(DiscElectrode(100.0, "Pt"), StimProtocol(5, 200, 130, 1))
+        a = micro.assess()
+        assert next(c for c in a.checks if c.name == "Shannon criterion").status is Status.NOT_EVALUATED
+        rows = dict(_computed_rows(micro, a))
+        assert "not applied" in rows["Shannon k"] and "not applied" in rows["Shannon current limit"]
+        macro = SafetyCalculator(DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1))
+        rows = dict(_computed_rows(macro, macro.assess()))
+        assert "not applied" not in rows["Shannon k"]
+
+    def test_m2_the_provenance_row_is_in_the_limits_unit_and_names_the_sub_range(self):
+        from neurostim.io.report import _provenance_rows
+
+        calc = SafetyCalculator(DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1))
+        row = dict(_provenance_rows(calc, calc.assess()))["Charge-injection limit"]
+        assert "mC/cm2" not in row
+        assert "50-150 uC/cm2" in row and "cathodic-first 100-150 uC/cm2 applied" in row
+
+    def test_m3_a_caution_detail_does_not_announce_pass(self):
+        from neurostim import RingElectrode
+
+        calc = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1),
+                                compliance_V=10.0)
+        check = next(c for c in calc.assess().checks if c.name == "Charge injection limit")
+        assert check.status is Status.CAUTION
+        first = check.detail.splitlines()[0]
+        assert "-> PASS" not in first and "-> CAUTION" in first
+
+    def test_125_no_perimeter_peak_on_a_sphere(self):
+        from neurostim.geometry import HemisphericalElectrode, SphericalElectrode
+
+        for electrode in (SphericalElectrode(500.0, "Pt"), HemisphericalElectrode(500.0, "Pt")):
+            text = SafetyCalculator(electrode, StimProtocol(50, 200, 130, 1)).assess().charge.describe()
+            assert "perimeter" not in text and "uniform" in text
+        disc = SafetyCalculator(DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1))
+        assert "perimeter" in disc.assess().charge.describe()
+
+    def test_102_the_endorsed_end_is_derated_like_the_limit(self):
+        from dataclasses import replace
+
+        from neurostim.data import cogan2016
+        from neurostim.materials import get_material
+        from neurostim.safety import charge
+        from neurostim.safety._limits import format_limit
+
+        pt = get_material("Pt")
+        pt = replace(pt, cic=replace(pt.cic, recommended_policy="conservative"))
+        result = charge.evaluate(pt, 1.0, 0.01, 200.0, policy="nominal", medium="in_vivo")
+        derating = cogan2016.PT_IN_VIVO_DERATING
+        assert f"applies {format_limit(100.0 / derating)} uC/cm^2" in result.policy_warning
+        assert f"end at {format_limit(50.0 / derating)} uC/cm^2" in result.policy_warning

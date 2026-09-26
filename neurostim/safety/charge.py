@@ -27,12 +27,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from ..data import cogan2016
 from ..materials import Material, Policy, get_material
 from ..uncertainty import Interval
 from ..units import charge_uC
 from ._limits import floor_to_pass, format_limit
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..geometry.base import Electrode
 
 PULSE_WIDTH_TOLERANCE = 2.0
 """Fold-difference in pulse width beyond which the CIC condition mismatch is flagged."""
@@ -143,6 +147,10 @@ class ChargeResult:
     (ledger 156): the factor then rests on no measurement."""
     derating_measured_from_us: float | None = None
     """The shortest pulse width the applied derating was measured at, if the source says."""
+    distribution: str = "disc"
+    """The electrode's primary current distribution, from
+    :func:`~neurostim.safety.current_density.primary_distribution`: ``"uniform"`` for a
+    sphere or hemisphere, which has no perimeter peak (ledger 125)."""
 
     @property
     def limit_is_a_range(self) -> bool:
@@ -169,9 +177,13 @@ class ChargeResult:
             return math.inf
         return self.cic_limit_uC_cm2 / self.charge_density_uC_cm2
 
-    def describe(self) -> str:
-        """Multi-line summary."""
-        verdict = "PASS" if self.passes else "EXCEEDS"
+    def describe(self, verdict: str | None = None) -> str:
+        """Multi-line summary.
+
+        ``verdict`` is the check's own status where it differs from this result's pass or
+        exceed: a CAUTION check's detail used to open "-> PASS" (ledger 61/M3).
+        """
+        verdict = verdict or ("PASS" if self.passes else "EXCEEDS")
         lines = [
             f"Charge injection ({self.material_key}, {self.policy}, "
             f"{self.polarity}) -> {verdict}",
@@ -200,11 +212,19 @@ class ChargeResult:
         elif self.medium == "in_vivo" and self.derating_note:
             lines.append(f"  IN VIVO: {self.derating_note}")
         lines.append(f"  measured under: {self.conditions}")
-        lines.append(
-            "  note: this is a geometric-average density. On a non-recessed electrode "
-            "the\n  local peak at the perimeter is higher -- Kuncel & Grill (2004) "
-            "found 25.6 % of a\n  DBS contact above its average current density."
-        )
+        if self.distribution == "uniform":
+            # A sphere, and a hemisphere flush in its plane, have a uniform primary
+            # distribution: no perimeter, no peak above the average (ledger 125).
+            lines.append(
+                "  note: a geometric-average density, and on this geometry the primary "
+                "current\n  distribution is uniform, so the local density equals it."
+            )
+        else:
+            lines.append(
+                "  note: this is a geometric-average density. On a non-recessed electrode "
+                "the\n  local peak at the perimeter is higher -- Kuncel & Grill (2004) "
+                "found 25.6 % of a\n  DBS contact above its average current density."
+            )
         if not self.verified:
             lines.append("  PROVISIONAL: limit not confirmed against a primary source")
         if self.derating_provisional:
@@ -228,6 +248,7 @@ def evaluate(
     policy: Policy = "conservative",
     medium: str = "saline",
     anodic_first: bool | None = None,
+    electrode: Electrode | None = None,
 ) -> ChargeResult:
     """Evaluate the charge-injection limit and flag condition mismatches.
 
@@ -237,6 +258,9 @@ def evaluate(
     capacity as up to tenfold below the saline value for platinum and activated iridium
     oxide, and fourfold for SIROF. Applying that derating is a choice with large
     consequences, so it is opt-in and always labelled in the output.
+
+    ``electrode`` sets the primary-distribution note in :meth:`ChargeResult.describe`;
+    it moves no number. ``None`` keeps the disc's (ledger 125).
     """
     if medium not in ("saline", "in_vivo"):
         raise ValueError(
@@ -289,7 +313,10 @@ def evaluate(
     # when recommended_policy is set, but that is not visible to a type checker.
     endorsed_policy = mat.cic.recommended_policy
     if endorsed_policy is not None and mat.cic.exceeds_recommendation(policy):
-        endorsed = mat.cic_uC_cm2(endorsed_policy, anodic_first)
+        # Derated as `limit` is: in vivo the warning compared a derated limit with an
+        # underated endorsed end, so the endorsed end read as the more permissive of the
+        # two (ledger 102).
+        endorsed = mat.cic_uC_cm2(endorsed_policy, anodic_first) / derating
         # Both are maxima, and `limit` may be derated or a midpoint -- round only by
         # accident, so `:g` would print it high (ledger 100).
         policy_warning = (
@@ -344,4 +371,14 @@ def evaluate(
         derating_note=derating_note,
         derating_provisional=derating_provisional,
         derating_measured_from_us=measured_from,
+        distribution=_distribution(electrode),
     )
+
+
+def _distribution(electrode: Electrode | None) -> str:
+    """The primary distribution, via current_density; imported here to avoid a cycle."""
+    if electrode is None:
+        return "disc"
+    from .current_density import primary_distribution
+
+    return primary_distribution(electrode)

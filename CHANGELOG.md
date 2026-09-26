@@ -121,6 +121,21 @@ A test also pins that the JSON export never emits `NaN`: a NaN raises instead.
 - `save_field` records the note, and `load_field` reads the saved `current_uA` and note
   back. A `current_uA` passed at load that disagrees with the saved one raises.
 
+### Each row of the report says what it rests on
+
+- When the Shannon check does not run, as on a microelectrode, the PDF's Shannon k and
+  Shannon current limit rows now say "not applied". Before, they printed a live-looking
+  limit.
+- The charge-injection provenance row is in µC/cm², the unit of the limit beside it. It
+  names the polarity sub-range applied, for example "cathodic-first 100-150 uC/cm2
+  applied, of 50-150 uC/cm2". It used to print "0.05-0.15 mC/cm2".
+- A CAUTION charge-injection detail opens "-> CAUTION", not "-> PASS".
+- On a sphere or hemisphere the charge-injection note says the primary distribution is
+  uniform, instead of the perimeter-peak note that applies to discs and bands.
+- In vivo, a policy warning now derates the endorsed end as it does the limit. Before,
+  the endorsed end read as the more permissive of the two. No shipped material reaches
+  this.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

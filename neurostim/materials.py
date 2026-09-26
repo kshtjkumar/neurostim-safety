@@ -177,13 +177,19 @@ class MeasuredRange:
         """True when the source reported an interval rather than a point value."""
         return self.high > self.low
 
-    def describe(self) -> str:
-        """Human-readable value with units, range markers and provenance flag."""
+    def describe(self, *, in_uC_cm2: bool = False) -> str:
+        """Human-readable value with units, range markers and provenance flag.
+
+        ``in_uC_cm2`` renders the value in uC/cm2 whatever unit it is stored in, for a row
+        beside a limit printed in uC/cm2: "0.05-0.15 mC/cm2" beside "100 uC/cm2" read as
+        a policy choosing 100 from a range starting at 50 (ledger 61/M2).
+        """
         prefix = "~" if self.approximate and not self.is_range else ""
-        body = (
-            f"{self.low:g}-{self.high:g}" if self.is_range else f"{prefix}{self.low:g}"
-        )
-        text = f"{body} {self.units}"
+        scale = 1e3 if in_uC_cm2 and self.units == "mC/cm2" else 1.0
+        units = "uC/cm2" if in_uC_cm2 else self.units
+        low, high = self.low * scale, self.high * scale
+        body = f"{low:g}-{high:g}" if self.is_range else f"{prefix}{low:g}"
+        text = f"{body} {units}"
         conditions = []
         if self.pulse_width_us is not None:
             conditions.append(f"{self.pulse_width_us:g} us")
