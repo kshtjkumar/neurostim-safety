@@ -322,3 +322,24 @@ def _render(floored: Decimal, exponent: int, sig: int) -> str:
     # Through the float, so the exponent is zero-padded the way ``%e`` writes it
     # ("1.528e+04", not Decimal's "1.528e+4"). The digits are already settled.
     return f"{float(floored):.{sig - 1}e}"
+
+
+def format_exceeding(applied: float, bound_text: str, sig: int = 4) -> str:
+    """Render an applied value that exceeds a bound so it reads as exceeding it.
+
+    An exceedance sentence prints two numbers, and when they sit close both rounded to the
+    same digits: "100 uC/cm^2 exceeds the 100.0 uC/cm^2 limit", "k = 1.50 exceeds the 1.50
+    threshold" (ledger 50). The applied value keeps round-to-nearest -- flooring it would
+    understate what is delivered -- at ``sig`` significant digits, and gains digits only
+    until what it prints parses strictly above ``bound_text``, the bound as printed.
+    Called only where ``applied`` truly exceeds the bound, so enough digits always do.
+    """
+    if not math.isfinite(applied):
+        return f"{applied:.{sig}g}"
+    bound = float(bound_text)
+    for digits in range(sig, 18):
+        text = f"{applied:.{digits}g}"
+        if float(text) > bound:
+            return text
+    return repr(applied)
+

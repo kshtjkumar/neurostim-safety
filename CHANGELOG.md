@@ -62,6 +62,21 @@ and `fig.pdf`.
 - A batch row can take a counter electrode: the electrode columns prefixed `counter_`,
   plus `counter_separation_um`.
 
+### An exceedance reads as one
+
+A FAIL used to print the applied value and its bound at the same precision. That
+produced sentences such as:
+- "100 uC/cm^2 exceeds the 100.0 uC/cm^2 limit";
+- "k = 1.50 exceeds the 1.50 threshold";
+- "4 nC/phase exceeds the 4 nC/phase";
+- "needs 0.83 V but only 0.83 V available".
+
+The applied value keeps round-to-nearest. It now gains digits only until it reads above
+the printed bound (`_limits.format_exceeding`). The available compliance voltage is a
+bound, so it now floors at three significant figures like the other limits: "10.00 V
+available" reads "10.0 V available". The PDF's charge density and Shannon k rows follow
+the same rule.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

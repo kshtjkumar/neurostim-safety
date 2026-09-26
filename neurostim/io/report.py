@@ -31,7 +31,7 @@ from reportlab.platypus import (
 from .. import _repro
 from ..references import cite
 from ..safety import SafetyCalculator
-from ..safety._limits import format_limit
+from ..safety._limits import format_exceeding, format_limit
 from ..safety.assessment import SafetyAssessment, Status
 from ..safety.compliance import ComplianceResult
 
@@ -326,14 +326,27 @@ def _computed_rows(
     Charge injection row does: the peak potential and the required compliance both rest
     on the capacitance that limit sets (ledger 60).
     """
+    # An applied value above its bound gains digits until it reads above it, as the check
+    # summaries do: these rows printed charge density "100" beside a limit "100.0"
+    # (ledger 50).
+    charge = assessment.charge
+    cic_text = format_limit(charge.cic_limit_uC_cm2)
+    density_text = (
+        format_exceeding(charge.charge_density_uC_cm2, cic_text)
+        if charge.charge_density_uC_cm2 > charge.cic_limit_uC_cm2
+        else f"{charge.charge_density_uC_cm2:.4g}"
+    )
+    k_text = f"{assessment.shannon.k_metric:.3f}"
+    if assessment.shannon.k_metric > calc.k and float(k_text) <= float(f"{calc.k:.2f}"):
+        k_text = format_exceeding(assessment.shannon.k_metric, f"{calc.k:.2f}")
     rows: list[tuple[str, str]] = [
         (
             "Charge density",
-            f"{assessment.charge.charge_density_uC_cm2:.4g} &micro;C/cm&sup2; per phase",
+            f"{density_text} &micro;C/cm&sup2; per phase",
         ),
         (
             "Shannon k",
-            f"{assessment.shannon.k_metric:.3f} "
+            f"{k_text} "
             f"(threshold {calc.k:.2f}; Shannon 1992, Merrill 2005 eq. 5.1)",
         ),
         (
@@ -342,7 +355,7 @@ def _computed_rows(
         ),
         (
             "Charge-injection limit",
-            f"{format_limit(assessment.charge.cic_limit_uC_cm2)} "
+            f"{cic_text} "
             f"&micro;C/cm&sup2; "
             f"({calc.policy} policy)",
         ),

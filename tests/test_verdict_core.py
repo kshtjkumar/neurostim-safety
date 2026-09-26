@@ -3832,3 +3832,89 @@ class TestIntervalContainmentAcrossPoliciesAndK:
                 assert assessment.limiting_current_interval_uA.contains(
                     assessment.limiting_current_uA
                 ), (policy, k)
+
+
+class TestAnExceedanceReadsAsOne:
+    """Ledger 50 (io-gui H1), C5.6. The applied value and its bound were printed at the
+    same precision, so a FAIL read "100 uC/cm^2 exceeds the 100.0 uC/cm^2 limit" or
+    "k = 1.50 exceeds the 1.50 threshold". Each exceedance sentence must print an applied
+    number that parses strictly above the bound it prints."""
+
+    PATTERNS = (
+        r"k = (\S+) exceeds the (\S+) threshold",
+        r"(\S+) uC/cm\^2 exceeds the (\S+) uC/cm\^2",
+        r"(\S+) nC/phase exceeds the (\S+) nC/phase",
+        r"needs (\S+) V but only (\S+) V available",
+    )
+
+    @classmethod
+    def _pairs(cls, text):
+        import re
+
+        return [
+            (float(m.group(1)), float(m.group(2)), m.group(0))
+            for pattern in cls.PATTERNS
+            for m in re.finditer(pattern, text)
+        ]
+
+    @staticmethod
+    def _cases():
+        from neurostim import RingElectrode
+        from neurostim.electrodes import electrode
+        from neurostim.materials import get_material
+
+        eps = 1.0 + 1e-7
+        ring = RingElectrode(330, 270, "Pt")
+        cic = SafetyCalculator(ring, StimProtocol(80, 200, 130, 1)).max_current_cic_uA
+        yield "Charge injection limit", SafetyCalculator(ring, StimProtocol(cic * eps, 200, 130, 1))
+        dbs = electrode("dbs_3389")
+        shannon = SafetyCalculator(dbs, StimProtocol(3000, 60, 130, 1)).max_current_shannon_uA
+        yield "Shannon criterion", SafetyCalculator(
+            dbs, StimProtocol(shannon * eps, 60, 130, 1), compliance_V=1e4
+        )
+        micro = DiscElectrode(100.0, "Pt")
+        yield "Microelectrode charge/phase", SafetyCalculator(
+            micro, StimProtocol(20.0 * eps, 200, 130, 1)
+        )
+        pt = get_material("Pt")
+        big = DiscElectrode(1000.0, "Pt")
+        high = pt.chronic_threshold.high_uC_cm2
+        yield "Chronic degradation", SafetyCalculator(
+            big, StimProtocol(high * big.area_cm2 / 200e-6 * eps, 200, 130, 1)
+        )
+        first = SafetyCalculator(ring, StimProtocol(80, 200, 130, 1), compliance_V=100.0)
+        required = first.assess().compliance.required_V
+        yield "Compliance voltage", SafetyCalculator(
+            ring, StimProtocol(80, 200, 130, 1), compliance_V=required / eps
+        )
+
+    def test_every_exceedance_prints_above_its_bound(self):
+        seen, wrong = set(), []
+        for name, calc in self._cases():
+            check = next(c for c in calc.assess().checks if c.name == name)
+            assert check.status is Status.FAIL, (name, check.summary)
+            pairs = self._pairs(check.summary)
+            assert pairs, (name, check.summary)
+            wrong += [sentence for applied, bound, sentence in pairs if not applied > bound]
+            seen.add(name)
+        assert len(seen) == 5
+        assert not wrong, wrong
+
+    def test_the_pdf_rows_read_as_an_exceedance_too(self):
+        """The PDF's Computed quantities printed charge density "100" and the limit "100"
+        on adjacent rows, and k beside its threshold at the same kind of precision."""
+        import re
+
+        from neurostim.io.report import _computed_rows
+
+        cases = dict(self._cases())
+        for name in ("Charge injection limit", "Shannon criterion"):
+            calc = cases[name]
+            rows = dict(_computed_rows(calc, calc.assess()))
+            if name == "Charge injection limit":
+                applied = float(rows["Charge density"].split()[0])
+                bound = float(rows["Charge-injection limit"].split()[0])
+            else:
+                m = re.match(r"(\S+) \(threshold (\S+);", rows["Shannon k"])
+                applied, bound = float(m.group(1)), float(m.group(2))
+            assert applied > bound, (name, rows)

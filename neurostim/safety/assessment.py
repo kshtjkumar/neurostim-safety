@@ -41,7 +41,7 @@ from . import current_density as jd_mod
 from . import envelope as envelope_mod
 from . import shannon as shannon_mod
 from . import water_window as ww_mod
-from ._limits import LimitDidNotSettle, floor_to_pass, format_limit
+from ._limits import LimitDidNotSettle, floor_to_pass, format_exceeding, format_limit
 from .shannon import K_BOUNDS
 
 CAUTION_MARGIN = 2.0
@@ -1334,7 +1334,8 @@ def _shannon_check(
             name="Shannon criterion",
             status=Status.FAIL,
             summary=(
-                f"k = {result.k_metric:.2f} exceeds the {k:.2f} threshold; "
+                f"k = {format_exceeding(result.k_metric, f'{k:.2f}', sig=3)} exceeds the "
+                f"{k:.2f} threshold; "
                 f"max {format_limit(result.max_current_uA)} uA"
             ),
             detail=detail,
@@ -1411,13 +1412,14 @@ def _charge_check(result: charge_mod.ChargeResult, waveform: str) -> Check:
                 + result.describe()
             ),
         )
+    cic_text = format_limit(result.cic_limit_uC_cm2)
     if not result.passes:
         return Check(
             name="Charge injection limit",
             status=Status.FAIL,
             summary=(
-                f"{result.charge_density_uC_cm2:.4g} uC/cm^2 exceeds the "
-                f"{format_limit(result.cic_limit_uC_cm2)} uC/cm^2 limit for "
+                f"{format_exceeding(result.charge_density_uC_cm2, cic_text)} uC/cm^2 exceeds "
+                f"the {cic_text} uC/cm^2 limit for "
                 f"{result.material_key}; max {format_limit(result.max_current_uA)} uA"
             ),
             detail=result.describe(),
@@ -1657,7 +1659,8 @@ def _regime_check(electrode: Electrode, protocol: StimProtocol) -> Check:
                 name="Microelectrode charge/phase",
                 status=Status.FAIL,
                 summary=(
-                    f"{charge_nC:.3g} nC/phase exceeds the {threshold:g} nC/phase "
+                    f"{format_exceeding(charge_nC, f'{threshold:g}', sig=3)} nC/phase exceeds "
+                    f"the {threshold:g} nC/phase "
                     f"microelectrode damage threshold"
                 ),
                 detail=detail,
@@ -1737,8 +1740,9 @@ def _chronic_check(material: Material, charge_density_uC_cm2: float) -> Check:
             name="Chronic degradation",
             status=Status.FAIL,
             summary=(
-                f"{charge_density_uC_cm2:.4g} uC/cm^2 exceeds the "
-                f"{threshold.high_uC_cm2:g} uC/cm^2 {threshold.mechanism} threshold{origin}"
+                f"{format_exceeding(charge_density_uC_cm2, f'{threshold.high_uC_cm2:g}')} "
+                f"uC/cm^2 exceeds the {threshold.high_uC_cm2:g} uC/cm^2 "
+                f"{threshold.mechanism} threshold{origin}"
             ),
             detail=(
                 f"{threshold.describe()}\n"
@@ -1869,9 +1873,20 @@ def _charge_balance_check(protocol: StimProtocol, area_cm2: float) -> Check:
     )
 
 
-def _required_text(result: compliance_mod.ComplianceResult) -> str:
-    """The requirement as a summary shows it, or the refusal sentence (ledger 143)."""
+def _required_text(
+    result: compliance_mod.ComplianceResult, exceeds: str | None = None
+) -> str:
+    """The requirement as a summary shows it, or the refusal sentence (ledger 143).
+
+    ``exceeds`` is the available voltage as printed beside it, in a FAIL: the requirement
+    then gains digits until it reads above that (ledger 50).
+    """
     if math.isfinite(result.required_V):
+        if exceeds is not None:
+            text = f"{result.required_V:.2f}"
+            if float(text) <= float(exceeds):
+                text = format_exceeding(result.required_V, exceeds, sig=3)
+            return f"{text} V"
         return f"{result.required_V:.2f} V"
     return f"an unbounded voltage ({result.unbounded_reason})"
 
@@ -1888,12 +1903,17 @@ def _compliance_check(result: compliance_mod.ComplianceResult) -> Check:
             detail=result.describe(),
         )
     if not result.passes:
+        assert result.available_V is not None  # evaluated, so a compliance was given
+        available_text = format_limit(result.available_V, sig=3)
         return Check(
             name="Compliance voltage",
             status=Status.FAIL,
+            # The available voltage is a bound the stimulator cannot exceed, so it floors
+            # like any limit; ``:.2f`` printed 0.828692 V as "0.83", above the requirement
+            # it was failing (ledger 50).
             summary=(
-                f"needs {_required_text(result)} but only "
-                f"{result.available_V:.2f} V available"
+                f"needs {_required_text(result, available_text)} but only "
+                f"{available_text} V available"
             ),
             detail=result.describe(),
             margin=result.max_current_uA / result.current_uA,
