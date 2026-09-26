@@ -11,7 +11,8 @@ bump is where incompatible changes go, and these are incompatible:
 
 1.0.0 would promise a stable interface, and Phases 5-7 still change it.
 `pyproject.toml` and `CITATION.cff` had stayed at 0.13.0 while `__version__` said
-0.15.0. All three now say 0.16.0.
+0.15.0. All three now say 0.16.0, and `__version__` is read from the installed
+distribution, which `pyproject.toml` writes, so there is one place to change it.
 
 ### The Shannon panel draws the line its verdict was decided against
 

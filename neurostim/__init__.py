@@ -53,7 +53,23 @@ from .references import REFERENCES, Reference, bibliography, cite
 from .safety import SafetyAssessment, SafetyCalculator, Status
 from .uncertainty import Interval
 
-__version__ = "0.16.0"
+
+def _installed_version() -> str:
+    """The version pyproject.toml gave the installed distribution (ledger 47).
+
+    One source: __version__ was a literal here that drifted from pyproject.toml and
+    CITATION.cff (0.15.0 against 0.13.0). A checkout that is not installed reads
+    ``0+unknown`` rather than a guess.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("neurostim-safety")
+    except PackageNotFoundError:  # pragma: no cover - running from an uninstalled tree
+        return "0+unknown"
+
+
+__version__ = _installed_version()
 
 __all__ = [
     "MATERIALS",

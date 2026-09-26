@@ -988,3 +988,19 @@ class TestTheAnswerCoversTheIntervalAndTheKinds:
         doc = " ".join(audit.reproduces.__doc__.split())
         assert "cannot see" in doc and "single check's status" in doc
         assert "version 1 and 2" in doc.lower()
+
+
+class TestTheVersionHasOneSource:
+    """Ledger 47, C7.2. __version__ said 0.15.0 while pyproject.toml, CITATION.cff and the
+    installed distribution said 0.13.0. It is now read from the installed metadata, which
+    pyproject.toml writes, so there is one place to change."""
+
+    def test_version_is_read_from_the_distribution(self):
+        import importlib.metadata
+        from pathlib import Path
+
+        import neurostim
+
+        assert neurostim.__version__ == importlib.metadata.version("neurostim-safety")
+        source = (Path(neurostim.__file__)).read_text()
+        assert '__version__ = "' not in source
