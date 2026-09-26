@@ -100,6 +100,13 @@ Brummer & Turner 1977; no entry is lost.
 - A "Counter electrode" group (a disc diameter, a material and the separation) makes the
   assessment two-terminal, as the library can.
 
+### The TIFF is one a journal accepts
+
+`save_publication` wrote its 600 dpi TIFF as uncompressed RGBA, 47 MB for the four-panel
+summary. That is above journal upload caps, and journals reject an alpha channel in a
+TIFF. It is now LZW-compressed RGB, 0.93 MB for the same figure, with the same pixels.
+A test also pins that the JSON export never emits `NaN`: a NaN raises instead.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

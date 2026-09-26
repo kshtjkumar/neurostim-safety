@@ -527,3 +527,24 @@ class TestSavePublicationKeepsDecimalNames:
         fig, _ = subplots()
         written = save_publication(fig, tmp_path / "k1.5.TIFF", formats=("svg",), close=True)
         assert [p.name for p in written] == ["k1.5.svg"]
+
+
+class TestTheTiffIsAJournalTiff:
+    """Ledgers 61/M12 and 87, C5.9. The 600 dpi TIFF was uncompressed RGBA: 47 001 446
+    bytes for the four-panel summary. Journals cap uploads well below that and reject an
+    alpha channel in a TIFF."""
+
+    def test_lzw_rgb_600dpi_and_small(self, tmp_path):
+        from PIL import Image
+
+        from neurostim.viz.style import save_publication
+
+        calc = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1),
+                                compliance_V=10.0)
+        fig, _ = safety_summary(calc)
+        [path] = save_publication(fig, tmp_path / "summary", formats=("tiff",), close=True)
+        with Image.open(path) as image:
+            assert image.info.get("compression") == "tiff_lzw"
+            assert image.mode == "RGB"
+            assert tuple(round(v) for v in image.info["dpi"]) == (600, 600)
+        assert path.stat().st_size < 5_000_000, path.stat().st_size

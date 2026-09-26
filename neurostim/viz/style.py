@@ -166,7 +166,11 @@ def save_publication(
     writes ``shannon_k1.5.svg``. It used to be stripped too, so ``"shannon_k1.5"`` and
     ``"shannon_k1.8"`` both wrote ``shannon_k1.svg`` and the second destroyed the first
     (ledger 58). SVG and PDF keep text editable for a typesetter; TIFF is the raster
-    fallback at ``dpi``. The written files are never opened.
+    fallback at ``dpi``, written as LZW-compressed RGB: matplotlib's own TIFF is
+    uncompressed RGBA, 47 MB for the four-panel summary, above journal upload caps and
+    with the alpha channel journals reject (ledgers 61/M12, 87). The raster is rendered
+    losslessly and flattened, so the pixels are the ones matplotlib drew. The written files
+    are never opened.
 
     Output is byte-reproducible: element ids are salted from a fixed string rather than a
     per-process ``uuid4``, matplotlib's own version is kept out of the file, and the
@@ -181,9 +185,25 @@ def save_publication(
     with mpl.rc_context({"svg.hashsalt": _repro.SVG_HASH_SALT}):
         for fmt in formats:
             out = base.with_name(f"{base.name}.{fmt}")
-            metadata = _repro.VECTOR_METADATA.get(fmt)
-            fig.savefig(out, format=fmt, dpi=dpi, bbox_inches="tight", metadata=metadata)
+            if fmt in ("tif", "tiff"):
+                _save_tiff(fig, out, dpi)
+            else:
+                metadata = _repro.VECTOR_METADATA.get(fmt)
+                fig.savefig(out, format=fmt, dpi=dpi, bbox_inches="tight", metadata=metadata)
             written.append(out)
     if close:
         plt.close(fig)
     return written
+
+
+def _save_tiff(fig: plt.Figure, out: Path, dpi: int) -> None:
+    """``fig`` as an LZW-compressed RGB TIFF at ``dpi`` (ledgers 61/M12, 87)."""
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    fig.savefig(buffer, format="png", dpi=dpi, bbox_inches="tight")
+    buffer.seek(0)
+    with Image.open(buffer) as image:
+        image.convert("RGB").save(out, format="TIFF", compression="tiff_lzw", dpi=(dpi, dpi))

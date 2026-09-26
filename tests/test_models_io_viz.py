@@ -558,3 +558,33 @@ class TestTheBatchColumnsSayWhatTheChecksSay:
             frame = assess_batch([row])
         assert frame.loc[0, "status"] == "ERROR"
         assert "counter_separation_um" in frame.loc[0, "error"]
+
+
+class TestTheJsonIsRfc8259:
+    """Ledger 61/M13, pinned at C5.9. json.dumps(default=str) emitted bare NaN; strict JSON
+    landed with ledger 143 (allow_nan=False). A NaN forced into the report must raise, never
+    reach the output, and ordinary output must parse under a strict parser."""
+
+    @staticmethod
+    def _strict_loads(text):
+        import json
+
+        def refuse(token):
+            raise ValueError(f"non-RFC 8259 constant {token}")
+
+        return json.loads(text, parse_constant=refuse)
+
+    def test_ordinary_output_parses_strictly(self):
+        from neurostim.io.tabular import report_to_json
+
+        calc = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1))
+        assert self._strict_loads(report_to_json(calc))["results"]
+
+    def test_a_forced_nan_raises_rather_than_emitting(self, monkeypatch):
+        from neurostim.io.tabular import report_to_json
+
+        calc = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1))
+        real = SafetyCalculator.report
+        monkeypatch.setattr(SafetyCalculator, "report", lambda self: {**real(self), "shannon_metric": math.nan})
+        with pytest.raises(ValueError, match="JSON compliant"):
+            report_to_json(calc)
