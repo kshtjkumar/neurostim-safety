@@ -29,6 +29,13 @@ the same luminance. Now:
 - McCreery's "some damage" points are triangles, beside the circles and squares;
 - a material bar that fails is hatched.
 
+### `save_publication` keeps a decimal in the file name
+
+`save_publication(fig, "shannon_k1.5")` and `"shannon_k1.8"` both wrote
+`shannon_k1.svg`, so the second silently destroyed the first. Only an image extension is
+replaced now: the first writes `shannon_k1.5.svg`, and `fig.svg` still writes `fig.svg`
+and `fig.pdf`.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

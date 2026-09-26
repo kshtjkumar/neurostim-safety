@@ -501,3 +501,29 @@ class TestPassAndFailDifferInMoreThanColour:
             hatched = bool(bar.get_hatch())
             assert hatched == (bar.get_width() < applied), (bar.get_width(), bar.get_hatch())
         plt.close("all")
+
+
+class TestSavePublicationKeepsDecimalNames:
+    """Ledger 58 (io-gui H9), C5.4. save_publication stripped whatever followed the last
+    dot, so "shannon_k1.5" and "shannon_k1.8" both wrote shannon_k1.svg and the second
+    destroyed the first."""
+
+    def test_two_decimal_names_do_not_collide(self, tmp_path):
+        from neurostim.viz.style import save_publication, subplots
+
+        written = []
+        for k in ("1.5", "1.8"):
+            fig, _ = subplots()
+            written += save_publication(fig, tmp_path / f"shannon_k{k}", formats=("svg",), close=True)
+        assert [p.name for p in written] == ["shannon_k1.5.svg", "shannon_k1.8.svg"]
+        assert all(p.exists() for p in written)
+
+    def test_a_format_extension_is_still_replaced(self, tmp_path):
+        from neurostim.viz.style import save_publication, subplots
+
+        fig, _ = subplots()
+        written = save_publication(fig, tmp_path / "fig.svg", formats=("svg", "pdf"), close=True)
+        assert [p.name for p in written] == ["fig.svg", "fig.pdf"]
+        fig, _ = subplots()
+        written = save_publication(fig, tmp_path / "k1.5.TIFF", formats=("svg",), close=True)
+        assert [p.name for p in written] == ["k1.5.svg"]

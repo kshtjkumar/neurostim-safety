@@ -147,6 +147,10 @@ def panel_label(ax, label: str, *, dx: float = -0.20, dy: float = 1.09) -> None:
     )
 
 
+IMAGE_EXTENSIONS = frozenset({"svg", "pdf", "tif", "tiff", "png", "eps", "ps", "jpg", "jpeg"})
+"""Suffixes :func:`save_publication` treats as a format to replace, not part of the name."""
+
+
 def save_publication(
     fig: plt.Figure,
     path: str | Path,
@@ -157,8 +161,11 @@ def save_publication(
 ) -> list[Path]:
     """Save a figure in publication formats and return the written paths.
 
-    ``path`` may carry an extension or not; it is stripped and each requested format
-    appended. SVG and PDF keep text editable for a typesetter; TIFF is the raster
+    ``path`` may carry an image extension or not; one it carries is replaced by each
+    requested format. Anything else after a dot is part of the name: ``"shannon_k1.5"``
+    writes ``shannon_k1.5.svg``. It used to be stripped too, so ``"shannon_k1.5"`` and
+    ``"shannon_k1.8"`` both wrote ``shannon_k1.svg`` and the second destroyed the first
+    (ledger 58). SVG and PDF keep text editable for a typesetter; TIFF is the raster
     fallback at ``dpi``. The written files are never opened.
 
     Output is byte-reproducible: element ids are salted from a fixed string rather than a
@@ -166,14 +173,14 @@ def save_publication(
     embedded date follows ``SOURCE_DATE_EPOCH`` when it is set. See :mod:`neurostim._repro`.
     """
     base = Path(path)
-    if base.suffix:
+    if base.suffix.lower().lstrip(".") in IMAGE_EXTENSIONS:
         base = base.with_suffix("")
     base.parent.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
     with mpl.rc_context({"svg.hashsalt": _repro.SVG_HASH_SALT}):
         for fmt in formats:
-            out = base.with_suffix(f".{fmt}")
+            out = base.with_name(f"{base.name}.{fmt}")
             metadata = _repro.VECTOR_METADATA.get(fmt)
             fig.savefig(out, format=fmt, dpi=dpi, bbox_inches="tight", metadata=metadata)
             written.append(out)
