@@ -78,8 +78,9 @@ produced sentences such as:
 The applied value keeps round-to-nearest. It now gains digits only until it reads above
 the printed bound (`_limits.format_exceeding`). The available compliance voltage is a
 bound, so it now floors at three significant figures like the other limits: "10.00 V
-available" reads "10.0 V available". The PDF's charge density and Shannon k rows follow
-the same rule.
+available" reads "10.0 V available". It floors in the PASS and CAUTION summaries and the
+detail too ("0.83 V of 14.5 V", not "of 14.52 V" for 14.5171 V). The PDF's charge density
+and Shannon k rows follow the same rule.
 
 ### Every citation the PDF names is in its bibliography
 

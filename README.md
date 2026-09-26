@@ -52,7 +52,7 @@ Limiting current: 20.00 uA (Microelectrode charge/phase)
 [         FAIL] Microelectrode charge/phase: 16 nC/phase exceeds the 4 nC/phase microelectrode damage threshold
 [         FAIL] Chronic degradation: 56.59 uC/cm^2 exceeds the 50 uC/cm^2 platinum dissolution threshold
 [         PASS] Charge balance: biphasic, fully charge-balanced
-[      CAUTION] Compliance voltage: 0.83 V of 10.00 V (8 % used); monopolar single-interface budget assumed -- supply counter_electrode for a two-terminal estimate
+[      CAUTION] Compliance voltage: 0.83 V of 10.0 V (8 % used); monopolar single-interface budget assumed -- supply counter_electrode for a two-terminal estimate
 ```
 
 Each check also prints the conditions its limit was measured under and the

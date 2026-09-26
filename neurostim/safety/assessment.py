@@ -1937,11 +1937,16 @@ def _compliance_check(result: compliance_mod.ComplianceResult) -> Check:
             "; monopolar single-interface budget assumed -- supply counter_electrode "
             "for a two-terminal estimate"
         )
+    # Floored as in the FAIL branch, and the requirement on its side of it: rounding to
+    # nearest printed a compliance of 14.5171 V as "14.52 V" (ledger 168).
+    assert result.available_V is not None  # evaluated, so a compliance was given
+    available_text = format_limit(result.available_V, sig=3)
+    required_text = format_against(result.required_V, available_text, exceeds=False)
     return Check(
         name="Compliance voltage",
         status=status,
         summary=(
-            f"{result.required_V:.2f} V of {result.available_V:.2f} V "
+            f"{required_text} V of {available_text} V "
             f"({result.utilisation * 100:.0f} % used){assumption}"
         ),
         detail=result.describe(),

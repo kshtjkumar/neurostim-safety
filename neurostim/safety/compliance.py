@@ -132,7 +132,7 @@ from ..geometry.volumetric import CylindricalBandElectrode, MicrowireElectrode
 from ..materials import Material, get_material
 from ..protocol import StimProtocol
 from ..units import charge_uC
-from ._limits import floor_to_pass, format_limit
+from ._limits import floor_to_pass, format_against, format_floor_places, format_limit
 from .charge import charge_density_uC_cm2
 from .water_window import (
     drift_headroom_V,
@@ -609,15 +609,25 @@ class ComplianceResult:
                 f"({self.return_phase_current_uA:g} uA x "
                 f"{self.return_phase_width_us:g} us)"
             )
-        if math.isfinite(self.required_V):
+        # The available voltage floored, and the requirement printed on its side of it
+        # (ledger 168); ":.3f" rounded the capacity up.
+        available_text = (
+            None if self.available_V is None else format_floor_places(self.available_V, 3)
+        )
+        if not math.isfinite(self.required_V):
+            lines.append(f"  required      {self.unbounded_reason}")
+        elif available_text is None:
             lines.append(f"  required      {self.required_V:.3f} V")
         else:
-            lines.append(f"  required      {self.unbounded_reason}")
+            required_text = format_against(
+                self.required_V, available_text, exceeds=not self.passes, decimals=3
+            )
+            lines.append(f"  required      {required_text} V")
         if self.available_V is None:
             lines.append("  available     not specified -> check NOT EVALUATED")
         else:
             verdict = "PASS" if self.passes else "INSUFFICIENT"
-            lines.append(f"  available     {self.available_V:.3f} V -> {verdict}")
+            lines.append(f"  available     {available_text} V -> {verdict}")
             if math.isfinite(self.required_V):
                 lines.append(
                     f"  headroom      {self.headroom_V:+.3f} V "

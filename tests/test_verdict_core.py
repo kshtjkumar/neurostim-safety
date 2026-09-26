@@ -4087,3 +4087,42 @@ class TestTheShannonThresholdPrintsAtItsOwnPrecision:
                 if bound != k or (applied > bound) == a.shannon.passes:
                     wrong.append((k, current, row))
         assert not wrong, wrong
+
+
+class TestTheAvailableVoltageFloorsInEveryBranch:
+    """Ledger 168 (Phase 5b review Q1), C6.0. C5.6 floored the stimulator's available
+    voltage in the FAIL summary only; the PASS/CAUTION summary and the detail printed it
+    round-to-nearest, so 491 of 3000 random settings showed it above the value given
+    (compliance_V = 14.5171: "14.35 V of 14.52 V")."""
+
+    def test_random_settings(self):
+        import random
+        import re
+
+        from neurostim import RingElectrode
+
+        rng = random.Random(168)
+        electrode = RingElectrode(330, 270, "Pt")
+        protocol = StimProtocol(80, 200, 130, 1)
+        wrong = []
+        for _ in range(1000):
+            given = round(rng.uniform(0.5, 30.0), rng.choice([2, 3, 4, 5]))
+            check = next(
+                c for c in SafetyCalculator(electrode, protocol, compliance_V=given).assess().checks
+                if c.name == "Compliance voltage"
+            )
+            if check.status is Status.FAIL:
+                m = re.search(r"needs (\S+) V but only (\S+) V available", check.summary)
+                required, available = float(m.group(1)), float(m.group(2))
+                ok = required > available
+            else:
+                m = re.search(r"^(\S+) V of (\S+) V", check.summary)
+                required, available = float(m.group(1)), float(m.group(2))
+                ok = required <= available
+            d = re.search(r"required\s+(\S+) V\n\s+available\s+(\S+) V", check.detail)
+            d_required, d_available = float(d.group(1)), float(d.group(2))
+            ok = ok and available <= given and d_available <= given
+            ok = ok and (d_required > d_available) == (check.status is Status.FAIL)
+            if not ok:
+                wrong.append((given, check.summary))
+        assert not wrong, (len(wrong), wrong[:3])

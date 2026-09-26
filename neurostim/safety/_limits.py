@@ -376,3 +376,19 @@ def format_against(applied: float, bound_text: str, *, exceeds: bool, decimals: 
             return text
     return repr(applied)
 
+
+def format_floor_places(value: float, places: int) -> str:
+    """A bound at ``places`` decimals, rounded down, never above ``value`` once parsed.
+
+    For a capacity printed at fixed places, as the compliance detail prints volts; the
+    ``:.3f`` it used rounded up (ledger 168).
+    """
+    if not math.isfinite(value):
+        return repr(value)
+    quantum = Decimal(1).scaleb(-places)
+    floored = Decimal(value).quantize(quantum, rounding=ROUND_FLOOR)
+    text = f"{floored:.{places}f}"
+    if float(text) > value:
+        text = f"{floored - quantum:.{places}f}"
+    return text
+
