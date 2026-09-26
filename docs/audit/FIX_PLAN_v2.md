@@ -1069,7 +1069,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 54 | HIGH | OK | C4.4 | **FIXED** `889b525`; also carries `counter_electrode` |
 | 55 | HIGH | OK | C5.2 | **FIXED** `6d5ce49`; the calculator's k drawn and named |
 | 56 | HIGH | OK | C5.3 | **FIXED** `2fa4120`; shape and hatch carry pass/fail |
-| 57 | HIGH | OK | C5.8 | |
+| 57 | HIGH | OK | C5.8 | **FIXED** `2450623`; no abort; atomic view; traceback in the pane |
 | 58 | HIGH | OK | C5.4 | **FIXED** `820e21a`; only an image extension is replaced |
 | 59 | HIGH | OK | C4.4 | **FIXED** `889b525` |
 | 60 | HIGH | OK | C4.3 | **FIXED** `8520d84` |
@@ -1089,7 +1089,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 61/M14 | MED | OK | C5.5 | **FIXED** `0aedc2d`; read errors name the file |
 | 62/L1 | LOW | OK | C5.11 | |
 | 62/L2 | LOW | OK | C5.11 | |
-| 62/L3 | LOW | OK | C5.8 | |
+| 62/L3 | LOW | OK | C5.8 | **FIXED** `2450623`; k three decimals; pulse width to 0.001 us |
 | 62/L4 | LOW | OK | C5.11 | |
 | 62/L5 | LOW | OK | C5.11 | |
 | 63 | HIGH | PARTIAL | C0.1, C0.2, C1.10 | coverage sub-claims reconciled in §3; mutation gate in §10 |
@@ -1169,7 +1169,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 123 | LOW | — (found in Phase 2b review, G5) | **P2b docs commit** | **FIXED** `96ccae5`; scheduling: 108 moved to its own commit before C3.1; 113 closed by narrowing the docstring |
 | 124 | LOW | — (found at C3.1) | C4.8 | **FIXED** `a91b5d8` (C4.8; McCreery 2010 is in the library, Weiland 2002 still absent); obtain Weiland 2002 and McCreery 2010 for papers_stim_calc_ref/ and verify the two presets' geometry and tags against them; C4.8 already verifies citations against the PDFs in the library |
 | 125 | LOW | — (found at C3.2) | C5.11 | condition charge.describe()'s perimeter-peak note on the geometry, using `current_density.primary_distribution` |
-| 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | **JSON and audit FIXED** `889b525`; **CSV FIXED** `94e742e` (counter_ columns); GUI at C5.8; the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
+| 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | **JSON and audit FIXED** `889b525`; **CSV FIXED** `94e742e` (counter_ columns); **GUI FIXED** `2450623` (counter group); the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
 | 127 | HIGH | — (found in Phase 3 review, H1) | **C3.7** | **FIXED** `f2b6a0a`; regenerate the FD band table with radial resolution tied to band height, show convergence, cross-check against an independent solve, restate the sphere's accuracy everywhere. MUST land before Phase 4 closes (review condition) |
 | 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | **FIXED** `8520d84`; render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
 | 129 | MED | — (found in Phase 3 review, H3) | **C3.8** | **FIXED** `f072907`; flat-tip microwire with no shaft: correct R, or refuse/flag (a modelling choice, proposed before implementing) |
