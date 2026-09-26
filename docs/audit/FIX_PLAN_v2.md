@@ -1059,11 +1059,11 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 30 | LOW | LISTED-ONLY | C4.1 | **FIXED** `53a0713`; `verified` field + provenance rollup named |
 | 31 | LOW | OK | C6.6 | |
 | 32 | HIGH | TEST-WEAK | C6.3 | pinned to Elwassif 0.8200 K, not to itself; booked once |
-| 33 | HIGH | OK | C6.1 | |
+| 33 | HIGH | OK | C6.1 | **FIXED** `7be04fb`; negative chronaxie refused |
 | 34 | MED | OK | C6.3 | |
 | 35 | MED | OK | C6.4 | |
 | 36 | MED | DOC | C6.4 | measured saturation figures |
-| 37 | MED | OK | C6.1 | |
+| 37 | MED | OK | C6.1 | **FIXED** `7be04fb`; SE and CI reach the caller |
 | 38 | MED | LISTED-ONLY | C6.2 | own commit |
 | 39 | MED | OK | C6.5 | |
 | 40 | MED | OK | C6.5 | |
