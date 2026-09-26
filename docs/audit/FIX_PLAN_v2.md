@@ -1063,14 +1063,14 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 32 | HIGH | TEST-WEAK | C6.3 | pinned to Elwassif 0.8200 K, not to itself; booked once |
 | 33 | HIGH | OK | C6.1 | **FIXED** `7be04fb`; negative chronaxie refused |
 | 34 | MED | OK | C6.3 | |
-| 35 | MED | OK | C6.4 | |
-| 36 | MED | DOC | C6.4 | measured saturation figures |
+| 35 | MED | OK | C6.4 | **FIXED** `52c254f`; time grid set by the physics |
+| 36 | MED | DOC | C6.4 | **FIXED** `52c254f`; clamp warns; saturation documented |
 | 37 | MED | OK | C6.1 | **FIXED** `7be04fb`; SE and CI reach the caller |
 | 38 | MED | LISTED-ONLY | C6.2 | **FIXED** `be646bc`; rank-deficient design refused |
 | 39 | MED | OK | C6.5 | |
 | 40 | MED | OK | C6.5 | |
 | 41 | MED | LISTED-ONLY | C6.5 | moved to the VTA commit |
-| 42 | LOW | OK | C6.4 | |
+| 42 | LOW | OK | C6.4 | **FIXED** `52c254f`; clamp is loud |
 | 43 | LOW | OK | C6.6 | |
 | 44 | LOW | OK | C6.6 | |
 | 45 | LOW | DOC | C4.8 | **FIXED** `a91b5d8`; discrepancy recorded |
