@@ -3918,3 +3918,47 @@ class TestAnExceedanceReadsAsOne:
                 m = re.match(r"(\S+) \(threshold (\S+);", rows["Shannon k"])
                 applied, bound = float(m.group(1)), float(m.group(2))
             assert applied > bound, (name, rows)
+
+
+class TestEveryCitationTheReportNamesResolves:
+    """Ledger 53 (io-gui H4), C5.7. The bibliography was built from a subset of the text
+    the report renders, matched by key or by surname within 40 characters of a year, so
+    "Brummer & Turner's 300-350 uC/cm^2 real-area figure" -- in the Pt material note, with
+    no year -- had no entry although brummer_turner1977 is in the registry."""
+
+    @pytest.mark.parametrize(
+        "calc",
+        [
+            SafetyCalculator(DiscElectrode(500.0, "Pt"), StimProtocol(50, 200, 130, 1)),
+            SafetyCalculator(DiscElectrode(100.0, "SIROF"), StimProtocol(20, 200, 130, 1),
+                             medium="in_vivo", compliance_V=5.0),
+        ],
+    )
+    def test_every_surname_in_the_body_has_an_entry(self, calc, tmp_path):
+        import re
+
+        from neurostim.references import REFERENCES
+
+        text = pdf_text(calc, tmp_path / "report.pdf")
+        body, _, bibliography = text.partition(" References ")
+        assert bibliography, "no References section"
+        listed = set(re.findall(r"\[([a-z0-9_]+)\]", bibliography))
+        missing = []
+        for key, ref in REFERENCES.items():
+            if key == "user_measurement":
+                continue
+            surname = ref.authors.split(",")[0].split()[0]
+            if re.search(rf"\b{re.escape(surname)}\b", body):
+                # Resolved by any listed source with that surname among its authors: "Rose &
+                # Robblee (1990)" names Robblee, whose paper is rose_robblee1990.
+                authored = {
+                    k
+                    for k, r in REFERENCES.items()
+                    if surname in {a.strip().split()[0] for a in r.authors.split(",") if a.strip()}
+                }
+                if not authored & listed:
+                    missing.append((surname, key))
+        assert not missing, missing
+        # "Rose & Robblee (1990)" in the Pt note is rose_robblee1990, not the chapter.
+        if calc.material.key == "Pt":
+            assert "robblee_rose1990_chapter" not in listed and "rose_robblee1990" in listed

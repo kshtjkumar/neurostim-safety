@@ -77,6 +77,16 @@ bound, so it now floors at three significant figures like the other limits: "10.
 available" reads "10.0 V available". The PDF's charge density and Shannon k rows follow
 the same rule.
 
+### Every citation the PDF names is in its bibliography
+
+The bibliography was built from the assessment's own text and matched a source only by
+key, or by surname within 40 characters of its year. "Brummer & Turner's 300-350
+uC/cm^2" in the Pt note therefore had no entry. The scan now also covers everything the
+report renders. A first author named without a year cites that source when no other
+source shares the first author. A surname right after "&" is a second author, so "Rose &
+Robblee (1990)" does not also cite Robblee & Rose's 1990 chapter. Pt reports gain
+Brummer & Turner 1977; no entry is lost.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

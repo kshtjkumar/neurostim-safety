@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import re
 from pathlib import Path
+from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -70,15 +71,44 @@ def _potential_scale(calc: SafetyCalculator) -> str:
     return window.scale if window is not None else "vs the resting potential"
 
 
-def _reference_keys(calc: SafetyCalculator, assessment: SafetyAssessment) -> list[str]:
+def _flowable_text(item: Any) -> str:
+    """The plain text a flowable renders: paragraphs, table cells, grouped content."""
+    if isinstance(item, Paragraph):
+        return item.getPlainText()
+    if isinstance(item, str):
+        return item
+    if isinstance(item, Table):
+        return "\n".join(_flowable_text(cell) for row in item._cellvalues for cell in row)
+    if isinstance(item, KeepTogether):
+        return "\n".join(_flowable_text(part) for part in item._content)
+    return ""
+
+
+def _first_surname(authors: str) -> str:
+    return authors.split(",")[0].split()[0]
+
+
+def _reference_keys(
+    calc: SafetyCalculator, assessment: SafetyAssessment, body: list
+) -> list[str]:
     """Every source this particular report cites, in registry order.
 
-    Built by scanning the assembled text rather than kept as a hand-maintained list.
-    A fixed list goes stale silently: two sources named in the body -- Butterwick's
-    electroporation threshold and Kuncel & Grill's current-distribution result -- were
-    being discussed in real output with no bibliography entry. In a report whose whole
-    claim is traceable provenance, a dangling citation is the one defect that matters
-    most, and it is the kind a human proof-read will miss.
+    Built by scanning the text the report renders -- every flowable of ``body`` -- rather
+    than kept as a hand-maintained list. A fixed list goes stale silently: two sources
+    named in the body -- Butterwick's electroporation threshold and Kuncel & Grill's
+    current-distribution result -- were being discussed in real output with no
+    bibliography entry. In a report whose whole claim is traceable provenance, a dangling
+    citation is the one defect that matters most, and it is the kind a human proof-read
+    will miss.
+
+    The scan used to cover only the assessment's own text, not everything that renders,
+    and a surname named without a year matched nothing, so "Brummer & Turner's 300-350
+    uC/cm^2" in the Pt note had no entry (ledger 53). It now covers both: every flowable
+    of ``body``, and the text of every check, rendered or not, since those are what the
+    numbers rest on. A first author's surname alone now cites the source when no other
+    source shares that first author; where several do, the key or the year decides. A
+    surname right after "&" or "and" is a second author -- "Rose & Robblee (1990)" is
+    rose_robblee1990, not Robblee & Rose's 1990 chapter -- and does not match a year.
     """
     from ..references import REFERENCES
 
@@ -88,8 +118,13 @@ def _reference_keys(calc: SafetyCalculator, assessment: SafetyAssessment) -> lis
             calc.material.describe(),
             calc.material.cic.describe(),
             *(c.detail + c.summary for c in assessment.checks),
+            *(_flowable_text(item) for item in body),
         ]
     )
+    first_authors: dict[str, int] = {}
+    for ref in REFERENCES.values():
+        name = _first_surname(ref.authors)
+        first_authors[name] = first_authors.get(name, 0) + 1
     keys = set(_CORE_REFERENCE_KEYS)
     for key, ref in REFERENCES.items():
         if key == "user_measurement":
@@ -99,9 +134,12 @@ def _reference_keys(calc: SafetyCalculator, assessment: SafetyAssessment) -> lis
         # (2007)". Matching only the key missed every prose citation, which is how the
         # two dangling entries arose. The surname is taken from the reference record
         # rather than written out here, so a new source is picked up automatically.
-        surname = ref.authors.split(",")[0].split()[0]
-        near_year = rf"{re.escape(surname)}[^\n]{{0,40}}{ref.year}"
-        if key in haystack or re.search(near_year, haystack):
+        surname = _first_surname(ref.authors)
+        near_year = rf"(?<!& )(?<!and ){re.escape(surname)}[^\n]{{0,40}}{ref.year}"
+        named_alone = first_authors[surname] == 1 and re.search(
+            rf"\b{re.escape(surname)}\b", haystack
+        )
+        if key in haystack or re.search(near_year, haystack) or named_alone:
             keys.add(key)
     return [k for k in REFERENCES if k in keys]
 
@@ -550,9 +588,10 @@ def build_report(
         story.append(Paragraph("Notes", styles["h2"]))
         story.append(Paragraph(notes.replace("\n", "<br/>"), styles["body"]))
 
+    references = _reference_keys(calc, assessment, story)
     story.append(PageBreak())
     story.append(Paragraph("References", styles["h2"]))
-    for key in _reference_keys(calc, assessment):
+    for key in references:
         story.append(Paragraph(f"[{key}] {cite(key).citation()}", styles["body"]))
         story.append(Spacer(1, 1.2 * mm))
 
