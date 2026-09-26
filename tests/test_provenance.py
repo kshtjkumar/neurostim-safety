@@ -661,8 +661,9 @@ class TestTheDigestCoversEveryConditionAndOldRecordsStillVerify:
 
         record = audit.record(self._calc())
         # G12, changed at C4b.1 (ledger 155): record() now writes version 3, which keeps
-        # version 2's conditions and adds the answer and the model constants.
-        assert record.payload_version == 3
+        # version 2's conditions and adds the answer and the model constants. G12 again
+        # (C5.0, ledger 160): version 4 adds the interval and the by-kind table.
+        assert record.payload_version == 4
         assert set(record.constants_v2) == self.V2_FIELDS
         assert "constants_v2" in record.payload()
         assert record.digest_matches
@@ -739,7 +740,8 @@ class TestTheDigestCoversTheAnswerAndTheModel:
 
         rec = audit.record(self._pt500_in_vivo())
         body = rec.payload()
-        assert rec.payload_version == 3
+        # G12 (C5.0, ledger 160): version 4.
+        assert rec.payload_version == 4
         answer = body["answer"]
         # G12 (C4b.2, ledger 156): 112.84456370652995 at 8.7x, 107.71174812307864 at 35/3.84.
         assert answer["limiting_current_uA"] == 107.71174812307864
@@ -914,3 +916,73 @@ class TestTheFlatReportCarriesTheProvisionalAndIncompleteFlags:
         body = json.loads(report_to_json(self._provisional()))
         assert body["results"]["limit_is_provisional"] is True
         assert body["results"]["limits_incomplete"] == body["limits_incomplete"]
+
+
+class TestTheAnswerCoversTheIntervalAndTheKinds:
+    """Ledgers 160 and 161 (Phase 4b review N1, N2), C5.0. Function bodies are not hashed,
+    so only the answer can see a code change, and the v3 answer left out
+    limiting_current_interval_uA: with shannon.max_current_interval_uA halved, the dbs_3389
+    interval moved from 19949.11-28061.90 to 11464.13-20386.43 uA and a v3 record still
+    reproduced."""
+
+    @staticmethod
+    def _calc():
+        from neurostim.electrodes import electrode
+
+        return SafetyCalculator(
+            electrode("dbs_3389"), StimProtocol(3000.0, 60.0, 130.0, 1.0), compliance_V=10.0
+        )
+
+    @staticmethod
+    def _halve_shannon_band(monkeypatch):
+        from neurostim.safety import shannon
+        from neurostim.uncertainty import Interval
+
+        real = shannon.max_current_interval_uA
+
+        def halved(*args, **kwargs):
+            band = real(*args, **kwargs)
+            return Interval(band.low * 0.5, band.high * 0.5)
+
+        monkeypatch.setattr(shannon, "max_current_interval_uA", halved)
+
+    def test_a_v4_answer_carries_the_interval_and_the_kinds(self):
+        from neurostim import audit
+
+        calc = self._calc()
+        assessment = calc.assess()
+        answer = audit.record(calc).answer
+        interval = assessment.limiting_current_interval_uA
+        assert answer["limiting_current_interval_uA"] == [interval.low, interval.high]
+        assert answer["limiting_current_by_kind"] == {
+            kind: (None if math.isinf(v) else v)
+            for kind, v in assessment.limiting_current_by_kind.items()
+        }
+
+    def test_the_reviewers_mutant_no_longer_reproduces(self, monkeypatch):
+        from neurostim import audit
+
+        rec = audit.record(self._calc())
+        before = self._calc().assess().limiting_current_interval_uA
+        self._halve_shannon_band(monkeypatch)
+        after = self._calc().assess().limiting_current_interval_uA
+        assert (after.low, after.high) != (before.low, before.high)  # the premise
+        ok, diffs = audit.reproduces(rec, self._calc())
+        assert not ok
+        assert any(d.startswith("answer.limiting_current_interval_uA:") for d in diffs), diffs
+
+    def test_a_v3_record_keeps_its_shape_and_reproduces(self):
+        from neurostim import audit
+
+        v3 = audit.record(self._calc(), payload_version=3)
+        assert "limiting_current_interval_uA" not in v3.answer
+        loaded = audit.load(v3.to_json())
+        assert loaded.digest_matches
+        assert audit.reproduces(loaded, self._calc()) == (True, [])
+
+    def test_the_docstring_states_what_old_records_cannot_see(self):
+        from neurostim import audit
+
+        doc = " ".join(audit.reproduces.__doc__.split())
+        assert "cannot see" in doc and "single check's status" in doc
+        assert "version 1 and 2" in doc.lower()

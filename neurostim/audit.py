@@ -169,8 +169,9 @@ def _diff(path: str, a: Any, b: Any) -> list[str]:
     return [f"{path}: {a!r} -> {b!r}"]
 
 
-PAYLOAD_VERSION = 3
-"""The payload :func:`record` writes (ledger 77, S-10; version 3, ledger 155)."""
+PAYLOAD_VERSION = 4
+"""The payload :func:`record` writes (ledger 77, S-10; version 3, ledger 155; version 4,
+ledger 160)."""
 
 MODEL_CONSTANT_MODULES: tuple[str, ...] = (
     "neurostim.data.butterwick2007",
@@ -258,16 +259,19 @@ def _finite_or_none(value: float) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def answer_of(calc: SafetyCalculator) -> dict[str, Any]:
-    """The answer a version 3 digest certifies (ledger 155).
+def answer_of(calc: SafetyCalculator, payload_version: int = PAYLOAD_VERSION) -> dict[str, Any]:
+    """The answer a version 3 or 4 digest certifies (ledgers 155, 160).
 
     The limiting current and mechanism, the overall status, the three flags that qualify
-    the limit, and every check's status, ceiling and provisional flag. An unbounded
-    ceiling is ``None``, as in the strict JSON report.
+    the limit, and every check's status, ceiling and provisional flag. Version 4 adds the
+    limiting current interval over the published ranges and the limit within each check
+    kind: function bodies are not hashed, so a code change in a band provider moved the
+    interval with a version 3 record still reproducing (ledger 160). An unbounded value is
+    ``None``, as in the strict JSON report.
     """
     assessment = calc.assess()
     report = calc.report()
-    return {
+    answer = {
         "limiting_current_uA": report["limiting_current_uA"],
         "limiting_mechanism": report["limiting_mechanism"],
         "status": report["status"],
@@ -283,6 +287,17 @@ def answer_of(calc: SafetyCalculator) -> dict[str, Any]:
             for check in assessment.checks
         },
     }
+    if payload_version >= 4:
+        interval = assessment.limiting_current_interval_uA
+        answer["limiting_current_interval_uA"] = [
+            _finite_or_none(interval.low),
+            _finite_or_none(interval.high),
+        ]
+        answer["limiting_current_by_kind"] = {
+            kind: _finite_or_none(value)
+            for kind, value in assessment.limiting_current_by_kind.items()
+        }
+    return answer
 
 
 def record(
@@ -345,7 +360,7 @@ def record(
     answer: dict[str, Any] = {}
     hashes: dict[str, str] = {}
     if payload_version >= 3:
-        answer = answer_of(calc)
+        answer = answer_of(calc, payload_version)
         hashes = model_constants()
     rec = AuditRecord(
         package_version=__version__,
@@ -394,6 +409,12 @@ def reproduces(original: AuditRecord, calc: SafetyCalculator) -> tuple[bool, lis
     fails and names the value (ledger 155); a key only one side has is not compared. A
     package-version difference is listed beside a failure but is not one by itself; see
     the module docstring.
+
+    What a record can check is what it stored. Version 1 and 2 records compare only their
+    stored ``report()`` keys, so they cannot see a change confined to a single check's
+    status or ceiling -- a Water window going PASS to CAUTION while the headline holds
+    reproduces for them. Version 3 records see every check; version 4 records also see the
+    interval over the published ranges and the limit per check kind (ledgers 160, 161).
     """
     # At the stored record's own payload version, so a version 1 record is checked the way
     # it was made (ledger 77, S-10).

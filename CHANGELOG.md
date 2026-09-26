@@ -41,6 +41,13 @@ inputs and the material record, not the results or the model's other constants.
 - Differences now read recorded → now, walked to the leaf.
 - A package-version difference alone is not a failure. It is listed beside a real one.
 - Records of versions 1 and 2 still load and verify.
+- **Payload version 4**, which `record()` now writes, adds the limiting-current interval
+  over the published ranges and the limit per check kind. The digest hashes constants,
+  not function bodies, so before this a code change in a band provider could move the
+  interval while a version 3 record still reproduced.
+- A version 3 record keeps its shape and still reproduces.
+- Version 1 and 2 records store only `report()`, so they cannot see a change confined to
+  one check. The `reproduces` docstring now says so.
 
 ### The limiting current was 7.07x too high, and is corrected
 
