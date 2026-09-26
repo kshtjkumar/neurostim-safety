@@ -588,3 +588,86 @@ class TestTheJsonIsRfc8259:
         monkeypatch.setattr(SafetyCalculator, "report", lambda self: {**real(self), "shannon_metric": math.nan})
         with pytest.raises(ValueError, match="JSON compliant"):
             report_to_json(calc)
+
+
+class TestTheFemImportPathCatchesItsOwnMistakes:
+    """Ledgers 61/M5-M9 (io-gui), C5.10. compare_with_point_source evaluated nothing -- a
+    potential column off by 1e6 came back as a clean frame with ratio 1e6; _match_column
+    took the first alias with no ambiguity check; duplicate positions loaded silently; one
+    NaN turned describe() into "nan to nan V"; and save_field/load_field dropped
+    current_uA and note."""
+
+    @staticmethod
+    def _point_source_field(scale=1.0, current_uA=100.0):
+        from neurostim.io.fem import FEMField
+        from neurostim.models.field import potential_V
+
+        rng = np.random.default_rng(3)
+        direction = rng.normal(size=(60, 3))
+        direction /= np.linalg.norm(direction, axis=1, keepdims=True)
+        r = np.geomspace(50.0, 5000.0, 60)
+        points = direction * r[:, None]
+        v = np.asarray(potential_V(current_uA, r, 0.35)) * scale
+        return FEMField(points, v, current_uA=current_uA)
+
+    def test_m5_a_million_fold_potential_is_rejected(self):
+        from neurostim.io.fem import compare_with_point_source
+
+        good = compare_with_point_source(self._point_source_field(), 100.0)
+        assert np.allclose(good["ratio"], 1.0)
+        with pytest.raises(ValueError, match="unit"):
+            compare_with_point_source(self._point_source_field(scale=1e6), 100.0)
+        # The check can be waived when a large far-field deviation is the point.
+        waived = compare_with_point_source(
+            self._point_source_field(scale=1e6), 100.0, check_scale=False
+        )
+        assert np.allclose(waived["ratio"], 1e6)
+
+    def test_m6_an_ambiguous_column_raises(self, tmp_path):
+        import pandas as pd
+
+        from neurostim.io import load_field
+
+        csv = tmp_path / "both.csv"
+        pd.DataFrame(
+            {"x": [0, 1e-4, 0, 1e-4, 2e-4], "y": [0, 0, 1e-4, 1e-4, 2e-4],
+             "z": [0, 0, 0, 1e-4, 2e-4], "x_um": [0, 100, 0, 100, 200],
+             "y_um": [0, 0, 100, 100, 200], "z_um": [0, 0, 0, 100, 200],
+             "V": [1.0, 0.5, 0.5, 0.3, 0.2]}
+        ).to_csv(csv, index=False)
+        with pytest.raises(ValueError, match="ambiguous"):
+            load_field(csv)
+
+    def test_m7_duplicate_positions_raise(self):
+        from neurostim.io.fem import FEMField
+
+        points = np.random.default_rng(4).uniform(-100, 100, size=(10, 3))
+        with pytest.raises(ValueError, match="duplicate"):
+            FEMField(np.vstack([points, points]), np.arange(20.0))
+
+    def test_m8_one_nan_does_not_collapse_describe(self):
+        from neurostim.io.fem import FEMField
+
+        points = np.random.default_rng(5).uniform(-100, 100, size=(10, 3))
+        v = np.linspace(0.1, 1.0, 10)
+        v[3] = np.nan
+        text = FEMField(points, v).describe()
+        assert "nan to nan" not in text
+        assert "0.1 to 1 V" in text and "1 non-finite" in text
+        points[2, 0] = np.nan
+        lo, hi = FEMField(points, np.linspace(0.1, 1.0, 10)).bounds_um
+        assert np.all(np.isfinite(lo)) and np.all(np.isfinite(hi))
+
+    def test_m9_current_and_note_round_trip(self, tmp_path):
+        from neurostim.io.fem import FEMField, load_field, save_field
+
+        points = np.random.default_rng(6).uniform(-500, 500, size=(20, 3))
+        original = FEMField(points, np.ones(20), current_uA=250.0, note="COMSOL run 7")
+        path = save_field(original, tmp_path / "field.npz")
+        reloaded = load_field(path)
+        assert reloaded.current_uA == 250.0 and reloaded.note == "COMSOL run 7"
+        assert load_field(path, current_uA=250.0).current_uA == 250.0
+        with pytest.raises(ValueError, match="250"):
+            load_field(path, current_uA=100.0)
+        unrecorded = save_field(FEMField(points, np.ones(20)), tmp_path / "none.npz")
+        assert load_field(unrecorded).current_uA is None

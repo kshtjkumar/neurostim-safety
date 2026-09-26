@@ -107,6 +107,20 @@ summary. That is above journal upload caps, and journals reject an alpha channel
 TIFF. It is now LZW-compressed RGB, 0.93 MB for the same figure, with the same pixels.
 A test also pins that the JSON export never emits `NaN`: a NaN raises instead.
 
+### The FEM import catches its own mistakes
+
+- `compare_with_point_source` is now a check as well as a table. A potential column off
+  by 10⁶ used to return a clean frame with every ratio at 10⁶. It now raises when the
+  far-field median ratio is off by more than a decade, naming the likely unit mistake.
+  `check_scale=False` waives the check.
+- A file carrying two columns for one quantity (`x` and `x_um`) raises instead of
+  silently taking the first.
+- Duplicate positions raise.
+- One NaN no longer turns `describe()` into "potential nan to nan V". The range ignores
+  non-finite values and says how many there are, and `bounds_um` does the same.
+- `save_field` records the note, and `load_field` reads the saved `current_uA` and note
+  back. A `current_uA` passed at load that disagrees with the saved one raises.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

@@ -224,8 +224,13 @@ anisotropy or encapsulation, import a finite element solution:
 from neurostim.io import load_field, compare_with_point_source
 
 field = load_field("comsol_export.csv", current_uA=100, position_scale_to_um=1e6)
-compare_with_point_source(field, current_uA=100)     # sanity-check units and validity
+compare_with_point_source(field, current_uA=100)     # raises on a unit-scale mistake
 ```
+
+`compare_with_point_source` raises when the far-field ratio to the point source is off by
+more than a decade, which is what a potential in mV or positions in metres produce. Pass
+the `electrode` the field was solved for, so that a planar electrode is compared against
+the half-space source.
 
 Solver-native binary formats are deliberately unsupported — a CSV export cannot be
 silently misparsed by a version mismatch.

@@ -43,11 +43,18 @@ _POTENTIAL_ALIASES = ("v", "v_v", "potential", "potential_v", "phi", "voltage", 
 
 
 def _match_column(columns: list[str], candidates: tuple[str, ...]) -> str | None:
+    """The one column naming this quantity, ``None`` if none does.
+
+    More than one raises: a file carrying both ``x`` (metres) and ``x_um`` silently took
+    the metre columns and read positions of 0 to 0.0003 um (ledger 61/M6).
+    """
     lowered = {c.strip().lower(): c for c in columns}
-    for candidate in candidates:
-        if candidate in lowered:
-            return lowered[candidate]
-    return None
+    found = [lowered[candidate] for candidate in candidates if candidate in lowered]
+    if len(found) > 1:
+        raise ValueError(
+            f"ambiguous columns {found}: each names the same quantity; drop all but one"
+        )
+    return found[0] if found else None
 
 
 @dataclass
@@ -77,6 +84,14 @@ class FEMField:
                 f"need at least 4 points to interpolate a 3-D field, "
                 f"got {self.points_um.shape[0]}"
             )
+        # Two samples at one position with different potentials leave the interpolant an
+        # arbitrary blend of them (ledger 61/M7).
+        unique = np.unique(self.points_um, axis=0).shape[0]
+        if unique < self.points_um.shape[0]:
+            raise ValueError(
+                f"{self.points_um.shape[0] - unique} duplicate position(s) among "
+                f"{self.points_um.shape[0]} points; a field has one potential per point"
+            )
 
     @property
     def n_points(self) -> int:
@@ -85,8 +100,11 @@ class FEMField:
 
     @property
     def bounds_um(self) -> tuple[np.ndarray, np.ndarray]:
-        """Axis-aligned bounding box of the sampled region."""
-        return self.points_um.min(axis=0), self.points_um.max(axis=0)
+        """Axis-aligned bounding box of the sampled region, ignoring non-finite positions.
+
+        A single NaN position used to turn the whole box into NaN (ledger 61/M8).
+        """
+        return np.nanmin(self.points_um, axis=0), np.nanmax(self.points_um, axis=0)
 
     def interpolate_V(
         self, query_points_um: np.ndarray, *, method: str = "linear"
@@ -147,12 +165,18 @@ class FEMField:
     def describe(self) -> str:
         """Multi-line summary."""
         lo, hi = self.bounds_um
+        # nan-aware, with the count beside it: one NaN printed "potential nan to nan V",
+        # destroying the diagnostic the load_field docstring points at (ledger 61/M8).
+        bad_v = int(np.count_nonzero(~np.isfinite(self.potential_V)))
+        bad_p = int(np.count_nonzero(~np.isfinite(self.points_um).all(axis=1)))
         lines = [
             f"FEM field: {self.n_points} points from {self.source or 'unknown source'}",
             f"  bounds x [{lo[0]:g}, {hi[0]:g}] um, "
-            f"y [{lo[1]:g}, {hi[1]:g}] um, z [{lo[2]:g}, {hi[2]:g}] um",
-            f"  potential {self.potential_V.min():.4g} to "
-            f"{self.potential_V.max():.4g} V",
+            f"y [{lo[1]:g}, {hi[1]:g}] um, z [{lo[2]:g}, {hi[2]:g}] um"
+            + (f" ({bad_p} non-finite position(s))" if bad_p else ""),
+            f"  potential {np.nanmin(self.potential_V):.4g} to "
+            f"{np.nanmax(self.potential_V):.4g} V"
+            + (f" ({bad_v} non-finite value(s))" if bad_v else ""),
         ]
         if self.current_uA is not None:
             lines.append(f"  solved at {self.current_uA:g} uA")
@@ -182,9 +206,24 @@ def load_field(
     if not p.exists():
         raise FileNotFoundError(f"No such field export: {p}")
 
+    note = ""
     if p.suffix.lower() == ".npz":
         with np.load(p) as data:
             keys = set(data.files)
+            # What save_field recorded comes back with the field; a current passed here
+            # that disagrees with it is refused rather than silently preferred
+            # (ledger 61/M9).
+            if "current_uA" in keys:
+                saved = float(np.asarray(data["current_uA"]).ravel()[0])
+                if math.isfinite(saved):
+                    if current_uA is not None and current_uA != saved:
+                        raise ValueError(
+                            f"{p.name} was saved at current_uA = {saved:g}; "
+                            f"got current_uA = {current_uA:g}"
+                        )
+                    current_uA = saved
+            if "note" in keys:
+                note = str(data["note"])
             if {"points_um", "potential_V"} <= keys:
                 points = data["points_um"]
                 potential = data["potential_V"]
@@ -223,6 +262,7 @@ def load_field(
         potential_V=potential,
         source=str(p),
         current_uA=current_uA,
+        note=note,
     )
 
 
@@ -235,6 +275,7 @@ def save_field(field: FEMField, path: str | Path) -> Path:
         points_um=field.points_um,
         potential_V=field.potential_V,
         current_uA=np.array([np.nan if field.current_uA is None else field.current_uA]),
+        note=np.array(field.note),
     )
     return out
 
@@ -246,6 +287,7 @@ def compare_with_point_source(
     *,
     min_distance_um: float = 1.0,
     electrode: Electrode | None = None,
+    check_scale: bool = True,
 ) -> pd.DataFrame:
     """Compare an imported field against the analytic point-source solution.
 
@@ -258,6 +300,13 @@ def compare_with_point_source(
     full-space point source, and a planar electrode compared against the full-space one
     reads a spurious factor of two far out (physics m4). ``None`` compares against a
     full-space point source.
+
+    With ``check_scale`` (the default) the comparison is also a verdict: when the median
+    ratio over the farther half of the points is off by more than a factor of
+    :data:`SCALE_TOLERANCE`, it raises, naming the likely unit mistake. It used to
+    return a clean frame with every ratio at 1e6 for a potential column off by a million
+    (ledger 61/M5). Pass ``check_scale=False`` when a large far-field deviation is what
+    you are looking at.
     """
     from ..models.field import potential_V
 
@@ -275,7 +324,7 @@ def compare_with_point_source(
     fem = field.potential_V[keep]
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio = np.where(analytic != 0, fem / analytic, np.nan)
-    return pd.DataFrame(
+    table = pd.DataFrame(
         {
             "distance_um": r_keep,
             "fem_V": fem,
@@ -283,3 +332,21 @@ def compare_with_point_source(
             "ratio": ratio,
         }
     ).sort_values("distance_um", ignore_index=True)
+    if check_scale:
+        far = table["ratio"].to_numpy()[len(table) // 2 :]
+        median = float(np.nanmedian(far)) if np.isfinite(far).any() else math.nan
+        if not (math.isfinite(median) and 1.0 / SCALE_TOLERANCE <= median <= SCALE_TOLERANCE):
+            raise ValueError(
+                f"far-field FEM/point-source ratio has median {median:.3g}, outside "
+                f"1/{SCALE_TOLERANCE:g} to {SCALE_TOLERANCE:g}: a unit-scale mistake is "
+                f"likely (potential in mV rather than V, positions in m rather than um -- "
+                f"see load_field's position_scale_to_um), or a different current; pass "
+                f"check_scale=False if the deviation is real"
+            )
+    return table
+
+
+SCALE_TOLERANCE = 10.0
+"""How far the far-field median ratio may stray from 1 before :func:`compare_with_point_source`
+calls it a unit mistake: a decade, well outside any real far-field departure from the
+homogeneous model and well inside the 1e3 and 1e6 factors unit slips produce."""
