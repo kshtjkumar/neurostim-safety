@@ -77,6 +77,7 @@ Known limits of this model, stated plainly
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -434,8 +435,14 @@ def pennes_transient_sphere(
     and clamping the outer boundary at radius ``R`` depresses the surface temperature by
     exactly the factor ``(1 - a/R)``. ``domain_extent_factor`` therefore defaults to 12
     penetration depths when perfused and to 400 source radii when not, the latter
-    keeping the truncation error near 0.25 %. Increase it if you need better, or compare
-    against the analytic solution, which assumes an unbounded medium.
+    keeping the truncation error near 0.25 %. Increasing it helps only while the grid
+    fits in ``max_cells``: past that the cells coarsen, the added domain goes unresolved,
+    and the error saturates near 0.075 % -- a :class:`ThermalResolutionWarning` says so,
+    and ``max_cells`` can be raised (ledger 36). Or compare against the analytic
+    solution, which assumes an unbounded medium.
+
+    The time step is set by the physics, not by the other times requested: a sample at
+    ``t`` is the same whatever else is asked for (ledger 35).
     """
     from scipy.linalg import solve_banded
 
@@ -472,6 +479,17 @@ def pennes_transient_sphere(
     dr = a / cells_per_radius
     n = round(extent / dr) + 1
     if n > max_cells:
+        # Loudly: the clamp used to be silent, and it is why a larger
+        # domain_extent_factor stops helping (ledgers 36, 42).
+        warnings.warn(
+            f"the grid needs {n} cells for {cells_per_radius} per radius over "
+            f"{extent * 1e3:.3g} mm but max_cells is {max_cells}; using {max_cells} "
+            f"({extent / (max_cells - 1) / a:.3g} radii per cell's worth, "
+            f"{a / (extent / (max_cells - 1)):.3g} cells per radius). Raise max_cells "
+            f"for the resolution asked for",
+            ThermalResolutionWarning,
+            stacklevel=2,
+        )
         n = max_cells
         dr = extent / (n - 1)
     r = a + dr * np.arange(n)
@@ -482,68 +500,52 @@ def pennes_transient_sphere(
     ghost_source = a * flux_in / kappa
 
     # Backward Euler on du/dt = alpha u'' - beta u, tridiagonal in banded storage.
-    max_t = float(times.max())
-    n_steps = max(200, times.size * 20)
-    dt = max_t / n_steps if max_t > 0 else 1.0
+    #
+    # The step grows with time, dt = STEP_FRACTION * (t + t0), on a grid set by the
+    # physics alone: t0 is a hundredth of the diffusion time a^2/alpha. It used to be the
+    # largest requested time over a fixed step count, so an early sample depended on the
+    # others requested with it -- t = 1e-3 s read -0.1 % alone and -15.0 % inside
+    # logspace(-3, 3.5, 60) (ledger 35). A requested time is reached by shortening the
+    # step that would pass it.
+    t0 = 0.01 * a**2 / alpha
 
-    lam = alpha * dt / dr**2
-    lower = np.full(n, -lam)
-    diag = np.full(n, 1.0 + 2.0 * lam + beta * dt)
-    upper = np.full(n, -lam)
-
-    # i = 0: eliminate the ghost node u_{-1} = u_1 - 2*dr*(u_0/a - ghost_source).
-    diag[0] = 1.0 + 2.0 * lam + beta * dt + 2.0 * lam * dr / a
-    upper[0] = -2.0 * lam
-    rhs_boundary = 2.0 * lam * dr * ghost_source
-
-    # i = n-1: clamped to baseline.
-    diag[-1] = 1.0
-    lower[-1] = 0.0
-
-    ab = np.zeros((3, n))
-    ab[0, 1:] = upper[:-1]
-    ab[1, :] = diag
-    ab[2, :-1] = lower[1:]
+    def step_once(u: np.ndarray, step: float) -> np.ndarray:
+        lam = alpha * step / dr**2
+        ab = np.zeros((3, n))
+        ab[0, 1:] = -lam
+        ab[1, :] = 1.0 + 2.0 * lam + beta * step
+        ab[2, :-1] = -lam
+        # i = 0: eliminate the ghost node u_{-1} = u_1 - 2*dr*(u_0/a - ghost_source).
+        ab[1, 0] += 2.0 * lam * dr / a
+        ab[0, 1] = -2.0 * lam
+        # i = n-1: clamped to baseline.
+        ab[1, -1] = 1.0
+        ab[2, -2] = 0.0
+        rhs = u.copy()
+        rhs[0] += 2.0 * lam * dr * ghost_source
+        rhs[-1] = 0.0
+        return solve_banded((1, 1), ab, rhs)
 
     u = np.zeros(n)
     out = np.zeros_like(times)
-    order = np.argsort(times)
-    idx = 0
     t = 0.0
-
-    while idx < times.size and times[order[idx]] <= 0:
-        out[order[idx]] = 0.0
-        idx += 1
-
-    while idx < times.size:
-        target = times[order[idx]]
-        while t < target - 1e-12:
-            step = min(dt, target - t)
-            if not math.isclose(step, dt, rel_tol=1e-9):
-                lam_s = alpha * step / dr**2
-                d = np.full(n, 1.0 + 2.0 * lam_s + beta * step)
-                d[0] = 1.0 + 2.0 * lam_s + beta * step + 2.0 * lam_s * dr / a
-                d[-1] = 1.0
-                ab_s = np.zeros((3, n))
-                ab_s[0, 1:] = np.full(n - 1, -lam_s)
-                ab_s[0, 1] = -2.0 * lam_s
-                ab_s[1, :] = d
-                ab_s[2, :-1] = np.full(n - 1, -lam_s)
-                ab_s[2, -2] = 0.0
-                rhs = u.copy()
-                rhs[0] += 2.0 * lam_s * dr * ghost_source
-                rhs[-1] = 0.0
-                u = solve_banded((1, 1), ab_s, rhs)
-            else:
-                rhs = u.copy()
-                rhs[0] += rhs_boundary
-                rhs[-1] = 0.0
-                u = solve_banded((1, 1), ab, rhs)
+    for index in np.argsort(times):
+        target = float(times[index])
+        while t < target - 1e-12 * max(target, 1.0):
+            step = min(STEP_FRACTION * (t + t0), target - t)
+            u = step_once(u, step)
             t += step
-        out[order[idx]] = float(u[0] / r[0])
-        idx += 1
+        out[index] = float(u[0] / r[0]) if target > 0 else 0.0
 
     return out
+
+
+STEP_FRACTION = 0.01
+"""Backward-Euler step as a fraction of ``t + t0`` in :func:`pennes_transient_sphere`."""
+
+
+class ThermalResolutionWarning(UserWarning):
+    """The transient grid was clamped to ``max_cells`` (ledgers 36, 42)."""
 
 
 @dataclass(frozen=True)

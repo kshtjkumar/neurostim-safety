@@ -222,6 +222,17 @@ unchanged.
 - A design with every pulse width equal raises. It used to return a rheobase and a
   chronaxie behind a numpy RankWarning.
 
+### The thermal transient depends only on the time asked
+
+`pennes_transient_sphere` took its time step from the latest requested time, so an early
+sample changed with the other times requested alongside it. At t = 1 ms the error was
+−0.1 % alone and −15.0 % inside a 60-point sweep. The step now grows with time on a grid
+set by the diffusion time alone, so a sample reads the same whatever else is asked for.
+The earliest point of the thermal figure's default grid (0.1 s) rises by 15 % to its
+converged value. A grid clamped to `max_cells` now raises `ThermalResolutionWarning`
+instead of silently coarsening; that clamp is why a larger `domain_extent_factor` stopped
+helping.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

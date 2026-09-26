@@ -853,3 +853,25 @@ class TestARankDeficientDesignIsRefused:
                 sd.fit_weiss(np.array([100.0, 100.0, 100.0]), np.array([40.0, 41.0, 39.0]))
             with pytest.raises(ValueError, match="distinct pulse widths"):
                 sd.fit_lapicque(np.array([100.0, 100.0, 100.0]), np.array([40.0, 41.0, 39.0]))
+
+
+class TestTheTransientDependsOnlyOnTheTimeAsked:
+    """Ledgers 35, 36 and 42, C6.4. The time step was the largest requested time over a
+    fixed step count, so an early sample depended on the others requested with it:
+    t = 1e-3 s alone read -0.1 % against the analytic solution, and -15.0 % inside
+    logspace(-3, 3.5, 60). max_cells clamped the grid silently."""
+
+    def test_one_time_alone_and_among_others_agree(self):
+        alone = thermal.pennes_transient_sphere(1e-3, 500.0, np.array([1e-3]))[0]
+        among = thermal.pennes_transient_sphere(1e-3, 500.0, np.logspace(-3, 3.5, 60))[0]
+        assert abs(among / alone - 1.0) < 0.01, (alone, among)
+
+    def test_the_long_time_limit_is_the_steady_state(self):
+        rise = thermal.pennes_transient_sphere(1e-3, 500.0, np.array([1e4]))[0]
+        steady = thermal.peak_temperature_rise_K(1e-3, 500.0)
+        assert abs(rise / steady - 1.0) < 0.005, (rise, steady)
+
+    def test_a_clamped_grid_warns(self):
+        """a = 10 um in perfused brain asks for 79006 cells; max_cells is 20000."""
+        with pytest.warns(thermal.ThermalResolutionWarning, match="max_cells"):
+            thermal.pennes_transient_sphere(1e-3, 10.0, np.array([1.0]))
