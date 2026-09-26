@@ -105,10 +105,12 @@ def shannon_safe_operating_area(
 
     if show_data:
         # McCreery et al. (1990) Table I. The line is a fit to these points; drawing it
-        # without them asks the reader to take the separatrix on trust.
+        # without them asks the reader to take the separatrix on trust. Each group has its
+        # own shape as well as its own colour (ledger 56): the two greens and reds read
+        # alike in greyscale and to a deuteranopic reader.
         for group, marker, face, edge, label in (
             (mccreery.undamaged(), "o", "white", STATUS_COLOURS["PASS"], "no damage"),
-            (mccreery.partial(), "o", PALETTE["caution"], PALETTE["caution"], "some damage"),
+            (mccreery.partial(), "^", PALETTE["caution"], PALETTE["caution"], "some damage"),
             (mccreery.damaged(), "s", STATUS_COLOURS["FAIL"], STATUS_COLOURS["FAIL"], "damage"),
         ):
             if not group:
@@ -165,7 +167,8 @@ def shannon_safe_operating_area(
         ax.loglog(
             [status.charge_per_phase_uC],
             [status.charge_density_uC_cm2],
-            marker="o",
+            # Shape as well as colour (ledger 56).
+            marker="o" if status.passes else "X",
             markersize=5,
             markerfacecolor=colour,
             markeredgecolor="white",
@@ -548,7 +551,13 @@ def material_comparison(
     ]
 
     y = np.arange(len(mats))
-    ax.barh(y, limits, color=colours, height=0.62, linewidth=0)
+    bars = ax.barh(y, limits, color=colours, height=0.62, linewidth=0)
+    # A failing bar is hatched as well as red (ledger 56): colour alone does not survive
+    # greyscale printing or a colour-blind reader.
+    for bar, limit in zip(bars, limits, strict=True):
+        if limit < applied:
+            bar.set_hatch("////")
+            bar.set_edgecolor("white")
     ax.axvline(applied, color=PALETTE["ink"], linewidth=1.0)
     ax.annotate(
         f"applied {applied:.3g} µC cm$^{{-2}}$",

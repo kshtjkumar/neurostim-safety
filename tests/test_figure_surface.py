@@ -452,3 +452,52 @@ class TestTheSeparatrixThatDecidedTheVerdictIsDrawn:
         assert not [line for line in ax.get_lines() if "this assessment" in str(line.get_label())]
         assert len(self._separatrix(ax, 1.5)) == 1
         plt.close("all")
+
+
+class TestPassAndFailDifferInMoreThanColour:
+    """Ledger 56 (io-gui H7), C5.3. Pass and fail were carried by colour alone: the Shannon
+    operating point was marker 'o', size 5, either way; material_comparison's bars had no
+    hatch; McCreery's "no damage" and "some damage" were both 'o'. #1a7f37 and #b62324 have
+    near-identical luminance, so greyscale and deuteranopic readers lose all three."""
+
+    @staticmethod
+    def _protocol_point(ax):
+        [line] = [line for line in ax.get_lines() if line.get_label() == "protocol"]
+        return line
+
+    def test_the_operating_point_changes_shape(self):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        passing = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1))
+        failing = SafetyCalculator(DiscElectrode(1000, "Pt"), StimProtocol(8000, 500, 50, 1))
+        assert passing.assess().shannon.passes and not failing.assess().shannon.passes
+        a = self._protocol_point(shannon_safe_operating_area(passing))
+        b = self._protocol_point(shannon_safe_operating_area(failing))
+        assert a.get_marker() != b.get_marker()
+        plt.close("all")
+
+    def test_the_mccreery_groups_have_three_shapes(self):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        ax = shannon_safe_operating_area()
+        markers = {
+            str(line.get_label()): line.get_marker()
+            for line in ax.get_lines()
+            if line.get_label() in ("no damage", "some damage", "damage")
+        }
+        assert len(markers) == 3 and len(set(markers.values())) == 3, markers
+        plt.close("all")
+
+    def test_material_bars_that_fail_are_hatched(self):
+        from neurostim.viz.plots import material_comparison
+
+        electrode, protocol = DiscElectrode(500, "Pt"), StimProtocol(300, 200, 130, 1)
+        applied = protocol.charge_per_phase_uC / electrode.area_cm2
+        ax = material_comparison(electrode, protocol)
+        bars = ax.patches
+        widths = [bar.get_width() for bar in bars]
+        assert any(w >= applied for w in widths) and any(w < applied for w in widths)
+        for bar in bars:
+            hatched = bool(bar.get_hatch())
+            assert hatched == (bar.get_width() < applied), (bar.get_width(), bar.get_hatch())
+        plt.close("all")

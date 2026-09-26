@@ -21,6 +21,14 @@ above the solid 1.5 line was green; at `k = 1.2` a point below it was red. The
 calculator's `k` is now drawn solid and labelled "this assessment", and added when it is
 not one of the reference values. With no calculator the panel is unchanged.
 
+### Pass and fail read in greyscale
+
+Pass and fail were told apart by colour alone, and the green and red in use have nearly
+the same luminance. Now:
+- the operating point is a circle when it passes and an X when it fails;
+- McCreery's "some damage" points are triangles, beside the circles and squares;
+- a material bar that fails is hatched.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,
