@@ -1065,7 +1065,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 55 | HIGH | OK | C5.2 | **FIXED** `6d5ce49`; the calculator's k drawn and named |
 | 56 | HIGH | OK | C5.3 | **FIXED** `2fa4120`; shape and hatch carry pass/fail |
 | 57 | HIGH | OK | C5.8 | |
-| 58 | HIGH | OK | C5.4 | |
+| 58 | HIGH | OK | C5.4 | **FIXED** `820e21a`; only an image extension is replaced |
 | 59 | HIGH | OK | C4.4 | **FIXED** `889b525` |
 | 60 | HIGH | OK | C4.3 | **FIXED** `8520d84` |
 | 61/M1 | MED | OK | C1.1 + C5.11 | headline caveat pulled forward ~30 commits |
