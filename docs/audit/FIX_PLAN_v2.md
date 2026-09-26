@@ -1082,7 +1082,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 44 | LOW | OK | C6.6 | **FIXED** `c2de844`; R > 0 in both |
 | 45 | LOW | DOC | C4.8 | **FIXED** `a91b5d8`; discrepancy recorded |
 | 46 | HIGH | OK | C7.3 | ledger row repaired at C0.5 |
-| 47 | HIGH | OK | C7.2 | |
+| 47 | HIGH | OK | C7.2 | **FIXED** `6287453`; version single-sourced |
 | 48 | CRIT | PARTIAL | C5.1 | **FIXED** `fa01e26` (C5.1 pulled forward into Phase 1; the refusal edge checked again at Phase 5, nothing remained); candidate set rebuilt from the assessment |
 | 49 | CRIT | PARTIAL | C1.3 | GUI, figure and `Interval.describe` added to scope |
 | 50 | HIGH | OK | C5.6 | **FIXED** `707f7c7`; applied reads above its bound |
