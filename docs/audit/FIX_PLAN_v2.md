@@ -1076,9 +1076,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 58 | HIGH | OK | C5.4 | **FIXED** `820e21a`; only an image extension is replaced |
 | 59 | HIGH | OK | C4.4 | **FIXED** `889b525` |
 | 60 | HIGH | OK | C4.3 | **FIXED** `8520d84` |
-| 61/M1 | MED | OK | C1.1 + C5.11 | headline caveat pulled forward ~30 commits |
-| 61/M2 | MED | OK | C5.11 | |
-| 61/M3 | MED | OK | C5.11 | |
+| 61/M1 | MED | OK | C1.1 + C5.11 | **FIXED** `833aae4`; C5.11a |
+| 61/M2 | MED | OK | C5.11 | **FIXED** `833aae4`; C5.11a |
+| 61/M3 | MED | OK | C5.11 | **FIXED** `833aae4`; C5.11a |
 | 61/M4 | MED | OK | C5.5 | **FIXED** `0aedc2d`; failed rows None, BatchRowsFailedWarning, attrs rows_failed |
 | 61/M5 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
 | 61/M6 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
@@ -1148,7 +1148,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 99 | HIGH | — (found in Phase 1b review) | **C2.3a** (`5276a40`) | `limiting_current_uA` returns 0.0 for a zero limit-bearing ceiling while documenting that it returns None whenever no amplitude is safe. Decided: None for a no-amplitude-is-safe FAIL **or** a ceiling ≤ 0.0, each with a reason naming the check. **Landed at C2.3a, not C2.1**: the row was written when C2.1 was the commit widening the refusal, and C2.3 has since opened a second door to the same defect — a continuous train with any unrecovered charge drives the drift ceiling to exactly 0.0 while Charge balance is only CAUTION, so `unsafe_at_any_amplitude` is empty and the surface printed `Limiting current: 0 uA (Water window)`. Carries the `NO_SAFE_AMPLITUDE` named set in the same commit, since both answer the question of what makes the headline refuse |
 | 100 | MEDIUM | — (found in Phase 1b review) | **C2.7** | **FIXED** — the policy warning floors through `format_limit` and is walked for every material × policy × polarity × medium; the stored-constant gate walks the stored ends and polarity sub-ranges and reads `limit_K` from the thermal module. `nominal` is a midpoint rather than a stored constant and is gated at its one render site instead. The `:g` round-trip gate walks two of three `Policy` values and cannot reach a derated quotient, so ledger 96's "structurally safe" claim is untrue of `charge.py:257`. Extend the gate to every policy and polarity, cover derived values, and replace the tautological `renders_exactly(2.0)` literal. Lands with 98 before Phase 2's exit gate |
 | 101 | MED | — (found executing C2.6) | **C2.6b** (`8f85f1e`) | **FIXED** — landed before 98 so every gate after it is plain `pytest -q`. Originally: CI's `pytest -q` fails 8 tests on `from tests import …` in `tests/test_data_model.py`; green only under `python -m pytest`. Must land before Phase 2's exit gate: the failing tests are the ones that close 2, 3 and 99 |
-| 102 | LOW | — (found in Phase 1b review, recorded at C2.7) | **unscheduled** — reported to the team lead | policy warning compares a derated `limit` with an underated `endorsed` under `medium="in_vivo"`; unreachable in the shipped database |
+| 102 | LOW | — (found in Phase 1b review, recorded at C2.7) | **C5.11a** (absorbed at Phase 5 by the lead's instruction) | **FIXED** `833aae4`; in vivo the endorsed end is derated like the limit |
 | 103 | CRIT | — (found in Phase 2 review, F1) | **C2.8** | **FIXED** `f4f08b8`; exact-linear unrecovered charge; drift gated on `is_charge_balanced`; the seed refuses a zero DC. MUST land before Phase 3 |
 | 104 | CRIT | — (found in Phase 2 review, F2) | **C2.8** | **FIXED** `f4f08b8`; removed by the same exact-linear net, which makes the drift clause exactly monotone; sweep over r_a in {0.9,...,1-1e-6} |
 | 105 | HIGH | — (found in Phase 2 review, F3) | **C2.9** | **FIXED** `1fc2cbc`; drift budget carries the excursion riding on the offset; the drift oracle is extended to partial recovery |
@@ -1171,7 +1171,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 122 | LOW | — (found in Phase 2b review, G4) | **P2b docs commit** | **FIXED** `96ccae5`; the README water-window limitation described a pure double-layer capacitance; rewritten to the CIC-derived `C_eff` |
 | 123 | LOW | — (found in Phase 2b review, G5) | **P2b docs commit** | **FIXED** `96ccae5`; scheduling: 108 moved to its own commit before C3.1; 113 closed by narrowing the docstring |
 | 124 | LOW | — (found at C3.1) | C4.8 | **FIXED** `a91b5d8` (C4.8; McCreery 2010 is in the library, Weiland 2002 still absent); obtain Weiland 2002 and McCreery 2010 for papers_stim_calc_ref/ and verify the two presets' geometry and tags against them; C4.8 already verifies citations against the PDFs in the library |
-| 125 | LOW | — (found at C3.2) | C5.11 | condition charge.describe()'s perimeter-peak note on the geometry, using `current_density.primary_distribution` |
+| 125 | LOW | — (found at C3.2) | C5.11 | **FIXED** `833aae4`; uniform note on sphere and hemisphere |
 | 126 | LOW | — (found at C3.5) | C4.4, C5.5, C5.8 | **JSON and audit FIXED** `889b525`; **CSV FIXED** `94e742e` (counter_ columns); **GUI FIXED** `2450623` (counter group); the JSON and audit settings record carry the counter at C4.4 (already in its scope); batch CSV columns at C5.5; a GUI input at C5.8 |
 | 127 | HIGH | — (found in Phase 3 review, H1) | **C3.7** | **FIXED** `f2b6a0a`; regenerate the FD band table with radial resolution tied to band height, show convergence, cross-check against an independent solve, restate the sphere's accuracy everywhere. MUST land before Phase 4 closes (review condition) |
 | 128 | HIGH | — (found in Phase 3 review, H2) | **C4.3** | **FIXED** `8520d84`; render a provisional marker beside the limiting current whenever the binding check (or the cap's binder) is provisional, on describe, PDF, GUI and figure. Written into C4.3's scope (section 5.4) |
