@@ -97,8 +97,11 @@ Brummer & Turner 1977; no entry is lost.
 - The k box has three decimals, so a typed 1.749 is no longer rounded up to 1.75, the
   less conservative direction. The pulse-width box accepts 0.001 µs; a typed 0.02 used
   to become 0.1.
-- A "Counter electrode" group (a disc diameter, a material and the separation) makes the
-  assessment two-terminal, as the library can.
+- A "Counter electrode" group makes the assessment two-terminal, as the library can. The
+  counter has the same geometry as the active electrode, with its own size, material and
+  separation. An early version used a disc, which the library refuses beside a
+  full-space electrode, so the DBS band, the microwire and the sphere showed "Invalid
+  input".
 
 ### The TIFF is one a journal accepts
 

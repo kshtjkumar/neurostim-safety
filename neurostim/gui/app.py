@@ -261,19 +261,25 @@ class SafetyWindow(QMainWindow):
         s_form.addRow("", self.use_compliance)
         layout.addWidget(s_box)
 
-        # A counter electrode, as a disc of its own material, so the window can assess a
-        # two-terminal pair as the library does; off, the budget is monopolar
-        # (ledger 126).
+        # A counter electrode of the same geometry as the active one -- a second 3389 band
+        # beside a DBS band -- with its own size, material and separation, so the window
+        # can assess a two-terminal pair as the library does; off, the budget is
+        # monopolar (ledger 126). It was a fixed disc, which the library refuses beside
+        # a full-space electrode: the band, the microwire and the sphere showed "Invalid
+        # input" (ledger 164). Its size fields follow the shape, at that shape's defaults.
         c_box = QGroupBox("Counter electrode")
         c_form = QFormLayout(c_box)
-        self.use_counter = QCheckBox("Two-terminal (counter disc)")
-        self.counter_diameter = _spin(0.1, 1e6, 2000.0)
+        self.use_counter = QCheckBox("Two-terminal (counter of the same geometry)")
+        self._counter_widgets: dict[str, QDoubleSpinBox] = {}
+        self.counter_container = QWidget()
+        self.counter_form = QFormLayout(self.counter_container)
+        self.counter_form.setContentsMargins(0, 0, 0, 0)
         self.counter_material = QComboBox()
         for material in list_materials():
             self.counter_material.addItem(f"{material.key} - {material.name}", material.key)
         self.counter_separation = _spin(0.1, 1e7, 3000.0)
         c_form.addRow("", self.use_counter)
-        c_form.addRow("Counter diameter (um)", self.counter_diameter)
+        c_form.addRow(self.counter_container)
         c_form.addRow("Counter material", self.counter_material)
         c_form.addRow("Separation, centre to centre (um)", self.counter_separation)
         layout.addWidget(c_box)
@@ -281,7 +287,7 @@ class SafetyWindow(QMainWindow):
         for spin in (
             self.current, self.pulse_width, self.frequency, self.train,
             self.interphase, self.charge_recovery, self.train_duty, self.k_value, self.sigma,
-            self.compliance, self.counter_diameter, self.counter_separation,
+            self.compliance, self.counter_separation,
         ):
             spin.valueChanged.connect(self.recompute)
         for combo in (self.waveform, self.policy, self.counter_material):
@@ -313,12 +319,20 @@ class SafetyWindow(QMainWindow):
             self.dim_form.removeRow(0)
         self._dimension_widgets.clear()
 
+        while self.counter_form.rowCount():
+            self.counter_form.removeRow(0)
+        self._counter_widgets.clear()
+
         _, fields = SHAPES[self.shape_combo.currentText()]
         for name, label, lo, hi, default in fields:
             box = _spin(lo, hi, default)
             box.valueChanged.connect(self.recompute)
             self.dim_form.addRow(label, box)
             self._dimension_widgets[name] = box
+            counter_box = _spin(lo, hi, default)
+            counter_box.valueChanged.connect(self.recompute)
+            self.counter_form.addRow(f"Counter {label[0].lower()}{label[1:]}", counter_box)
+            self._counter_widgets[name] = counter_box
         self.recompute()
 
     # --- result side ---------------------------------------------------------
@@ -390,8 +404,9 @@ class SafetyWindow(QMainWindow):
             tissue_conductivity_S_per_m=self.sigma.value(),
             compliance_V=self.compliance.value() if self.use_compliance.isChecked() else None,
             counter_electrode=(
-                DiscElectrode(
-                    self.counter_diameter.value(), self.counter_material.currentData()
+                cls(
+                    **{name: box.value() for name, box in self._counter_widgets.items()},
+                    material=self.counter_material.currentData(),
                 )
                 if counter
                 else None

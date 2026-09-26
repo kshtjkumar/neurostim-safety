@@ -679,9 +679,13 @@ class TestTheWindowTakesACounterElectrode:
     and the PDF but had no input in the window, which could only assess monopolar."""
 
     def test_the_counter_reaches_the_calculator(self, window):
+        """G12, changed at C5b.2 (ledger 164): the counter was always a disc, set through
+        window.counter_diameter; it now takes the active electrode's geometry, so the
+        active electrode is made a disc and the counter's own diameter field is set."""
         from neurostim import DiscElectrode
 
-        window.counter_diameter.setValue(2000.0)
+        window.shape_combo.setCurrentText("Disc")
+        window._counter_widgets["diameter_um"].setValue(2000.0)
         window.counter_separation.setValue(3000.0)
         window.use_counter.setChecked(True)
         window.recompute()
@@ -697,3 +701,28 @@ class TestTheWindowTakesACounterElectrode:
         window.use_counter.setChecked(False)
         window.recompute()
         assert window._calc is not None and window._calc.counter_electrode is None
+
+
+
+class TestTheCounterMatchesTheActiveGeometry:
+    """Ledger 164 (Phase 5 review P2), C5b.2, per the user's choice: the counter is the
+    same geometry type as the active electrode, with its own size, material and
+    separation. The fixed half-space disc was refused beside every full-space electrode:
+    "Invalid input: counter_electrode is half_space and electrode is full_space" for the
+    DBS band, the microwire and the sphere."""
+
+    @pytest.mark.parametrize("shape", list(SHAPES))
+    def test_every_geometry_takes_a_counter_at_its_defaults(self, window, shape):
+        window.shape_combo.setCurrentText(shape)
+        window.use_counter.setChecked(True)
+        window.recompute()
+        assert window.headline.text() != "Invalid input", window.detail.toPlainText()
+        calc = window._calc
+        assert calc is not None and calc.counter_electrode is not None
+        assert type(calc.counter_electrode) is type(calc.e)
+        assert calc.counter_electrode.environment == calc.e.environment
+
+    def test_the_counter_fields_follow_the_shape(self, window):
+        for shape, (_, fields) in SHAPES.items():
+            window.shape_combo.setCurrentText(shape)
+            assert list(window._counter_widgets) == [name for name, *_ in fields], shape
