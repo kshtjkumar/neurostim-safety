@@ -1130,9 +1130,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 71 | HIGH | OK | C4.5 | **FIXED** `c375476` |
 | 72 | HIGH | OK | C4.6 | **FIXED** `a879ef9`; |
 | 73 | HIGH | OK | C4.6 | **FIXED** `a879ef9`; |
-| 74 | HIGH | OK | C0.4, C7.4 | transcript regenerates from C0.4 on every numeric commit |
+| 74 | HIGH | OK | C0.4, C7.4 | **FIXED** `86a79f9`; PEDOT row from the database |
 | 75 | HIGH | OK | C4.8 | **FIXED** `a91b5d8`; |
-| 76 | HIGH | OK | C7.4 | exit criterion 6 restated so it no longer conflicts |
+| 76 | HIGH | OK | C7.4 | **FIXED** `86a79f9`; no flag claimed that does not fire |
 | 77/S-6 | MED | OK | C4.7b | **FIXED** `7bf8cdf`; Butterwick exponent −0.48 vs the re-fit −0.4429 |
 | 77/S-7 | MED | OK | C4.7a | **FIXED** `3a31f3a`; AIROF derating evidence string |
 | 77/S-8 | MED | OK | C4.7b | **FIXED** `7bf8cdf`; SIROF 2–4 vs Kane's 2–3 |
@@ -1150,7 +1150,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 78/S-21 | LOW | OK | C4.9 | **FIXED** `889b525` (C4.4, found independently there); |
 | 78/S-22 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b); derived AIROF area and Schaldach figures named as derived |
 | 78/S-23 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b, contact diameter attributed to the manufacturer) and `17bd45f` (C4.9c, decision (a): 1.3803 mm kept as `SOURCE_RADIUS_M`, equal-area derivation documented, not stated in the paper); **decision (a) reversed** at `d787c06` (C6.3, user decision (B)): `SOURCE_RADIUS_M` is the equal-area sphere, 690.11 µm |
-| 78/S-24 | LOW | OK | C7.4 | six stale README claims |
+| 78/S-24 | LOW | OK | C7.4 | **FIXED** `86a79f9`; six stale README claims corrected; test |
 | 78/S-25 | LOW | OK | C4.9 | **FIXED** `702769a` (C4.9b); four via-citation reference entries |
 | 84 | HIGH | — (found in Phase 0) | C1.5 | **FIXED** `e704d8a` (row marked at Phase 5); D3(i) restated; `unsafe_at_any_amplitude` + the rendering contract. Interacts with C2.1, C2.3 and C5.1, each of which carries an assertion |
 | 85 | MED | — (found in Phase 0) | C0.3 | **FIXED** — `datetime.now` removed from the PDF byline |
