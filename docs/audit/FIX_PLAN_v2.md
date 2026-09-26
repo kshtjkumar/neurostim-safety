@@ -1225,7 +1225,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 166 | LOW | — (Phase 5 review P4) | **C5b.4** | **FIXED** `8be8dfe`; text clear of lines, bars and labels |
 | 167 | LOW | — (Phase 5 review P5) | **C5b.5** | **FIXED** `8d95ee1`; status/error persist; write_csv warns |
 | 168 | LOW | — (Phase 5b review Q1) | **C6.0** | **FIXED** `5072c7a`; available voltage floors in every branch |
-| 169 | LOW | — (Phase 5b review Q2) | **C6.0** | Shannon label off McCreery points; not-applied note clear of the caption |
+| 169 | LOW | — (Phase 5b review Q2) | **C6.0** | **FIXED** `76e1f7e`; label clear of data and caption |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
