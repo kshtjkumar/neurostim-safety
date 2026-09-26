@@ -74,13 +74,23 @@ RC_PARAMS = {
     "font.family": "sans-serif",
     "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
     "svg.fonttype": "none",
+    # mathtext in the body typeface: unset, every $...$ label fell back to DejaVu Sans
+    # beside Arial, two typefaces in one figure (ledger 61/M11).
+    "mathtext.fontset": "custom",
+    "mathtext.rm": "Arial",
+    "mathtext.sf": "Arial",
+    "mathtext.it": "Arial:italic",
+    "mathtext.bf": "Arial:bold",
     "pdf.fonttype": 42,
     "ps.fonttype": 42,
     "font.size": 7,
     "axes.labelsize": 7,
     "axes.titlesize": 7.5,
-    "xtick.labelsize": 6.5,
-    "ytick.labelsize": 6.5,
+    # 7.2, not 6.5: the log axes label their decades as mathtext powers of ten, whose
+    # superscripts render at 0.7 of this size -- 4.55 pt at 6.5, below the 5 pt floor; at
+    # 7.2 they are 5.04 (ledger 61/M11).
+    "xtick.labelsize": 7.2,
+    "ytick.labelsize": 7.2,
     "legend.fontsize": 6.5,
     "axes.spines.right": False,
     "axes.spines.top": False,

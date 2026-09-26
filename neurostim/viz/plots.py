@@ -136,7 +136,9 @@ def shannon_safe_operating_area(
     # k = 1.5 line was coloured as passing, and the line it passed against was not there.
     decided = calc.k if calc is not None else None
     solid = decided if decided is not None else shannon_mod.K_SHANNON
-    lines = [(k, colour) for k, colour in zip(k_values, greys, strict=False)]
+    # Every requested k is drawn, the greys cycling: zip against the three greys used to
+    # drop a fourth and later k silently (ledger 62/L1).
+    lines = [(k, greys[i % len(greys)]) for i, k in enumerate(k_values)]
     if decided is not None and not any(math.isclose(k, decided) for k, _ in lines):
         lines.append((decided, PALETTE["ink"]))
     for k, colour in lines:
@@ -189,7 +191,9 @@ def shannon_safe_operating_area(
             )
 
     ax.set_xlabel("Charge per phase, $Q$ (µC per phase)")
-    ax.set_ylabel("Charge density, $Q/A$ (µC cm$^{-2}$ per phase)")
+    # Units in plain text, not mathtext superscripts: a superscript renders at 0.7 of its
+    # base size, below the 5 pt journal floor, and in a second typeface (ledger 61/M11).
+    ax.set_ylabel("Charge density, $Q/A$ (µC/cm² per phase)")
     ax.set_title("Shannon safe operating area", pad=4)
     ax.legend(loc="upper right", handlelength=1.6, fontsize=5.4, ncol=1)
     ax.text(
@@ -250,8 +254,13 @@ def current_limit_sweep(
     ceilings = [
         (check.name, check.ceiling_uA)
         for check in assessment.checks
-        if check.name in LIMIT_BEARING and math.isfinite(check.ceiling_uA)
+        if check.name in LIMIT_BEARING
+        and math.isfinite(check.ceiling_uA)
+        and check.ceiling_uA > 0.0
     ]
+    # A zero ceiling cannot be drawn on a log axis: it sat at y = 0, invisible, with its
+    # legend entry beside the visible ones (ledger 116). The refusal sentence below names
+    # it -- "Water window permits no current at all" -- so it is left out of the lines.
 
     if currents_uA is None:
         highest = max((ceiling for _, ceiling in ceilings), default=protocol.current_uA)
@@ -416,7 +425,7 @@ def radial_field_profile(
         color=PALETTE["accent"],
         linestyle="--",
     )
-    ax2.set_ylabel("Field (V m$^{-1}$)", color=PALETTE["accent"])
+    ax2.set_ylabel("Field (V/m)", color=PALETTE["accent"])
     ax2.tick_params(axis="y", colors=PALETTE["accent"])
 
     # Potential falls as 1/r and field as 1/r^2, but independent autoscaling on twin
@@ -431,7 +440,7 @@ def radial_field_profile(
     n = len(profile.distance_um)
     v_at, e_at = int(n * 0.62), int(n * 0.22)
     ax.annotate(
-        r"$V \propto 1/r$",
+        "V falls as 1/r",
         xy=(profile.distance_um[v_at], potential_mV[v_at]),
         xytext=(3, -12),
         textcoords="offset points",
@@ -440,7 +449,7 @@ def radial_field_profile(
         fontweight="bold",
     )
     ax2.annotate(
-        r"$E \propto 1/r^{2}$",
+        "E falls as 1/r²",
         xy=(profile.distance_um[e_at], field[e_at]),
         xytext=(3, 5),
         textcoords="offset points",
@@ -560,7 +569,7 @@ def material_comparison(
             bar.set_edgecolor("white")
     ax.axvline(applied, color=PALETTE["ink"], linewidth=1.0)
     ax.annotate(
-        f"applied {applied:.3g} µC cm$^{{-2}}$",
+        f"applied {applied:.3g} µC/cm²",
         xy=(applied, len(mats) - 0.4),
         xytext=(4, 0),
         textcoords="offset points",
@@ -583,7 +592,7 @@ def material_comparison(
     ax.set_xscale("log")
     ax.set_yticks(y)
     ax.set_yticklabels([m.key for m in mats])
-    ax.set_xlabel("Charge-injection limit (µC cm$^{-2}$)")
+    ax.set_xlabel("Charge-injection limit (µC/cm²)")
     ax.set_title(f"Material limits, {policy} policy", pad=4)
     ax.invert_yaxis()
     return ax

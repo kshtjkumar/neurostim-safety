@@ -136,6 +136,20 @@ A test also pins that the JSON export never emits `NaN`: a NaN raises instead.
   the endorsed end read as the more permissive of the two. No shipped material reaches
   this.
 
+### The figures meet their own style contract
+
+- No text in the exported figures is smaller than 5 pt. Before, 42 declarations sat
+  between 4.2 and 4.9 pt, all mathtext superscripts:
+  - unit labels are plain text ("µC/cm²", "V/m");
+  - the two field-profile labels read "V falls as 1/r" and "E falls as 1/r²";
+  - tick labels are 7.2 pt, so the log-axis powers of ten render at 5.04 pt.
+- mathtext uses the body typeface, so a figure is set in one font rather than Arial and
+  DejaVu Sans.
+- `shannon_safe_operating_area` draws every requested `k`. It used to drop a fourth and
+  later value silently.
+- A zero ceiling is no longer drawn at y = 0 on the log axis, where it could not be seen.
+  The refusal sentence names it.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

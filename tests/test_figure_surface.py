@@ -548,3 +548,80 @@ class TestTheTiffIsAJournalTiff:
             assert image.mode == "RGB"
             assert tuple(round(v) for v in image.info["dpi"]) == (600, 600)
         assert path.stat().st_size < 5_000_000, path.stat().st_size
+
+
+class TestTheFiguresMeetTheirOwnStyleContract:
+    """C5.11b: ledgers 61/M11, 62/L1, L2, L4 and 116."""
+
+    @staticmethod
+    def _ring():
+        return SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1),
+                                compliance_V=10.0)
+
+    def test_m11_no_text_below_5pt_and_one_typeface(self, tmp_path):
+        """The exported summary SVG declared 42 font sizes below 5 px (mathtext superscripts
+        at 4.2-4.9) and set 23 declarations in DejaVu Sans beside 260 in Arial."""
+        import re
+
+        from neurostim.viz.style import save_publication
+
+        fig, _ = safety_summary(self._ring())
+        [path] = save_publication(fig, tmp_path / "summary", formats=("svg",), close=True)
+        svg = path.read_text()
+        sizes = [float(x) for x in re.findall(r"font-size[:=]\s*\"?([\d.]+)px", svg)]
+        assert sizes and min(sizes) >= 5.0, sorted(set(s for s in sizes if s < 5.0))
+        families = set(re.findall(r"font-family[:=]\s*'?\"?([^;'\"]+)", svg))
+        assert len(families) == 1, families
+
+    def test_l1_every_requested_separatrix_is_drawn(self):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        ks = (1.5, 1.6, 1.7, 1.8, 1.9)
+        ax = shannon_safe_operating_area(k_values=ks, show_data=False)
+        labels = [str(line.get_label()) for line in ax.get_lines()]
+        assert all(any(label.startswith(f"k = {k:.2f}") for label in labels) for k in ks), labels
+        plt.close("all")
+
+    def test_l2_log_axes_carry_decade_labels(self):
+        """Logged as a style note: decade tick labels are the standard marking of a log
+        axis, so nothing changes; pinned so it stays so."""
+        from matplotlib.ticker import LogFormatterSciNotation
+
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        ax = shannon_safe_operating_area(self._ring())
+        assert isinstance(ax.xaxis.get_major_formatter(), LogFormatterSciNotation)
+        assert isinstance(ax.yaxis.get_major_formatter(), LogFormatterSciNotation)
+        plt.close("all")
+
+    def test_l4_an_explicit_zero_compliance_is_forwarded(self, monkeypatch):
+        from neurostim.viz import plots
+
+        seen = {}
+        real = plots.current_limit_sweep
+
+        def spy(*args, **kwargs):
+            seen["compliance_V"] = kwargs.get("compliance_V", "absent")
+            return real(*args, **{**kwargs, "compliance_V": 10.0})
+
+        monkeypatch.setattr(plots, "current_limit_sweep", spy)
+        plots.safety_summary(self._ring(), compliance_V=0.0)
+        assert seen["compliance_V"] == 0.0
+        plt.close("all")
+
+    def test_116_a_zero_ceiling_is_named_not_drawn_at_zero(self):
+        """A zero ceiling was drawn at y = 0 on a log axis, invisible, with its legend entry
+        beside the four visible ones."""
+        calc = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9),
+        )
+        zero = [c.name for c in calc.assess().permits_no_current]
+        assert zero == ["Water window"]  # premise
+        ax = current_limit_sweep(calc.e, calc.p)
+        for line in ax.get_lines():
+            y = [float(v) for v in line.get_ydata()]
+            assert not (y and all(v == 0.0 for v in y)), line.get_label()
+        assert "Water window" not in [str(line.get_label()) for line in ax.get_lines()]
+        assert any("Water window permits no current" in t for t in texts(ax)), texts(ax)
+        plt.close("all")
