@@ -1087,14 +1087,14 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 61/M8 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
 | 61/M9 | MED | OK | C5.10 | **FIXED** `0822cbe`; C5.10 |
 | 61/M10 | MED | OK | C5.11 | |
-| 61/M11 | MED | OK | C5.11 | |
+| 61/M11 | MED | OK | C5.11 | **FIXED** `88c523f`; no text below 5 pt; one typeface |
 | 61/M12 | MED | OK | C0.4, C5.9 | **FIXED** `7f9798d`; LZW RGB TIFF, 0.93 MB |
 | 61/M13 | MED | OK | C5.9 | **FIXED** `362752e`; strict JSON (allow_nan=False) landed with ledger 143; pinned by strict-parser and forced-NaN tests at 7f9798d |
 | 61/M14 | MED | OK | C5.5 | **FIXED** `0aedc2d`; read errors name the file |
-| 62/L1 | LOW | OK | C5.11 | |
-| 62/L2 | LOW | OK | C5.11 | |
+| 62/L1 | LOW | OK | C5.11 | **FIXED** `88c523f`; every requested k drawn |
+| 62/L2 | LOW | OK | C5.11 | **FIXED** `88c523f`; style note, no change: decade tick labels pinned |
 | 62/L3 | LOW | OK | C5.8 | **FIXED** `2450623`; k three decimals; pulse width to 0.001 us |
-| 62/L4 | LOW | OK | C5.11 | |
+| 62/L4 | LOW | OK | C5.11 | **FIXED** `fa01e26`; fixed with ledger 48 (is not None); pinned at 88c523f |
 | 62/L5 | LOW | OK | C5.11 | |
 | 63 | HIGH | PARTIAL | C0.1, C0.2, C1.10 | coverage sub-claims reconciled in §3; mutation gate in §10 |
 | 64 | HIGH | OK | C1.10 | |
@@ -1163,7 +1163,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 113 | LOW | — (found in Phase 2 review, F11) | **P2b docs commit** (docstring narrowed; ledger 123) | **FIXED** `96ccae5`; documentation-only today (not rendered); fix with the next change to the interval, or narrow the docstring |
 | 114 | LOW | — (found in Phase 2 review, F12) | C5.5 | **FIXED** `94e742e`; None when the check did not run; with 157 |
 | 115 | LOW | — (found in Phase 2 review, F13) | C2.8 | **FIXED** `f4f08b8`; one sentence in D2 point 2 |
-| 116 | LOW | — (found in Phase 2 review, F14) | C5.11 | viz |
+| 116 | LOW | — (found in Phase 2 review, F14) | C5.11 | **FIXED** `88c523f`; zero ceiling named, not drawn at y = 0 |
 | 117 | LOW | — (found in Phase 2 review, F15; extended by Phase 2b review G1 = ledger 119) | C2.8, C4.2 | **FIXED** `76ffd06` (contract and charge interval; nan term earlier); the nan term closes at C2.8; water_window.evaluate's argument contract at C4.2, which already reworks its polarity arguments; the charge-interval fallback at C4.2 — nan term **FIXED** at `f4f08b8` |
 | 118 | LOW | — (found in Phase 2 review, F16) | C4.3 | **FIXED** `8520d84`; provisional propagation: set provisional on Water window whenever drift binds, and say 'no-leak bound' |
 | 119 | LOW | — (found in Phase 2b review, G1) | C4.2 (folded into 117) | **FIXED** `76ffd06`; the public `water_window.evaluate` keeps both old behaviours: no balance gate, and `recovered_charge_uC` defaults to 0.0. C4.2 makes the drift inputs one object, or makes the riding charge required with the DC, and applies the balance tolerance inside the function |
