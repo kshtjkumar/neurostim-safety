@@ -1232,6 +1232,10 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 167 | LOW | — (Phase 5 review P5) | **C5b.5** | **FIXED** `8d95ee1`; status/error persist; write_csv warns |
 | 168 | LOW | — (Phase 5b review Q1) | **C6.0** | **FIXED** `5072c7a`; available voltage floors in every branch |
 | 169 | LOW | — (Phase 5b review Q2) | **C6.0** | **FIXED** `76e1f7e`; label clear of data and caption |
+| 170 | LOW | — (Phase 6 review R1) | **C7.0** | Lapicque CI under-coverage stated; the 94 % figure scoped to Weiss |
+| 171 | LOW | — (Phase 6 review R2) | **C7.0** | early-time transient grid refined or warned below the resolved tau |
+| 172 | LOW | — (Phase 6 review R3) | **C7.0** | outward rounding for sqrt and from_mean_sd |
+| 173 | LOW | — (Phase 6 review R4) | C7.3 | CITATION.cff "validated" wording |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
