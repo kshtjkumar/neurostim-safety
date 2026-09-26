@@ -123,7 +123,8 @@ class TestElwassif2006:
             elwassif2006.LEAD_3389_CONTACT_DIAMETER_UM,
             elwassif2006.LEAD_3389_CONTACT_HEIGHT_UM,
         )
-        a = contact.equivalent_radius_um * 1e-6
+        # G12 (C6.3, ledgers 32 and 34, user decision (B), reversing S-23 (a)): the thermal source radius, not the equal-area disc radius.
+        a = thermal.source_radius_um(contact, 0.35) * 1e-6
         block = elwassif2006.perfusion_block()
         for point in block[1:]:
             tissue = thermal.TissueThermalProperties(
@@ -138,22 +139,14 @@ class TestElwassif2006:
             reported = point.rise_K_3389 / block[0].rise_K_3389
             assert predicted == pytest.approx(reported, rel=0.10)
 
-    def test_peak_rise_reproduced_from_their_implied_power(self):
-        """Feed the analytic model the power their 0.82 K implies and it returns 0.82 K."""
-        contact = CylindricalBandElectrode(
-            elwassif2006.LEAD_3389_CONTACT_DIAMETER_UM,
-            elwassif2006.LEAD_3389_CONTACT_HEIGHT_UM,
-        )
-        unperfused = thermal.TissueThermalProperties(
-            thermal_conductivity_W_per_mK=0.527,
-            perfusion_rate_per_s=0.0,
-            verified_fields=(),
-            uncertainty={},
-        )
-        rise = thermal.peak_temperature_rise_K(
-            elwassif2006.implied_power_W(), contact.equivalent_radius_um, unperfused
-        )
-        assert rise == pytest.approx(elwassif2006.PEAK_RISE_K, rel=0.02)
+    def test_peak_rise_reproduced_from_their_own_drive(self):
+        """G12 (C6.3, ledgers 32 and 34, user decision (B), reversing S-23 (a)): this fed back the power 0.82 K implies at the disc radius and got
+        0.82 K by construction. Now: their 1.56 V RMS across two 690.11 um spheres 2 mm
+        apart, 5.639 mW split equally, own contact plus partner -- 0.8298 K against their
+        0.8200, 1.2 % apart."""
+        rise = elwassif2006.two_sphere_peak_rise_K()
+        assert rise == pytest.approx(elwassif2006.PEAK_RISE_K, rel=0.015)
+        assert abs(rise / elwassif2006.PEAK_RISE_K - 1.0) > 0.005  # not a round trip
 
 
 class TestMcCreery1990:

@@ -12,18 +12,26 @@ Reported behaviour        Analytic prediction         Agreement
 ========================  ==========================  =====================
 peak rise linear in sigma ``P = sigma * int|grad V|^2`` 0.7 % over 4 points
 peak rise as 1/kappa      ``dT = P / (4 pi kappa a)``   0.9 % over 4 points
-perfusion attenuation     ``1 / (1 + a/L)``             within 7-8 %
+perfusion attenuation     ``1 / (1 + a/L)``             2.7-7.7 %
 ========================  ==========================  =====================
 
-The residual 7-8 % on perfusion is expected: they energise two adjacent contacts on a
-thermally insulated shaft, which concentrates heat relative to a lone sphere.
+The perfusion figures are at ``a`` = 690.11 um, the contact's electro-thermal radius; at
+the equal-area disc radius used before C6.3 they were 7.1-7.8 %. The residual is expected:
+they energise two adjacent contacts on a thermally insulated shaft, which concentrates
+heat relative to a lone sphere.
 
-Why the absolute numbers looked irreconcilable before
------------------------------------------------------
+Their absolute number, reproduced
+---------------------------------
 Their protocol is a **continuous 1.56 V RMS bipolar** drive between adjacent contacts
-(their RMS reduction of a "high" clinical setting of 10 V, 185 pps, 210 us). Their peak
-rise of 0.82 K corresponds to about 7.5 mW dissipated continuously, which at 1.56 V
-implies roughly 325 ohm between the energised contacts -- a sensible bipolar impedance.
+(their RMS reduction of a "high" clinical setting of 10 V, 185 pps, 210 us). Across two
+contacts modelled as spheres of the contact's area, 2.0 mm apart, that is 431.6 ohm and
+5.639 mW, and the analytic solution returns a peak rise of 0.8298 K against their FEM's
+0.8200 K, 1.2 % apart (:func:`two_sphere_peak_rise_K`). The two-sphere model is this
+package's choice, not the paper's.
+
+This module used to say 0.82 K "corresponds to about 7.5 mW", "roughly 325 ohm": the
+rise inverted at the equal-area disc radius, 2x too large, so the power was 2x high and
+the impedance 2x low, compensating (ledger 34).
 
 A duty-cycled *current*-controlled monopolar protocol at 3 mA, 60 us, 130 Hz dissipates
 about 70 uW, roughly a hundredth of that, and correspondingly produces a rise of order
@@ -40,6 +48,7 @@ cites it, not the journal article (ledger 75). The conference PDF prints no DOI.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 BASELINE_C = 37.0
@@ -169,32 +178,71 @@ def perfusion_block() -> tuple[ThermalPoint, ...]:
     return TABLE_I[8:12]
 
 
-SOURCE_RADIUS_M = 1.3803e-3
-"""The source radius :func:`implied_power_W` inverts at: one contact's equal-area disc
-radius, not a figure from the paper (ledger 78, S-23)."""
+SOURCE_RADIUS_M = math.sqrt(
+    LEAD_3389_CONTACT_DIAMETER_UM * 1e-6 * LEAD_3389_CONTACT_HEIGHT_UM * 1e-6 / 4.0
+)
+"""One 3389 contact's equal-area sphere, ``4 pi a^2 = pi d h``: 690.11 um. It is also the
+band's electro-thermal radius, ``1/(4 pi sigma R_access)`` (``thermal.source_radius_um``).
+
+Not stated in the paper, which gives neither a radius nor a diameter. It was 1.3803 mm,
+the equal-area disc radius, kept by decision (a) on ledger 78 / S-23; ledger 34 then
+showed that radius 2x too large with its power and impedance 2x off in compensating
+directions, and S-23 (a) is reversed (C6.3, user decision (B))."""
+
+CONTACT_SEPARATION_M = (LEAD_3389_CONTACT_HEIGHT_UM + LEAD_3389_SPACING_UM) * 1e-6
+"""Centre-to-centre distance of two adjacent 3389 contacts: 1.5 mm + 0.5 mm = 2.0 mm."""
+
+PEAK_ROW_SIGMA_S_PER_M = 0.35
+PEAK_ROW_KAPPA_W_PER_MK = 0.527
+"""The Table I row with the 0.82 K peak: sigma 0.35, kappa 0.527, no perfusion."""
+
+
+def two_sphere_resistance_ohm(
+    sigma_S_per_m: float = PEAK_ROW_SIGMA_S_PER_M,
+    source_radius_m: float = SOURCE_RADIUS_M,
+    separation_m: float = CONTACT_SEPARATION_M,
+) -> float:
+    """``(1/(2 pi sigma)) (1/a - 1/d)``: two spheres, the mutual term included."""
+    return (1.0 / source_radius_m - 1.0 / separation_m) / (2.0 * math.pi * sigma_S_per_m)
 
 
 def implied_power_W(
-    rise_K: float = PEAK_RISE_K,
-    thermal_conductivity_W_per_mK: float = 0.527,
+    v_rms_V: float = V_RMS,
+    sigma_S_per_m: float = PEAK_ROW_SIGMA_S_PER_M,
     source_radius_m: float = SOURCE_RADIUS_M,
+    separation_m: float = CONTACT_SEPARATION_M,
 ) -> float:
-    """Continuous power that the analytic unperfused solution needs for a given rise.
+    """The power their drive dissipates: ``V_rms^2 / R`` across two contact spheres.
 
-    Inverts ``dT = P / (4 pi kappa a)``. For their peak 0.82 K this returns about
-    7.5 mW, which at 1.56 V RMS implies roughly 325 ohm between the energised contacts.
+    5.639 mW at 431.6 ohm for 1.56 V RMS. The two-sphere resistance is this package's
+    modelling choice -- two spheres of the contact's area at the contact spacing, the
+    mutual term included -- not stated in the paper, which reports neither a power nor an
+    impedance.
 
-    The source radius, :data:`SOURCE_RADIUS_M` = 1.3803 mm, is not stated in the paper,
-    which gives neither a radius nor a diameter. It is this package's choice: the
-    equal-area disc radius of one 3389 contact, ``pi a^2 = pi x 1.27 mm x 1.5 mm``
-    (1.38022 mm, the band's ``equivalent_radius_um``, rounded). The same ``a`` solves
-    ``4 pi a^2 = 4 x`` that area, so it is also the equal-area sphere of four contacts,
-    though their protocol energises two. The two energised contacts' equal-area sphere,
-    0.976 mm, would give 5.30 mW and 459 ohm instead of 7.50 mW and 325 ohm (ledger 78,
-    S-23; kept by decision (a)).
+    This function used to invert the 0.82 K rise at the equal-area disc radius, 1.3803 mm,
+    and returned about 7.5 mW, "roughly 325 ohm": 2x off in compensating directions
+    (ledger 34). That radius was kept by decision (a) on S-23; the evidence of ledger 34
+    reversed it (C6.3, user decision (B)).
     """
-    import math
+    return v_rms_V**2 / two_sphere_resistance_ohm(sigma_S_per_m, source_radius_m, separation_m)
 
-    return (
-        rise_K * 4.0 * math.pi * thermal_conductivity_W_per_mK * source_radius_m
-    )
+
+def two_sphere_peak_rise_K(
+    thermal_conductivity_W_per_mK: float = PEAK_ROW_KAPPA_W_PER_MK,
+    source_radius_m: float = SOURCE_RADIUS_M,
+    separation_m: float = CONTACT_SEPARATION_M,
+) -> float:
+    """Peak rise from their own drive: 0.8298 K against their 0.8200 K, 1.2 % apart.
+
+    The power of :func:`implied_power_W`, with an equal split between the two energised
+    contacts; each contact's rise from its own half, ``(P/2)/(4 pi kappa a)``, plus its
+    partner's at the separation, ``(P/2)/(4 pi kappa d)``, unperfused as in their peak row.
+    The superposition and the equal split are this package's modelling choice, not
+    stated in the paper. It is the independent external pin of the thermal model: the
+    round trip it replaces fed back a power inverted from 0.82 K and returned 0.82 K by
+    construction (ledgers 32, 34). S-23 (a) is reversed.
+    """
+    half = implied_power_W(source_radius_m=source_radius_m, separation_m=separation_m) / 2.0
+    own = half / (4.0 * math.pi * thermal_conductivity_W_per_mK * source_radius_m)
+    partner = half / (4.0 * math.pi * thermal_conductivity_W_per_mK * separation_m)
+    return own + partner

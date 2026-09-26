@@ -79,8 +79,12 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from ..geometry.base import Electrode
 
 BODY_TEMPERATURE_C = 37.0
 """Arterial blood temperature used as the baseline."""
@@ -615,6 +619,25 @@ class ThermalResult:
             "(0.7 %),\n  inverse in kappa (0.9 %), perfusion attenuation within 7-8 %"
         )
         return "\n".join(lines)
+
+
+def source_radius_um(electrode: Electrode, sigma_S_per_m: float = 0.35) -> float:
+    """The radius of the sphere that heats as ``electrode`` does: ``1/(4 pi sigma R)``.
+
+    The electro-thermal analogy: steady conduction of heat and of current obey the same
+    equation in the same geometry, so the thermal resistance is the access resistance
+    times ``sigma / kappa``, and the sphere solution ``dT = P / (4 pi kappa a)`` gives it
+    exactly with ``a = 1 / (4 pi sigma R_access)``. For a sphere this is its own radius.
+
+    The heating estimate used to take the equal-area DISC radius, ``sqrt(A / pi)``, as the
+    ``a`` of that SPHERE solution: 1380.22 um for a 3389 contact against 690.11 um here,
+    so the rise read half what it is -- 3.435 mK where 8.061 is right at 3 mA, 60 us,
+    130 Hz (ledger 32). Non-conservative. The lumped surface source itself overestimates
+    the peak of the distributed Joule source, by 2x unperfused, so the result stays an
+    upper estimate.
+    """
+    resistance = electrode.access_resistance_ohm(sigma_S_per_m)
+    return 1e6 / (4.0 * math.pi * sigma_S_per_m * resistance)
 
 
 def evaluate(

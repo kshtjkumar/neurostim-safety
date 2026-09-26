@@ -349,8 +349,12 @@ the electrode's own access resistance.
 - **Thermal** — spreading-resistance heating only. Tissue properties are now IT'IS v4.2
   with uncertainty, but the model still omits electrode and lead self-heating and any
   encapsulation layer. Gives millikelvin rises for clinical DBS parameters, well below the
-  ~0.8 K peak Elwassif et al. (2006) report from a full finite element model. **That gap is
-  not reconciled.** Treat the output as an order-of-magnitude floor.
+  ~0.8 K peak Elwassif et al. (2006) report from a finite element model. The gap is the
+  protocol's power, not missing physics: their continuous 1.56 V RMS bipolar drive
+  dissipates about 5.6 mW, and fed that drive the model returns 0.83 K against their
+  0.82 K (two contacts as spheres 2 mm apart, an equal power split: our modelling
+  choice, not theirs). The source radius is the electrode's own electro-thermal radius,
+  `1/(4πσR_access)`.
 - **VTA** — a sphere is the wrong shape, `k` spans an order of magnitude across studies,
   and the default value was read from a secondary summary. Fit your own.
 

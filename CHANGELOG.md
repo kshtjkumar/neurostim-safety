@@ -233,6 +233,29 @@ converged value. A grid clamped to `max_cells` now raises `ThermalResolutionWarn
 instead of silently coarsening; that clamp is why a larger `domain_extent_factor` stopped
 helping.
 
+### Tissue heating uses the electrode's own thermal radius, and Elwassif is reproduced, not inverted
+
+- **The heating estimate read half the rise.** It fed the equal-area *disc* radius,
+  √(A/π), into a *sphere* solution. The radius is now the electrode's electro-thermal
+  one, `thermal.source_radius_um(electrode, σ)` = 1/(4πσR_access). For a 3389 contact
+  that is 690.11 µm, not 1380.22 µm, and the worked example's DBS rise at 3 mA, 60 µs,
+  130 Hz goes from **3.435 to 8.061 mK**. The old figure was not conservative.
+- **Elwassif's absolute number is reproduced from their drive.** 1.56 V RMS across two
+  contacts, taken as spheres of the contact's area 2.0 mm apart, is 431.6 Ω and 5.639 mW.
+  With the power split equally and each contact heated by itself and its partner, the
+  rise is **0.8298 K against their 0.8200 K** (`elwassif2006.two_sphere_peak_rise_K`).
+  The two-sphere model and the equal split are this package's choice, not the paper's.
+  The previous "validation" fed back the power that 0.82 K implies at the disc radius,
+  and returned 0.82 K by construction.
+- `elwassif2006.implied_power_W()` now returns that 5.639 mW, and its signature is the
+  drive's (voltage, σ, radius, separation). It used to invert the rise at 1.3803 mm and
+  returned 7.5 mW, "roughly 325 Ω": both 2× off, compensating.
+  `SOURCE_RADIUS_M` is 690.11 µm. **This reverses S-23 decision (a)**, which kept
+  1.3803 mm, on the new evidence of the compensating errors.
+- The README and the worked example no longer call the gap to Elwassif "not
+  reconciled", or attribute it to lead self-heating. It is the protocol's power. The
+  perfusion-scaling agreement is now 2.7–7.7 % (was 7.1–7.8 % at the disc radius).
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,
@@ -577,11 +600,10 @@ caveat comment are corrected, and no verdict changes.
   and the note says that rather than presenting them as read from it.
 - The DBS lead's contact diameter is not stated in Elwassif et al. It is the
   manufacturer's figure, and the docstring names it as such.
-- Elwassif et al. state no source radius either. The 1.3803 mm that
-  `elwassif2006.implied_power_W()` inverts at, now `SOURCE_RADIUS_M`, is one contact's
-  equal-area disc radius. That is also, numerically, the equal-area sphere of four
-  contacts, though their protocol energises two. The value is kept, and the docstring
-  gives the two-contact alternative (0.976 mm: 5.30 mW and 459 Ω, not 7.50 mW and 325 Ω).
+- Elwassif et al. state no source radius either. `SOURCE_RADIUS_M` is now one contact's
+  equal-area sphere, 690.11 µm. The 1.3803 mm equal-area disc radius was first kept and
+  documented. That decision (S-23 (a)) is reversed below: the disc radius put the implied
+  power and impedance 2× off in compensating directions.
 - Four sources the package cites but does not hold are now in `references.py` as
   entries of their own, each with a note naming the paper it was cited through: Wang &
   Weiland 2012 and McCreery 2008 (via Cogan 2016), and Robblee & Rose 1990 and Lan,

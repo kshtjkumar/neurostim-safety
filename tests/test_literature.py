@@ -497,7 +497,10 @@ class TestElwassif2006Validation:
             * e.LEAD_3389_CONTACT_HEIGHT_UM
             * 1e-6
         )
-        return math.sqrt(area / math.pi)
+        # G12 (C6.3, ledgers 32 and 34, user decision (B), reversing S-23 (a)): the thermal source radius, the equal-area sphere, 690.11 um; it was
+        # the equal-area disc radius, 1380.22 um, which the perfusion agreement quoted in
+        # the module docstring was measured with.
+        return math.sqrt(area / (4.0 * math.pi))
 
     def test_table_has_twelve_rows(self):
         from neurostim.data import elwassif2006 as e
@@ -548,13 +551,14 @@ class TestElwassif2006Validation:
             reported = point.rise_K_3389 / unperfused.rise_K_3389
             assert predicted == pytest.approx(reported, rel=0.10)
 
-    def test_implied_power_is_a_sensible_bipolar_impedance(self):
-        """0.82 K needs about 7.5 mW, i.e. roughly 325 ohm at their 1.56 V RMS."""
+    def test_implied_power_is_the_two_sphere_bipolar_power(self):
+        """G12 (C6.3, ledgers 32 and 34, user decision (B), reversing S-23 (a)): this pinned 7.5 mW and "roughly 325 ohm", the inversion of 0.82 K at
+        the disc radius -- 2x off in compensating directions. Their 1.56 V RMS across
+        two spheres of 690.11 um 2.0 mm apart is 431.6 ohm and 5.639 mW."""
         from neurostim.data import elwassif2006 as e
 
-        power = e.implied_power_W()
-        assert power == pytest.approx(7.5e-3, rel=0.05)
-        assert 200.0 < e.V_RMS**2 / power < 500.0
+        assert e.two_sphere_resistance_ohm() == pytest.approx(431.5586831502678, rel=1e-9)
+        assert e.implied_power_W() == pytest.approx(0.0056390940444885585, rel=1e-9)
 
     def test_the_apparent_gap_is_a_protocol_difference_not_a_physics_one(self):
         """Their mW-scale continuous bipolar drive vs a uW-scale duty-cycled pulse train.
@@ -575,11 +579,13 @@ class TestElwassif2006Validation:
             uncertainty={},
         )
 
-        # Feed the analytic model their power and it lands on their number.
-        at_their_power = thermal_mod.peak_temperature_rise_K(
-            e.implied_power_W(), contact.equivalent_radius_um, unperfused
-        )
-        assert at_their_power == pytest.approx(e.PEAK_RISE_K, rel=0.02)
+        # G12 (C6.3, ledgers 32 and 34, user decision (B), reversing S-23 (a)): this fed the power the 0.82 K implies at the disc radius back in at
+        # the same radius, which returns 0.82 K by construction. The independent pin is
+        # the two-sphere reproduction from their own drive, 0.8298 K against 0.8200.
+        reproduced = e.two_sphere_peak_rise_K()
+        assert reproduced == pytest.approx(e.PEAK_RISE_K, rel=0.015)
+        assert reproduced == pytest.approx(0.8298148442791379, rel=1e-9)
+        assert unperfused.perfusion_rate_per_s == 0.0
 
         # A duty-cycled current-controlled protocol is two orders of magnitude cooler.
         pulsed = StimProtocol(3000, 60, 130, 1)
@@ -1958,8 +1964,10 @@ class TestLedger154NoSinglePulseReliefOnSmallElectrodes:
 
 
 class TestLedger78SourceRadius:
-    """Ledger 78, S-23, the radius half, per the user's decision (a): keep 1.3803 mm and
-    document where it comes from."""
+    """Ledger 78, S-23, the radius half. G12 (C6.3, ledgers 32 and 34, user decision (B), reversing S-23 (a)): decision (a) kept 1.3803 mm, the equal-
+    area disc radius; the Phase 4 audit's ledger 34 then showed it 2x off in compensating
+    directions, and the user reversed (a). The radius is now the equal-area sphere of one
+    contact, the electro-thermal radius of the band."""
 
     ELWASSIF = "papers_stim_calc_ref/elwassif2006.pdf"
 
@@ -1968,9 +1976,9 @@ class TestLedger78SourceRadius:
             text = _pdf_page_text(self.ELWASSIF, page).lower()
             assert "radius" not in text and "diameter" not in text, page
 
-    def test_the_default_is_one_contacts_equal_area_disc_radius(self):
-        """pi a^2 = pi x 1.27 mm x 1.5 mm gives a = 1.38022 mm; the same a solves
-        4 pi a^2 = 4 x that area, so it is also the equal-area sphere of four contacts."""
+    def test_the_radius_is_one_contacts_equal_area_sphere(self):
+        """4 pi a^2 = pi x 1.27 mm x 1.5 mm gives a = 690.11 um, which is the band's own
+        electro-thermal radius, 1/(4 pi sigma R_access)."""
         import inspect
 
         from neurostim.data import elwassif2006 as e
@@ -1980,21 +1988,18 @@ class TestLedger78SourceRadius:
         )
         default = inspect.signature(e.implied_power_W).parameters["source_radius_m"].default
         assert default == e.SOURCE_RADIUS_M
-        assert abs(e.SOURCE_RADIUS_M - contact.equivalent_radius_um * 1e-6) < 1e-7
-        four_sphere = math.sqrt(4 * contact.area_um2 / (4 * math.pi)) * 1e-6
-        assert abs(e.SOURCE_RADIUS_M - four_sphere) < 1e-7
+        assert math.isclose(e.SOURCE_RADIUS_M, 690.1086870921131e-6, rel_tol=1e-12)
+        assert math.isclose(
+            e.SOURCE_RADIUS_M * 1e6, thermal_mod.source_radius_um(contact, 0.35), rel_tol=1e-12
+        )
 
-    def test_the_docstring_names_the_derivation_and_the_two_contact_alternative(self):
-        """Their protocol energises two contacts; their equal-area sphere is 0.976 mm,
-        which would give 5.30 mW and 459 ohm at 1.56 V RMS instead of 7.50 mW and 325."""
+    def test_the_docstring_states_the_modelling_choice_and_the_reversal(self):
         from neurostim.data import elwassif2006 as e
 
-        doc = " ".join(e.implied_power_W.__doc__.split())
-        assert "equal-area disc" in doc and "not stated in the paper" in doc
-        assert "four contacts" in doc and "0.976 mm" in doc and "459 ohm" in doc
-        two = e.implied_power_W(source_radius_m=0.9759610647971567e-3)
-        assert two == pytest.approx(5.30e-3, rel=1e-3)
-        assert e.V_RMS**2 / two == pytest.approx(459.2, rel=1e-3)
+        doc = " ".join((e.implied_power_W.__doc__ + e.two_sphere_peak_rise_K.__doc__).split())
+        assert "not stated in the paper" in doc and "modelling choice" in doc
+        assert "equal split" in doc and "S-23" in doc and "reversed" in doc
+        assert "0.976" not in doc and "459" not in doc
 
 
 class TestLedger153CurrentDensityPassIsProvisional:
@@ -2165,3 +2170,46 @@ class TestLedger156PlatinumInVivoDerating:
         assert assessment.counter_charge is not None
         check = next(c for c in assessment.checks if c.name == "Counter charge injection")
         assert check.provisional
+
+
+
+class TestLedger32And34TheThermalSourceRadius:
+    """Ledgers 32 and 34, C6.3, user decision (B). The heating estimate fed the equal-area
+    DISC radius into a SPHERE solution: the DBS contact read 5.396 mK (3.435 after C3.1)
+    where the electro-thermal radius, a_eff = 1/(4 pi sigma R_access), gives 2x less
+    radius and 8.061 mK. The Elwassif inversion used the same disc radius, so its 7.5 mW /
+    325 ohm were 2x off in compensating directions."""
+
+    def test_a_eff_follows_the_access_resistance(self):
+        from neurostim.geometry import DiscElectrode, SphericalElectrode
+
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        r = band.access_resistance_ohm(0.35)
+        assert thermal_mod.source_radius_um(band, 0.35) == pytest.approx(
+            1e6 / (4 * math.pi * 0.35 * r), rel=1e-12
+        )
+        assert thermal_mod.source_radius_um(band, 0.35) == pytest.approx(690.1086870921131)
+        sphere = SphericalElectrode(500.0, "Pt")
+        assert thermal_mod.source_radius_um(sphere, 0.35) == pytest.approx(250.0, rel=1e-9)
+        disc = DiscElectrode(1000.0, "Pt")
+        assert thermal_mod.source_radius_um(disc, 0.2) == pytest.approx(
+            1e6 / (4 * math.pi * 0.2 * disc.access_resistance_ohm(0.2)), rel=1e-12
+        )
+
+    def test_the_worked_example_dbs_rise(self):
+        from neurostim import StimProtocol
+
+        band = CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
+        protocol = StimProtocol(3000, 60, 130, 1)
+        heat = thermal_mod.evaluate(
+            protocol.rms_current_uA,
+            band.access_resistance_ohm(0.35),
+            thermal_mod.source_radius_um(band, 0.35),
+        )
+        assert heat.peak_rise_K * 1e3 == pytest.approx(8.061230078973669, rel=1e-9)
+
+    def test_the_example_uses_the_derived_radius(self):
+        from pathlib import Path
+
+        source = (Path(__file__).resolve().parents[1] / "examples" / "worked_example.py").read_text()
+        assert "source_radius_um(dbs" in source and "dbs.equivalent_radius_um" not in source

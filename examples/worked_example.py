@@ -175,14 +175,17 @@ def main(output_dir: Path) -> int:
 
     rule("7. Tissue heating")
     resistance = dbs.access_resistance_ohm(0.35)
+    # The sphere that heats as the contact does, 1/(4 pi sigma R_access): 690 um, not the
+    # equal-area disc radius, which read half the rise (ledger 32).
     heat = thermal.evaluate(
-        dbs_protocol.rms_current_uA, resistance, dbs.equivalent_radius_um
+        dbs_protocol.rms_current_uA, resistance, thermal.source_radius_um(dbs, 0.35)
     )
     print(heat.describe())
     print(
-        "\nThis is well below the ~0.8 K peak Elwassif et al. (2006) obtain from a full\n"
-        "finite element model that includes lead and electrode self-heating. The gap is\n"
-        "not reconciled; treat this as an order-of-magnitude floor."
+        "\nWell below the ~0.8 K peak Elwassif et al. (2006) report, and for a known\n"
+        "reason: their drive is a continuous 1.56 V RMS bipolar one, about 5.6 mW, against\n"
+        "tens of microwatts here. Given their drive, this model returns 0.83 K against\n"
+        "their 0.82 K (elwassif2006.two_sphere_peak_rise_K). Compare power, not amplitude."
     )
 
     rule("8. Strength-duration, fitted to measured thresholds")
