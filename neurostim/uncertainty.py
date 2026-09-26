@@ -30,8 +30,9 @@ General dependency tracking is out of scope.
 Outward rounding
 ----------------
 Every arithmetic result that floating point had to round is widened by one unit in the
-last place, down at the low end and up at the high end, so the interval does contain
-every possible result: ``Interval(0.1, 0.1) * 3`` used to be exactly 0.30000000000000004,
+last place, down at the low end and up at the high end -- the four operations, integer
+powers, :meth:`Interval.sqrt` and :meth:`Interval.from_mean_sd` -- so the interval does
+contain every possible result: ``Interval(0.1, 0.1) * 3`` used to be exactly 0.30000000000000004,
 which excludes 0.3 (ledger 26). A result the floats represent exactly -- checked with
 :class:`fractions.Fraction` -- is left as it is, so exact inputs give exact outputs.
 """
@@ -74,7 +75,15 @@ class Interval:
         # Its own message: a negative k used to fail on bound ordering (ledger 31).
         if not math.isfinite(k) or k < 0:
             raise ValueError(f"k must be finite and >= 0, got {k!r}")
-        return cls(mean - k * sd, mean + k * sd)
+        # The bounds computed exactly and rounded outward, as the arithmetic is: two float
+        # roundings could leave either end inside the true range (ledger 172).
+        if not math.isfinite(mean):
+            return cls(mean - k * sd, mean + k * sd)
+        spread = Fraction(k) * Fraction(sd)
+        return cls(
+            _round_outward(Fraction(mean) - spread, down=True),
+            _round_outward(Fraction(mean) + spread, down=False),
+        )
 
     # --- properties -----------------------------------------------------------
 
@@ -201,7 +210,14 @@ class Interval:
         """Element-wise square root; requires a non-negative interval."""
         if self.low < 0:
             raise ValueError(f"sqrt of an interval with a negative bound: {self}")
-        return Interval(math.sqrt(self.low), math.sqrt(self.high))
+        # Rounded outward like the arithmetic: math.sqrt rounds to nearest, which put the
+        # low end above the true root in about half of all cases (ledger 172).
+        low, high = math.sqrt(self.low), math.sqrt(self.high)
+        if math.isfinite(low) and Fraction(low) ** 2 > Fraction(self.low):
+            low = math.nextafter(low, -math.inf)
+        if math.isfinite(high) and Fraction(high) ** 2 < Fraction(self.high):
+            high = math.nextafter(high, math.inf)
+        return Interval(low, high)
 
     # --- rendering ------------------------------------------------------------
 
@@ -234,6 +250,14 @@ class Interval:
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         return self.describe()
+
+
+def _round_outward(exact: Fraction, *, down: bool) -> float:
+    """The float nearest ``exact``, one ulp further out if that lies inside it."""
+    value = float(exact)
+    if (Fraction(value) > exact) if down else (Fraction(value) < exact):
+        return math.nextafter(value, -math.inf if down else math.inf)
+    return value
 
 
 def _outward(value: float, op, a: float, b: float, *, down: bool) -> float:

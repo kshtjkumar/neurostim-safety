@@ -277,7 +277,8 @@ raise `cells_per_radius`, or read those samples as lower bounds.
 ### Intervals round outward, and the small converters refuse nonsense
 
 - Interval arithmetic widens a result by one ulp at each end when floating point had to
-  round it, so an interval contains every possible result. Before, `Interval(0.1, 0.1) *
+  round it, so an interval contains every possible result. `sqrt` and `from_mean_sd` do
+  the same. Before, `Interval(0.1, 0.1) *
   3` excluded 0.3. Exact results stay exact.
 - `Interval.square()` and `** n` know a square is non-negative: `[-1, 1]` squared is
   `[0, 1]`, where `x * x` gave `[-1, 1]`.

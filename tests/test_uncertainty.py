@@ -249,3 +249,39 @@ class TestC66OutwardRoundingAndGuards:
 
         with pytest.raises(ValueError, match="> 0"):
             thermal.ohmic_power_W(100.0, 0.0)
+
+
+class TestSqrtAndMeanSdRoundOutward:
+    """Ledger 172 (Phase 6 review R3), C7.0c. The module promises every rounded result is
+    widened outward; sqrt and from_mean_sd were not -- in 49944 of 100000 random sqrts the
+    low end sat above the true root. Checked here against exact rationals."""
+
+    def test_sqrt_contains_the_true_root(self):
+        import random
+        from fractions import Fraction
+
+        rng = random.Random(172)
+        bad = 0
+        for _ in range(20000):
+            lo = rng.uniform(0.0, 1e3)
+            hi = lo + rng.uniform(0.0, 1e3)
+            root = Interval(lo, hi).sqrt()
+            ok = Fraction(root.low) ** 2 <= Fraction(lo) and Fraction(root.high) ** 2 >= Fraction(hi)
+            bad += not ok
+        assert bad == 0, bad
+        assert Interval(4.0, 9.0).sqrt() == Interval(2.0, 3.0)  # exact stays exact
+
+    def test_from_mean_sd_contains_the_exact_bounds(self):
+        import random
+        from fractions import Fraction
+
+        rng = random.Random(1720)
+        bad = 0
+        for _ in range(20000):
+            mean, sd, k = rng.uniform(-1e3, 1e3), rng.uniform(0, 1e2), rng.uniform(0, 3)
+            iv = Interval.from_mean_sd(mean, sd, k)
+            low = Fraction(mean) - Fraction(k) * Fraction(sd)
+            high = Fraction(mean) + Fraction(k) * Fraction(sd)
+            bad += not (Fraction(iv.low) <= low and Fraction(iv.high) >= high)
+        assert bad == 0, bad
+        assert Interval.from_mean_sd(1.0, 0.5, 2.0) == Interval(0.0, 2.0)
