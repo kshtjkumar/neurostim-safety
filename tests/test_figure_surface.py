@@ -409,3 +409,46 @@ def _is_flat(line) -> bool:
     """Whether a drawn line is horizontal, so its single level can be compared."""
     y = line.get_ydata()
     return bool(len(y)) and len(set(map(float, y))) == 1
+
+
+class TestTheSeparatrixThatDecidedTheVerdictIsDrawn:
+    """Ledger 55 (io-gui H6), C5.2. The Shannon panel drew separatrices at the module
+    constants 1.5/1.7/2.0 and never at ``calc.k``, while the operating point's colour came
+    from ``calc.k``: at calc.k = 2.0 a point sat above the solid k = 1.5 line coloured
+    green, at calc.k = 1.2 below it coloured red. The line that decided is not on the chart."""
+
+    @staticmethod
+    def _separatrix(ax, k):
+        """The drawn lines of slope -1 at ``k``: Q * (Q/A) == 10**k along every point."""
+        found = []
+        for line in ax.get_lines():
+            x, y = (list(map(float, v)) for v in (line.get_xdata(), line.get_ydata()))
+            if len(x) > 2 and all(
+                math.isclose(xi * yi, 10.0**k, rel_tol=1e-9) for xi, yi in zip(x, y, strict=True)
+            ):
+                found.append(line)
+        return found
+
+    @pytest.mark.parametrize("k", [1.2, 1.5, 1.75, 2.0])
+    def test_the_assessments_k_is_drawn_and_named(self, k):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        calc = SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1), k=k)
+        ax = shannon_safe_operating_area(calc)
+        lines = self._separatrix(ax, k)
+        assert len(lines) == 1, (k, [line.get_label() for line in lines])
+        assert "this assessment" in str(lines[0].get_label())
+        others = [
+            line for line in ax.get_lines()
+            if line is not lines[0] and "this assessment" in str(line.get_label())
+        ]
+        assert not others
+        plt.close("all")
+
+    def test_without_a_calculator_nothing_is_named(self):
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        ax = shannon_safe_operating_area()
+        assert not [line for line in ax.get_lines() if "this assessment" in str(line.get_label())]
+        assert len(self._separatrix(ax, 1.5)) == 1
+        plt.close("all")

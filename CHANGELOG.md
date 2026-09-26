@@ -13,6 +13,14 @@ bump is where incompatible changes go, and these are incompatible:
 `pyproject.toml` and `CITATION.cff` had stayed at 0.13.0 while `__version__` said
 0.15.0. All three now say 0.16.0.
 
+### The Shannon panel draws the line its verdict was decided against
+
+The safe-operating-area panel drew separatrices at the reference values 1.5, 1.7 and 2.0
+only, and coloured the operating point by the calculator's own `k`. At `k = 2.0` a point
+above the solid 1.5 line was green; at `k = 1.2` a point below it was red. The
+calculator's `k` is now drawn solid and labelled "this assessment", and added when it is
+not one of the reference values. With no calculator the panel is unchanged.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

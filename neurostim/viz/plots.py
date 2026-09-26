@@ -94,6 +94,10 @@ def shannon_safe_operating_area(
     et al. (2005): each ``k`` is a straight line of slope -1 on log-log axes, because
     ``log(Q/A) = k - log(Q)``. The region below a line is the region their reprocessed
     histology showed no damage.
+
+    With a calculator, its own ``k`` is drawn solid and labelled "this assessment", added
+    to the reference values when it is not one of them: it is the line the operating
+    point's colour was decided against (ledger 55).
     """
     apply_style()
     if ax is None:
@@ -124,16 +128,33 @@ def shannon_safe_operating_area(
 
     q = np.logspace(math.log10(charge_range_uC[0]), math.log10(charge_range_uC[1]), 200)
     greys = (PALETTE["ink"], PALETTE["grey"], PALETTE["mid_grey"])
-    for k, colour in zip(k_values, greys, strict=False):
+    # The separatrix that decided the verdict is the assessment's own k, and it is drawn,
+    # solid and named, whether or not it is one of the reference values (ledger 55). The
+    # panel drew only the module constants, so at calc.k = 2.0 a point above the solid
+    # k = 1.5 line was coloured as passing, and the line it passed against was not there.
+    decided = calc.k if calc is not None else None
+    solid = decided if decided is not None else shannon_mod.K_SHANNON
+    lines = [(k, colour) for k, colour in zip(k_values, greys, strict=False)]
+    if decided is not None and not any(math.isclose(k, decided) for k, _ in lines):
+        lines.append((decided, PALETTE["ink"]))
+    for k, colour in lines:
         density = 10.0**k / q
         damaging = k >= shannon_mod.K_DAMAGE_OBSERVED
+        notes = [
+            note
+            for note, applies in (
+                ("damage seen", damaging),
+                ("this assessment", decided is not None and math.isclose(k, decided)),
+            )
+            if applies
+        ]
         ax.loglog(
             q,
             density,
             color=STATUS_COLOURS["FAIL"] if damaging else colour,
             linewidth=1.0,
-            linestyle="-" if k == shannon_mod.K_SHANNON else "--",
-            label=f"k = {k:.2f}" + (" (damage seen)" if damaging else ""),
+            linestyle="-" if math.isclose(k, solid) else "--",
+            label=f"k = {k:.2f}" + (f" ({', '.join(notes)})" if notes else ""),
             zorder=2,
         )
 
