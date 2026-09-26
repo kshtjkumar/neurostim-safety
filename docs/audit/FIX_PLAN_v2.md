@@ -1064,7 +1064,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 50 | HIGH | OK | C5.6 | **FIXED** `707f7c7`; applied reads above its bound |
 | 51 | HIGH | OK | C5.5 | **FIXED** `0aedc2d`; header-only raises naming the file; empty keeps the schema |
 | 52 | HIGH | OK | C1.9 | |
-| 53 | HIGH | OK | C5.7 | |
+| 53 | HIGH | OK | C5.7 | **FIXED** `325cf20`; every surname in the body resolves |
 | 54 | HIGH | OK | C4.4 | **FIXED** `889b525`; also carries `counter_electrode` |
 | 55 | HIGH | OK | C5.2 | **FIXED** `6d5ce49`; the calculator's k drawn and named |
 | 56 | HIGH | OK | C5.3 | **FIXED** `2fa4120`; shape and hatch carry pass/fail |
