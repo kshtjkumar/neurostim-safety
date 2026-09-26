@@ -3082,12 +3082,14 @@ class TestNonFiniteSettingsAreRejected:
             "frequency_hz": 130,
             "train_duration_s": 1,
         }
-        frame = assess_batch(
-            [
-                {"label": "good", **base, "compliance_V": 10.0},
-                {"label": "blank", **base, "compliance_V": float("nan")},
-            ]
-        )
+        # G12 (C5.5a, ledger 61/M4): a batch with a failed row now warns.
+        with pytest.warns(UserWarning, match="rows failed to build"):
+            frame = assess_batch(
+                [
+                    {"label": "good", **base, "compliance_V": 10.0},
+                    {"label": "blank", **base, "compliance_V": float("nan")},
+                ]
+            )
         rows = {row["label"]: row for _, row in frame.iterrows()}
 
         assert rows["good"]["status"] != "ERROR"

@@ -36,6 +36,18 @@ the same luminance. Now:
 replaced now: the first writes `shannon_k1.5.svg`, and `fig.svg` still writes `fig.svg`
 and `fig.pdf`.
 
+### An empty or partly failed batch says so
+
+- `read_batch_csv` on a header-only file returned an empty frame with no columns, which
+  looked the same as a clean batch. It now raises and names the file.
+- `assess_batch([])` returns an empty frame that still has every column.
+- A row that failed to build was NaN everywhere, so `frame.limiting_current_uA.min()`
+  quietly reported the minimum of the rows that ran. A failed row is now `None` in every
+  result column. The batch emits `BatchRowsFailedWarning` naming how many rows failed,
+  and lists their labels in `frame.attrs["rows_failed"]`.
+- A Latin-1 or empty file raised pandas' own error, which gave a byte offset and no path.
+  It now raises `ValueError` naming the file.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

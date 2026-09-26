@@ -7,8 +7,10 @@ materials -- and you want one row of safety results per combination.
 
 from __future__ import annotations
 
+import functools
 import json
 import math
+import warnings
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -145,6 +147,13 @@ def assess_batch(
     are reported in an ``error`` column rather than aborting the batch, unless
     ``stop_on_error`` is set -- a sweep of 200 currents should not be lost because one
     of them was mistyped.
+
+    A failed row has status ``"ERROR"`` and ``None`` in every result column, and the batch
+    emits :class:`BatchRowsFailedWarning` naming how many failed; their labels are in
+    ``frame.attrs["rows_failed"]``. pandas skips missing values when it aggregates, so
+    ``frame.limiting_current_uA.min()`` over a batch with failed rows is the minimum over
+    the rows that ran -- exclude or fix the failed ones first (ledger 61/M4). No rows at
+    all returns an empty frame that still has every column (ledger 51).
     """
     electrode_fields: set[str] = set()
     for cls in _ELECTRODE_TYPES.values():
@@ -187,7 +196,38 @@ def assess_batch(
             record = {"label": label, "status": "ERROR", "error": f"{type(exc).__name__}: {exc}"}
         results.append(record)
 
-    return _frame(results)
+    columns = ["label", *_result_columns(), "error"]
+    failed = [record["label"] for record in results if record["status"] == "ERROR"]
+    # With a failed row every column is built as the nullable ones are, so the failed row
+    # reads None, not NaN, in each result it does not have.
+    frame = _frame(results, columns, nullable=columns if failed else NULLABLE_COLUMNS)
+    frame.attrs["rows_failed"] = failed
+    if failed:
+        warnings.warn(
+            f"{len(failed)} of {len(results)} rows failed to build (labels {failed}); they "
+            f"carry status 'ERROR' and no results, so exclude them before aggregating, or "
+            f"pass stop_on_error=True",
+            BatchRowsFailedWarning,
+            stacklevel=2,
+        )
+    return frame
+
+
+class BatchRowsFailedWarning(UserWarning):
+    """Some rows of a batch failed to build and carry no results (ledger 61/M4)."""
+
+
+@functools.cache
+def _result_columns() -> tuple[str, ...]:
+    """The keys :meth:`SafetyCalculator.report` returns, in its order.
+
+    Read off one assessment rather than listed, so a key added to ``report()`` is a column
+    of every batch, failed rows included, the day it is added.
+    """
+    from ..geometry.planar import DiscElectrode
+
+    sample = SafetyCalculator(DiscElectrode(200.0, "Pt"), StimProtocol(50.0, 200.0, 130.0, 1.0))
+    return tuple(sample.report())
 
 
 NULLABLE_COLUMNS = ("limiting_current_uA", "required_compliance_V", "limit_is_provisional")
@@ -195,7 +235,11 @@ NULLABLE_COLUMNS = ("limiting_current_uA", "required_compliance_V", "limit_is_pr
 there is no limit for a flag to qualify (ledger 158)."""
 
 
-def _frame(records: list[dict[str, Any]]) -> pd.DataFrame:
+def _frame(
+    records: list[dict[str, Any]],
+    columns: list[str] | None = None,
+    nullable: Iterable[str] = NULLABLE_COLUMNS,
+) -> pd.DataFrame:
     """A results frame whose nullable columns hold ``None``, never ``NaN``.
 
     pandas turns ``None`` into ``NaN`` in a column that also holds numbers, and keeps it as
@@ -204,9 +248,9 @@ def _frame(records: list[dict[str, Any]]) -> pd.DataFrame:
     those columns are object dtype, a float or ``None`` in every row. On disk both are an
     empty CSV cell, as before.
     """
-    frame = pd.DataFrame(records)
-    for column in NULLABLE_COLUMNS:
-        if column in frame:
+    frame = pd.DataFrame(records, columns=columns)
+    for column in nullable:
+        if column in frame and len(frame):
             frame[column] = pd.Series(
                 [record.get(column) for record in records], index=frame.index, dtype=object
             )
@@ -214,8 +258,20 @@ def _frame(records: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 def read_batch_csv(path: str | Path, **kwargs: Any) -> pd.DataFrame:
-    """Read a batch specification CSV and assess every row."""
-    frame = pd.read_csv(path)
+    """Read a batch specification CSV and assess every row.
+
+    A file that cannot be parsed, or holds no rows to assess, raises ``ValueError`` naming
+    the file: pandas' own errors gave a byte offset or "No columns to parse" and no path,
+    which in a batch of many files identifies nothing (ledger 61/M14), and a header-only
+    file used to come back as an empty frame, indistinguishable from a clean one
+    (ledger 51).
+    """
+    try:
+        frame = pd.read_csv(path)
+    except (UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
+        raise ValueError(f"cannot read batch CSV {path}: {type(exc).__name__}: {exc}") from exc
+    if frame.empty:
+        raise ValueError(f"batch CSV {path} has no rows to assess (header only)")
     return assess_batch(frame.to_dict(orient="records"), **kwargs)
 
 

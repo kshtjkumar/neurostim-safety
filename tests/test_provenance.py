@@ -896,7 +896,9 @@ class TestTheFlatReportCarriesTheProvisionalAndIncompleteFlags:
             {"shape": "disc", "diameter_um": -1.0, "material": "Pt", "current_uA": 50,
              "pulse_width_us": 200, "frequency_hz": 130, "train_duration_s": 1},
         ]
-        frame = assess_batch(rows)
+        # G12 (C5.5a, ledger 61/M4): a batch with a failed row now warns.
+        with pytest.warns(UserWarning, match="rows failed to build"):
+            frame = assess_batch(rows)
         assert {"limit_is_provisional", "limits_incomplete"} <= set(frame.columns)
         flags = frame["limit_is_provisional"].tolist()
         assert isinstance(flags[0], bool)

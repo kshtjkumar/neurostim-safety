@@ -280,7 +280,9 @@ class TestIO:
             {"shape": "not_a_shape", "current_uA": 10, "pulse_width_us": 100,
              "frequency_hz": 50, "train_duration_s": 1},
         ]
-        frame = assess_batch(rows)
+        # G12 (C5.5a, ledger 61/M4): a batch with a failed row now warns.
+        with pytest.warns(UserWarning, match="rows failed to build"):
+            frame = assess_batch(rows)
         assert len(frame) == 2
         assert frame.loc[1, "status"] == "ERROR"
         assert "Unknown electrode shape" in frame.loc[1, "error"]
@@ -288,11 +290,13 @@ class TestIO:
     def test_unknown_column_is_rejected(self):
         from neurostim.io import assess_batch
 
-        frame = assess_batch(
-            [{"shape": "disc", "diameter_um": 100, "current_uA": 10,
-              "pulse_width_us": 100, "frequency_hz": 50, "train_duration_s": 1,
-              "typo_field": 3}]
-        )
+        # G12 (C5.5a, ledger 61/M4): a batch with a failed row now warns.
+        with pytest.warns(UserWarning, match="rows failed to build"):
+            frame = assess_batch(
+                [{"shape": "disc", "diameter_um": 100, "current_uA": 10,
+                  "pulse_width_us": 100, "frequency_hz": 50, "train_duration_s": 1,
+                  "typo_field": 3}]
+            )
         assert frame.loc[0, "status"] == "ERROR"
         assert "unrecognised column" in frame.loc[0, "error"]
 
@@ -416,3 +420,65 @@ class TestViz:
 
         ax = material_comparison(calc.e, calc.p)
         assert ax.get_xscale() == "log"
+
+
+class TestAnEmptyBatchIsNotACleanBatch:
+    """Ledger 51 (io-gui H2) and 61/M4, 61/M14, C5.5a. A header-only CSV returned a 0 x 0
+    frame, indistinguishable from a clean one; errored rows were NaN everywhere and
+    ``df.limiting_current_uA.min()`` silently reported the one good row as the batch
+    minimum; a Latin-1 or empty file raised an error naming a byte offset, not the file."""
+
+    HEADER = "shape,diameter_um,material,current_uA,pulse_width_us,frequency_hz,train_duration_s\n"
+    GOOD = "disc,200,Pt,50,200,130,1\n"
+
+    def test_a_header_only_csv_raises_naming_the_file(self, tmp_path):
+        from neurostim.io.tabular import read_batch_csv
+
+        path = tmp_path / "spec.csv"
+        path.write_text(self.HEADER)
+        with pytest.raises(ValueError, match=r"spec\.csv"):
+            read_batch_csv(path)
+
+    def test_an_empty_row_list_keeps_the_schema(self):
+        from neurostim.io.tabular import assess_batch
+
+        frame = assess_batch([])
+        assert len(frame) == 0
+        assert {"label", "status", "error", "limiting_current_uA"} <= set(frame.columns)
+
+    def test_an_errored_row_is_none_not_nan_and_the_batch_warns(self, tmp_path):
+        from neurostim.io.tabular import BatchRowsFailedWarning, read_batch_csv
+
+        path = tmp_path / "mixed.csv"
+        path.write_text(self.HEADER + self.GOOD + "disc,-1,Pt,50,200,130,1\n")
+        with pytest.warns(BatchRowsFailedWarning, match="1 of 2 rows"):
+            frame = read_batch_csv(path)
+        bad = frame[frame.status == "ERROR"].iloc[0]
+        good_columns = frame[frame.status != "ERROR"].iloc[0].dropna().index
+        result_columns = [c for c in good_columns if c not in ("label", "status", "error")]
+        assert result_columns
+        assert all(bad[c] is None for c in result_columns), {c: bad[c] for c in result_columns}
+        assert frame.attrs["rows_failed"] == [1]
+
+    def test_a_clean_batch_does_not_warn(self, tmp_path):
+        import warnings
+
+        from neurostim.io.tabular import read_batch_csv
+
+        path = tmp_path / "clean.csv"
+        path.write_text(self.HEADER + self.GOOD)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            frame = read_batch_csv(path)
+        assert frame.attrs["rows_failed"] == []
+
+    @pytest.mark.parametrize(
+        "content", [b"", HEADER.rstrip().encode() + b",label\ndisc,200,Pt,50,200,130,1,caf\xe9\n"]
+    )
+    def test_a_read_error_names_the_file(self, tmp_path, content):
+        from neurostim.io.tabular import read_batch_csv
+
+        path = tmp_path / "bad_input.csv"
+        path.write_bytes(content)
+        with pytest.raises(ValueError, match=r"bad_input\.csv"):
+            read_batch_csv(path)

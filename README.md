@@ -79,6 +79,13 @@ guessing that it means a continuous train. In `assess_batch` and `current_sweep`
 - `limits_incomplete` is true when a limit-bearing check did not run, so the true limit
   may be lower.
 
+In `assess_batch` a row that fails to build has status `ERROR`, its message in `error`,
+and `None` in every result column. The batch then emits `BatchRowsFailedWarning` and lists
+the failed labels in `frame.attrs["rows_failed"]`, because pandas skips missing values
+when it aggregates: exclude those rows before taking a minimum. `read_batch_csv` raises
+`ValueError` naming the file when it cannot parse the file, or when the file has a header
+and no rows.
+
 The JSON's `provenance` object gives each applied constant's reference key, `verified`
 and `peer_reviewed` flags, stored note and `inherited_from` (`cic`, `water_window`,
 `chronic_threshold`, or `null` where the material has none), and `material_verified`,
