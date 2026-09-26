@@ -15,6 +15,7 @@ opened automatically.
 from __future__ import annotations
 
 import sys
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -72,11 +73,24 @@ def main(output_dir: Path) -> int:
     print(f"Set by:           {assessment.limiting_mechanism}")
     print(f"Shannon allows:   {format_limit(assessment.shannon.max_current_uA)} uA")
     print(f"Electrode allows: {format_limit(assessment.charge.max_current_uA)} uA")
-    print(
-        "\nNote the gap: the tissue-damage criterion is satisfied with 7x headroom "
-        "while\nthe electrode itself cannot deliver the charge reversibly. Passing "
-        "Shannon alone\nis not sufficient."
-    )
+    # Read off the assessment, not written beside it: a fixed sentence here claimed the
+    # tissue criterion was "satisfied with 7x headroom" eleven lines after the script's
+    # own "[NOT_EVALUATED] Shannon criterion" (ledger 61/M10).
+    shannon = next(c for c in assessment.checks if c.name == "Shannon criterion")
+    if shannon.status.value == "NOT_EVALUATED":
+        gap = (
+            "The Shannon criterion does not apply at this size, so its number above is "
+            f"not a limit. The binding limit is set by {assessment.limiting_mechanism}: "
+            "on a microelectrode the charge per phase, not the charge density, governs "
+            "damage."
+        )
+    else:
+        gap = (
+            f"Shannon allows {assessment.shannon.max_current_uA / protocol.current_uA:.1f}x "
+            f"the requested amplitude; the binding limit is set by "
+            f"{assessment.limiting_mechanism}. Passing Shannon alone is not sufficient."
+        )
+    print("\n" + textwrap.fill(gap, 76))
 
     rule("3. Current sweep")
     sweep = current_sweep(electrode, protocol, np.arange(10, 121, 10), compliance_V=10.0)
@@ -91,11 +105,13 @@ def main(output_dir: Path) -> int:
         f"  {'material':10s} {'CIC limit':>12s}  {'status':<8s} {'max uA':>8s}  "
         f"binding constraint / first failure"
     )
+    bound: dict[str, tuple[float | None, str]] = {}
     for key in ("Pt", "SIROF", "PEDOT", "SS316LVM"):
         material = get_material(key)
         result = SafetyCalculator(
             electrode, protocol, material=material, compliance_V=10.0
         ).assess()
+        bound[key] = (result.limiting_current_uA, result.limiting_mechanism)
         failing = result.failed
         reason = failing[0].name if failing else result.limiting_mechanism
         material_limit_uA = result.limiting_current_uA
@@ -108,13 +124,30 @@ def main(output_dir: Path) -> int:
             f"{result.status.value:<8s} "
             f"{rendered:>8s}  {reason}"
         )
-    print(
-        "\nA higher charge-injection limit does not rescue this protocol. At "
-        "56.6 uC/cm^2 the\ninterface is driven roughly 2.8 V from rest under the "
-        "conservative pure-capacitance\nmodel, which leaves every published water "
-        "window regardless of material. Lower the\ncharge density -- shorter pulse, "
-        "lower amplitude, or more area -- rather than\nchanging material."
-    )
+    # Also read off the results: this paragraph used to say the interface was driven
+    # 2.8 V from rest and "leaves every published water window" beside the script's own
+    # "[PASS] Water window: peak -0.23 V" (ledger 61/M10).
+    pt_cic = get_material("Pt").cic_uC_cm2("conservative")
+    higher = [k for k in bound if get_material(k).cic_uC_cm2("conservative") > pt_cic]
+    shared = {bound[k] for k in (*higher, "Pt")}
+    if higher and len(shared) == 1:
+        limit_uA, mechanism = shared.pop()
+        rendered = "no amplitude" if limit_uA is None else f"{format_limit(limit_uA)} uA"
+        verdict = (
+            "A higher charge-injection limit does not rescue this protocol: every "
+            f"material here with a higher limit than Pt ({', '.join(higher)}) is bound "
+            f"at {rendered} by {mechanism}, as Pt is"
+            + (
+                ", a check on charge per phase that no electrode material changes. "
+                "Lower the charge per phase -- shorter pulse or lower amplitude -- "
+                "rather than changing material."
+                if mechanism == "Microelectrode charge/phase"
+                else "."
+            )
+        )
+        print("\n" + textwrap.fill(verdict, 76))
+    else:
+        print("\nThe materials bind differently here; see the table above.")
     print("\nProvenance for the best-performing material:")
     print(get_material("SIROF").describe())
 
@@ -182,8 +215,8 @@ def main(output_dir: Path) -> int:
     print(f"  JSON            {json_path}")
 
     fig, _ = safety_summary(calc)
-    # SVG and PDF only. The 600 dpi TIFF `save_publication` also offers is 47 MB of
-    # uncompressed RGBA for this figure, and the vector formats are the deliverable.
+    # SVG and PDF only: the vector formats are the deliverable. The 600 dpi TIFF that
+    # `save_publication` also offers is about 1 MB of LZW-compressed RGB for this figure.
     for path in save_publication(
         fig, output_dir / "figure_summary", formats=("svg", "pdf"), close=True
     ):

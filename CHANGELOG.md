@@ -150,6 +150,17 @@ A test also pins that the JSON export never emits `NaN`: a NaN raises instead.
 - A zero ceiling is no longer drawn at y = 0 on the log axis, where it could not be seen.
   The refusal sentence names it.
 
+### The worked example says what its own output shows
+
+The example printed two fixed paragraphs that contradicted the assessment above them:
+- that the tissue criterion was "satisfied with 7x headroom", while the Shannon check was
+  NOT_EVALUATED;
+- that the interface "leaves every published water window", while Water window passed
+  at −0.23 V.
+
+Both paragraphs are now read off the assessment. `compare_with_point_source` refuses a
+current other than the one the field was solved at; rescale the field first.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

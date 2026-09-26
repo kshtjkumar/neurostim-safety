@@ -671,3 +671,46 @@ class TestTheFemImportPathCatchesItsOwnMistakes:
             load_field(path, current_uA=100.0)
         unrecorded = save_field(FEMField(points, np.ones(20)), tmp_path / "none.npz")
         assert load_field(unrecorded).current_uA is None
+
+
+class TestTheExampleAndTheFemComparisonAgreeWithThemselves:
+    """C5.11c: ledgers 61/M10 and 62/L5."""
+
+    def test_m10_the_narration_agrees_with_the_assessment_above_it(self, tmp_path, capsys):
+        """The worked example printed "the tissue-damage criterion is satisfied with 7x
+        headroom" eleven lines after "[NOT_EVALUATED] Shannon criterion", and "the interface
+        is driven roughly 2.8 V from rest ... which leaves every published water window"
+        beside "[PASS] Water window: peak -0.23 V"."""
+        import importlib.util
+        from pathlib import Path
+
+        spec = importlib.util.spec_from_file_location(
+            "worked_example", Path(__file__).resolve().parents[1] / "examples" / "worked_example.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        assert module.main(tmp_path) == 0
+        out = " ".join(capsys.readouterr().out.split())
+        assert "[NOT_EVALUATED] Shannon criterion" in out and "[ PASS] Water window" in out
+        assert "satisfied with 7x headroom" not in out
+        assert "leaves every published water window" not in out
+        assert "cannot deliver the charge reversibly" not in out
+        assert "The Shannon criterion does not apply at this size" in out
+        assert (
+            "every material here with a higher limit than Pt (SIROF, PEDOT) is bound at "
+            "20.00 uA by Microelectrode charge/phase, as Pt is" in out
+        )
+
+    def test_l5_a_comparison_at_another_current_is_refused(self):
+        from neurostim.io.fem import FEMField, compare_with_point_source
+        from neurostim.models.field import potential_V
+
+        rng = np.random.default_rng(7)
+        direction = rng.normal(size=(40, 3))
+        direction /= np.linalg.norm(direction, axis=1, keepdims=True)
+        r = np.geomspace(50.0, 5000.0, 40)
+        field = FEMField(direction * r[:, None], np.asarray(potential_V(100.0, r, 0.35)),
+                         current_uA=100.0)
+        with pytest.raises(ValueError, match="100"):
+            compare_with_point_source(field, 999999.0)
+        assert len(compare_with_point_source(field, 100.0)) == 40

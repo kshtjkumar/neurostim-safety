@@ -310,6 +310,13 @@ def compare_with_point_source(
     """
     from ..models.field import potential_V
 
+    # The field was solved at one current; comparing it against a point source at another
+    # returned ratios off by their quotient with no complaint (ledger 62/L5).
+    if field.current_uA is not None and current_uA != field.current_uA:
+        raise ValueError(
+            f"the field was solved at {field.current_uA:g} uA but compared at "
+            f"{current_uA:g} uA; rescale it first with field.scale_to_current"
+        )
     r = np.linalg.norm(field.points_um, axis=1)
     keep = r >= min_distance_um
     if not np.any(keep):
