@@ -11,8 +11,10 @@ all of that. This one does not.
 
 > **Not validated for clinical or regulatory use.** The tissue-damage criterion is an
 > empirical separatrix fitted to animal histology. The thermal and activation models are
-> analytic approximations with narrow, documented validity ranges. Values that could not
-> be confirmed against a primary source are flagged `PROVISIONAL` wherever they surface.
+> analytic approximations with narrow, documented validity ranges. Anything that rests on
+> an unconfirmed constant or model -- your own measurement, a capacitance derived from it,
+> a criterion extrapolated beyond the geometry it was fitted on -- is marked `PROVISIONAL`
+> wherever it surfaces.
 
 ## Install
 
@@ -118,8 +120,8 @@ update. Exports the PDF report and the four-panel summary figure.
 | Check | Basis | Source |
 |---|---|---|
 | Shannon criterion | `k = log₁₀(Q²/A)`, damage separatrix | Shannon 1992; Merrill 2005 eq. 5.1 |
-| Charge-injection limit | Material CIC vs applied charge density. NOT_EVALUATED for monophasic delivery, because every CIC was measured biphasic | Cogan 2008 Table 2; Merrill 2005 |
-| Water window | Peak interfacial excursion vs electrolysis limits, plus DC drift: when the charge a waveform leaves behind (with each pulse riding on it) reaches the edge, against the train duration | Cogan 2008; Merrill 2005 |
+| Charge-injection limit | Material CIC vs applied charge density. NOT_EVALUATED for monophasic delivery, because every CIC was measured biphasic | each material's primary source (in the provenance); Cogan 2008 Table 2 as the review; Merrill 2005 |
+| Water window | Peak interfacial excursion vs electrolysis limits, plus DC drift: when the charge a waveform leaves behind (with each pulse riding on it) reaches the edge, against the train duration | Cogan 2008; Riedy & Walter 1996 (316LVM) |
 | Charge balance | Fraction of charge recovered and the resulting net DC. FAIL only when nothing is recovered; CAUTION for a partial recovery, whose consequence is judged by Water window | Merrill 2005 |
 | Counter charge injection | Only with a `counter_electrode`: the counter's larger phase charge density against its own material's CIC for the mirrored waveform (a cathodic-first protocol is anodic-first at the counter) | Cogan 2008 Table 2; Merrill 2005 |
 | Compliance voltage | `I(R_access + R_lead) + ΔV_polarisation`; with a `counter_electrode`, `I(R_a + R_c − 2/(Gσd) + R_lead) + ΔV_a + ΔV_c`. An unbalanced train adds the DC offset its first `N − 1` pulses leave behind, capped at the water-window headroom on the active electrode. Without a counter, CAUTION: a single-interface budget is assumed | Newman 1966 |
@@ -140,14 +142,15 @@ tip), sphere, hemisphere, plus linear and grid arrays.
 
 ## Corrections to the 0.1.0 prototype
 
-Tracing every constant to its primary source changed four of the five material values:
+Tracing every constant to its primary source changed all five of the prototype's material
+values (the database now holds nine materials):
 
 | Material | 0.1.0 | current | Why |
 |---|---|---|---|
 | `SS` | 0.05 mC/cm² | 0.02–0.04 | Traced to Riedy & Walter 1996; 40 µC/cm² safe, 20 non-faradaic. Stainless steel is absent from Cogan Table 2 |
 | `Pt` | 0.10 | 0.05–0.15 | Cogan reports a range, from Rose & Robblee 1990 at 200 µs |
 | `PtIr` | 0.15 | 0.05–0.15 | Cogan gives **one** row for "Pt and PtIr alloys". The separate higher value was not supported |
-| `PEDOT` | 5.0 | 3.6–15.0 | Cogan's 15 mC/cm² is from a **conference abstract**; the low end is Nyberg et al.'s peer-reviewed value |
+| `PEDOT` | 5.0 | 2.3–3.6 | Cui & Zhou 2007, peer reviewed. Cogan's 15 mC/cm² is from a **conference abstract** and is not used |
 | `SIROF` | 2.0 | 1.0–5.0 | Now carries the published range rather than a midpoint |
 
 The prototype's README example (80 µA into a 330/270 µm stainless ring) exceeds the
@@ -295,8 +298,8 @@ the electrode's own access resistance.
   applied. A caution is raised when your protocol is more than 2× from those conditions.
   Cogan also reports ~20 % temperature dependence (20 °C vs 37 °C) and strong area
   dependence for SIROF; neither is corrected for.
-- **PEDOT's headline limit is not peer reviewed** — it comes from a meeting abstract, and
-  is flagged `NOT PEER REVIEWED` at every point of use.
+- **PEDOT** — its limit is Cui & Zhou 2007's peer-reviewed 2.3–3.6 mC/cm². The 15 mC/cm²
+  in Cogan 2008 comes from a meeting abstract and is not used.
 - **Water window** — models the interface as a linear capacitance `C_eff`, derived from
   the material's own charge-injection limit and window. Injecting exactly the CIC then
   reaches the window edge, and the 20 µF/cm² double-layer value, which ignores
@@ -348,8 +351,10 @@ the electrode's own access resistance.
   checked and can bind the limiting current. Its water window and chronic dissolution
   threshold are **not** assessed. A counter smaller than the active electrode carries the
   same charge at a higher density, so check those separately.
-- **Thermal** — spreading-resistance heating only. Tissue properties are now IT'IS v4.2
-  with uncertainty, but the model still omits electrode and lead self-heating and any
+- **Thermal** — spreading-resistance heating only. Thermal tissue properties are IT'IS
+  v4.2 with uncertainty; the electrical conductivity defaults to Elwassif et al.'s
+  0.35 S/m, the DBS modelling convention, not IT'IS's grey-matter value, so pass the one
+  you intend. The model still omits electrode and lead self-heating and any
   encapsulation layer. Gives millikelvin rises for clinical DBS parameters, well below the
   ~0.8 K peak Elwassif et al. (2006) report from a finite element model. The gap is the
   protocol's power, not missing physics: their continuous 1.56 V RMS bipolar drive
@@ -357,8 +362,10 @@ the electrode's own access resistance.
   0.82 K (two contacts as spheres 2 mm apart, an equal power split: our modelling
   choice, not theirs). The source radius is the electrode's own electro-thermal radius,
   `1/(4πσR_access)`.
-- **VTA** — a sphere is the wrong shape, `k` spans an order of magnitude across studies,
-  and the default value was read from a secondary summary. Fit your own.
+- **VTA** — a sphere is the wrong shape, and `k` spans a factor of ninety across cortical
+  elements (300–27 000 µA/mm²; the result reports the radius and volume across it). The
+  default is Stoney et al. 1968's pyramidal-tract mean, read from Tehovnik et al. 2006's
+  figure. Fit your own.
 
 ## References
 
@@ -369,10 +376,9 @@ from neurostim import bibliography
 print(bibliography())
 ```
 
-Primary sources: Shannon 1992; McCreery et al. 1990; Merrill, Bikson & Jefferys 2005;
-Cogan 2008; Rose & Robblee 1990; Riedy & Walter 1996; Brummer & Turner 1977; Rand & Woods
-1971; Newman 1966; Pennes 1948; Elwassif et al. 2006; Lapicque 1907; Weiss 1901; Stoney
-et al. 1968; Tehovnik et al. 2006; Kuncel & Grill 2004.
+`bibliography()` is the list of record: every constant names its source there, and a PDF
+report lists exactly the sources its text cites. It is generated, not maintained here,
+because a hand-written list here fell eleven sources behind the code.
 
 ## Licence
 

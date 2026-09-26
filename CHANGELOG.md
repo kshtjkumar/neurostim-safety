@@ -293,6 +293,21 @@ raise `cells_per_radius`, or read those samples as lower bounds.
 - No package output moves: the package builds its intervals directly and does no
   arithmetic on them.
 
+### The README says what the code does
+
+These hand-written claims in the README had drifted from the database, and each is now
+corrected and held to it by a test:
+- PEDOT is Cui & Zhou 2007's 2.3–3.6 mC/cm², not "3.6–15.0".
+- The README claimed PEDOT carried a "NOT PEER REVIEWED" flag that no material carries.
+  The claim is removed, and the PROVISIONAL sentence now says what that flag actually
+  marks.
+- All five prototype values changed, not four.
+- The water window no longer cites Merrill, which no window uses.
+- The hand-written primary-source list, eleven sources behind, is replaced by
+  `bibliography()`.
+- The 0.35 S/m conductivity default is named as Elwassif's convention.
+- The current-distance `k` spans a factor of ninety, not an order of magnitude.
+
 ### The flat report says when its limit is provisional
 
 The PROVISIONAL marker reached `describe()`, the GUI, the PDF and the JSON checks list,

@@ -692,3 +692,40 @@ class TestTheThermalClaimIsTheReproductionNotAValidation:
             assert "0.83 K" in text and "0.82 K" in text, name
         citation = (root / "CITATION.cff").read_text()
         assert "validated" not in citation.lower()
+
+
+class TestTheReadmeMatchesTheDatabase:
+    """Ledgers 74, 76 and 78/S-24, C7.4: the README's hand-written claims had drifted from
+    the code -- PEDOT's range, a NOT PEER REVIEWED flag no material carries, "four of the
+    five", Merrill cited for the water window, a primary-source list missing about eleven
+    sources, and a conductivity default it did not name."""
+
+    @staticmethod
+    def _readme():
+        from pathlib import Path
+
+        return (Path(__file__).resolve().parents[1] / "README.md").read_text()
+
+    def test_74_the_pedot_row_is_the_databases(self):
+        from neurostim.materials import get_material
+
+        pedot = get_material("PEDOT").cic
+        row = next(line for line in self._readme().splitlines() if line.startswith("| `PEDOT`"))
+        assert f"{pedot.low:g}\u2013{pedot.high:g}" in row and "15.0" not in row.split("|")[3]
+
+    def test_76_no_flag_is_claimed_that_does_not_fire(self):
+        from neurostim.materials import MATERIALS
+
+        text = " ".join(self._readme().split())
+        assert all(m.cic.peer_reviewed for m in MATERIALS.values())  # premise
+        assert "flagged `NOT PEER REVIEWED` at every point of use" not in text
+        assert "PEDOT's headline limit is not peer reviewed" not in text
+
+    def test_s24_the_remaining_claims(self):
+        text = " ".join(self._readme().split())
+        assert "four of the five material values" not in text
+        water = next(line for line in self._readme().splitlines() if line.startswith("| Water window |"))
+        assert "Merrill" not in water
+        assert "Primary sources:" not in text and "bibliography()" in text
+        assert "0.35 S/m" in text
+        assert "an order of magnitude across studies" not in text
