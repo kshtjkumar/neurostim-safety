@@ -189,19 +189,24 @@ def shannon_safe_operating_area(
             label="protocol",
         )
         if annotate:
-            # Up and right of the point, unless the point sits in the upper half of the
-            # axes, where that runs into the upper-right legend: then down and left
-            # (ledger 162). The fraction is read on the log axis the point is drawn on.
-            low, high = (math.log10(v) for v in ax.get_ylim())
-            height = (math.log10(status.charge_density_uC_cm2) - low) / (high - low)
-            below = height > 0.5
+            text = f"k = {status.k_metric:.2f}"
+            xy = (status.charge_per_phase_uC, status.charge_density_uC_cm2)
+            data = (
+                [
+                    (p.charge_per_phase_uC, p.charge_density_uC_cm2)
+                    for p in (*mccreery.undamaged(), *mccreery.partial(), *mccreery.damaged())
+                ]
+                if show_data
+                else []
+            )
+            (dx, dy), ha, va = _clear_offset(ax, xy, text, 6.5, data)
             ax.annotate(
-                f"k = {status.k_metric:.2f}",
-                xy=(status.charge_per_phase_uC, status.charge_density_uC_cm2),
-                xytext=(-8, -8) if below else (8, 8),
+                text,
+                xy=xy,
+                xytext=(dx, dy),
                 textcoords="offset points",
-                ha="right" if below else "left",
-                va="top" if below else "bottom",
+                ha=ha,
+                va=va,
                 fontsize=6.5,
                 color=colour,
                 fontweight="bold",
@@ -219,26 +224,62 @@ def shannon_safe_operating_area(
     # separatrices (ledger 166).
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.30), ncol=3, handlelength=1.6,
               fontsize=5.4, frameon=False, columnspacing=1.0)
-    if shannon_off:
-        ax.text(
-            0.03,
-            0.17,
-            "Shannon not applied (microelectrode)",
-            transform=ax.transAxes,
-            fontsize=6,
-            color=PALETTE["grey"],
-            va="bottom",
-        )
+    # One text block, so the not-applied note cannot touch the caption beneath it, as a
+    # separate text placed above it did (ledger 169).
     ax.text(
         0.03,
         0.04,
-        "points: McCreery et al. 1990 Table I\n(400 us, 50 Hz, 7 h, cat cortex)",
+        ("Shannon not applied (microelectrode)\n" if shannon_off else "")
+        + "points: McCreery et al. 1990 Table I\n(400 us, 50 Hz, 7 h, cat cortex)",
         transform=ax.transAxes,
         fontsize=6,
         color=PALETTE["grey"],
         va="bottom",
     )
     return ax
+
+
+def _clear_offset(
+    ax, xy: tuple[float, float], text: str, fontsize: float, data: list[tuple[float, float]]
+) -> tuple[tuple[float, float], str, str]:
+    """An offset for a point's label whose box covers none of ``data``.
+
+    Up-right first, then down-left, up-left and down-right. The box is estimated from the
+    text length and font size, with a margin, in display units at the current limits, and
+    must also stay out of the caption's corner, the lower-left of the axes. The
+    label's white backing used to sit on a McCreery point when up-right was taken
+    unconditionally (ledger 169); the down-left fallback also keeps a high point's label
+    off the top of the panel (ledger 162).
+    """
+    scale = ax.figure.dpi / 72.0
+    width = (0.62 * fontsize * len(text) + 6.0) * scale
+    height = (1.5 * fontsize + 4.0) * scale
+    ax.get_xlim(), ax.get_ylim()  # settle the autoscaled limits the transform uses
+    px, py = ax.transData.transform(xy)
+    others = ax.transData.transform(data) if data else []
+    upper = (py - ax.bbox.y0) / ax.bbox.height > 0.5
+    # The caption's corner: the lower-left 60 % x 25 % of the axes.
+    caption_x = ax.bbox.x0 + 0.60 * ax.bbox.width
+    caption_y = ax.bbox.y0 + 0.25 * ax.bbox.height
+    candidates = [
+        ((8, 8), "left", "bottom", 1, 1),
+        ((-8, -8), "right", "top", -1, -1),
+        ((-8, 8), "right", "bottom", -1, 1),
+        ((8, -8), "left", "top", 1, -1),
+    ]
+    if upper:
+        candidates.insert(0, candidates.pop(1))
+    for offset, ha, va, sx, sy in candidates:
+        x0 = px + sx * 8 * scale
+        y0 = py + sy * 8 * scale
+        xs = sorted((x0, x0 + sx * width))
+        ys = sorted((y0, y0 + sy * height))
+        in_caption = xs[0] <= caption_x and ys[0] <= caption_y
+        if not in_caption and not any(
+            xs[0] <= ox <= xs[1] and ys[0] <= oy <= ys[1] for ox, oy in others
+        ):
+            return offset, ha, va
+    return candidates[0][0], candidates[0][1], candidates[0][2]
 
 
 def current_limit_sweep(

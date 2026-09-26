@@ -204,6 +204,10 @@ unchanged.
 - "V falls as 1/r" sits below its line. It used to sit on the line.
 - On a microelectrode the Shannon panel reads "k = 1.50 (this k, not applied)" and says
   "Shannon not applied (microelectrode)".
+- The operating-point label takes the first of four positions (up-right, down-left,
+  up-left, down-right) that covers no McCreery point and stays out of the caption corner.
+  On the DBS panel it used to cover the no-damage point at 1 µC. The not-applied note
+  and the McCreery caption are one text block, so they cannot overlap.
 
 ### The flat report says when its limit is provisional
 

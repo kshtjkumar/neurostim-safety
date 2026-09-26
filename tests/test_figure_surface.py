@@ -768,3 +768,45 @@ class TestNoTextCollides:
         ax = shannon_safe_operating_area(macro)
         assert not any("not applied" in str(line.get_label()) for line in ax.get_lines())
         plt.close("all")
+
+
+class TestTheShannonLabelsClearTheData:
+    """Ledger 169 (Phase 5b review Q2), C6.0b. On the DBS panel the "k = -0.27" label's
+    white backing covered the McCreery no-damage circle at Q = 1 uC; on the worked
+    example "Shannon not applied (microelectrode)" touched the McCreery caption."""
+
+    @staticmethod
+    def _cases():
+        from neurostim.electrodes import electrode
+
+        return [
+            SafetyCalculator(electrode("dbs_3389"), StimProtocol(3000, 60, 130, 1), compliance_V=10.0),
+            SafetyCalculator(RingElectrode(330, 270, "Pt"), StimProtocol(80, 200, 130, 1)),
+            SafetyCalculator(DiscElectrode(1000, "Pt"), StimProtocol(8000, 500, 50, 1)),
+            SafetyCalculator(DiscElectrode(500, "Pt"), StimProtocol(80, 200, 130, 1)),
+            SafetyCalculator(DiscElectrode(2000, "Pt"), StimProtocol(1000, 400, 50, 1)),
+        ]
+
+    def test_the_label_covers_no_data_point_and_no_text_overlaps(self):
+        import numpy as np
+
+        from neurostim.viz.plots import shannon_safe_operating_area
+
+        for calc in self._cases():
+            ax = shannon_safe_operating_area(calc)
+            ax.figure.canvas.draw()
+            renderer = ax.figure.canvas.get_renderer()
+            [label] = [t for t in ax.texts if t.get_text().startswith("k = ")]
+            box = label.get_bbox_patch().get_window_extent(renderer)
+            for line in ax.get_lines():
+                if str(line.get_label()) not in ("no damage", "some damage", "damage"):
+                    continue
+                pts = ax.transData.transform(np.column_stack(line.get_data()))
+                inside = (pts[:, 0] >= box.x0) & (pts[:, 0] <= box.x1) & (
+                    pts[:, 1] >= box.y0) & (pts[:, 1] <= box.y1)
+                assert not inside.any(), (calc.e, label.get_text(), line.get_label())
+            boxes = [t.get_window_extent(renderer) for t in ax.texts]
+            for i, a in enumerate(boxes):
+                for b in boxes[i + 1:]:
+                    assert not a.overlaps(b), (calc.e, [t.get_text() for t in ax.texts])
+            plt.close("all")
