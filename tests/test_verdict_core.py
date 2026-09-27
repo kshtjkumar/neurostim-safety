@@ -2309,7 +2309,7 @@ class TestUnsafeAtAnyAmplitude:
         assessment and the resulting string is checked for the absent number and the
         present name.
         """
-        pytest.importorskip("PyQt6")
+        pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)  # ledger 175
         from neurostim.gui.app import headline_text
 
         text = headline_text(self._monophasic().assess())
@@ -2783,7 +2783,7 @@ class TestLimitsIncompleteAndByKind:
     def test_the_pdf_and_the_gui_headline_say_the_limit_may_be_lower(self, tmp_path):
         """Not tautological: both surfaces are rendered and searched for the literal
         marker, which neither carries today."""
-        pytest.importorskip("PyQt6")
+        pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)  # ledger 175
         from neurostim.gui.app import headline_text
 
         calc = self._worked_example()

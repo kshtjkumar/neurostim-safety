@@ -20,7 +20,12 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-pytest.importorskip("PyQt6.QtWidgets", reason="PyQt6 not installed")
+# ImportError, not only ModuleNotFoundError: PyQt6 installed without its system libraries
+# (libEGL on a bare runner) raises ImportError, which pytest 9.1 re-raises by default and
+# which failed the whole run at collection (ledger 175).
+pytest.importorskip(
+    "PyQt6.QtWidgets", reason="PyQt6 or its system libraries not available", exc_type=ImportError
+)
 
 from PyQt6.QtWidgets import QApplication
 

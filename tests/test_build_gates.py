@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -1021,3 +1022,41 @@ class TestContributingCarriesTheRulesTheGatesDependOn:
             "python scripts/provenance_audit.py --strict",
         ):
             assert command in text and command in ci, command
+
+
+class TestTheGuiTestsSkipWithoutQtSystemLibraries:
+    """Ledger 175 (Phase 7 review S1). A runner with PyQt6 installed but no libEGL raises
+    ``ImportError`` (not ``ModuleNotFoundError``) on ``import PyQt6.QtWidgets``. Under
+    pytest 9.1 ``importorskip`` re-raises that by default, so test_gui.py errored at
+    collection and failed the whole run. A stub PyQt6 that raises the same error stands in
+    for the runner."""
+
+    def test_the_gui_tests_skip_instead_of_erroring(self, tmp_path: Path) -> None:
+        stub = tmp_path / "PyQt6"
+        stub.mkdir()
+        (stub / "__init__.py").write_text(
+            'raise ImportError("libEGL.so.1: cannot open shared object file")\n'
+        )
+        env = {**os.environ, "PYTHONPATH": str(tmp_path), "QT_QPA_PLATFORM": "offscreen"}
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+             "tests/test_gui.py", "tests/test_verdict_core.py", "-k",
+             "test_gui or gui_headline or TestLimitsIncompleteAndByKind"],
+            cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stdout[-2000:]
+        assert "skipped" in result.stdout and "error" not in result.stdout.lower()
+
+
+def test_the_coverage_job_installs_what_the_test_job_installs() -> None:
+    """Ledger 175: the floor is measured over the suite as the test job runs it."""
+    import re
+
+    def packages(job: str) -> set[str]:
+        text = _ci_job(job)
+        start = text.index("sudo apt-get install -y")
+        block = text[start : text.index("\n\n", start) if "\n\n" in text[start:] else None]
+        return set(re.findall(r"\b(?:poppler-utils|lib[\w.-]+)", block))
+
+    assert "poppler-utils" in packages("coverage")
+    assert packages("coverage") == packages("test")

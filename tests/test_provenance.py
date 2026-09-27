@@ -422,6 +422,7 @@ class TestAProvisionalBindingLimitIsMarkedWhereTheLimitIsShown:
         assert assessment.limiting_current_uA is not None
 
     def test_every_headline_surface_says_provisional(self):
+        pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)  # ledger 175
         from neurostim.gui.app import headline_text
         from neurostim.io.report import _headline_html
 
@@ -456,6 +457,7 @@ class TestAProvisionalBindingLimitIsMarkedWhereTheLimitIsShown:
         assert any("binding limit" in t and "provisional" in t.lower() for t in texts)
 
     def test_a_non_provisional_binding_limit_is_not_marked(self):
+        pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)  # ledger 175
         from neurostim.gui.app import headline_text
 
         assessment = SafetyCalculator(

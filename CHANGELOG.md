@@ -110,7 +110,12 @@ check informationally, and the workflow says so.
 ### CI runs the PDF tests, pins its tools and gates coverage where it stands
 
 - The test job installs poppler (`poppler-utils` on Linux, `brew install poppler` on
-  macOS). Without it, the tests that read the generated PDF report's text skipped on
+  macOS), and so does the coverage job, with the same Qt libraries. The coverage floor
+  is measured over the suite the test job runs: without pdftotext, `references.py` fell
+  to 16.67 % of its branch points and the per-module floor failed. The GUI tests now
+  skip, rather than error at collection, when PyQt6 is installed but its system
+  libraries (libEGL) are missing. pytest 9.1's `importorskip` re-raises that
+  `ImportError` unless asked with `exc_type=ImportError`. Without it, the tests that read the generated PDF report's text skipped on
   every CI interpreter. The tests that read the paper library still skip in CI, because
   the papers are not redistributed.
 - The `dev` extra pins its tools exactly: pytest 9.1.1, pytest-cov 7.1.0, coverage

@@ -998,6 +998,8 @@ class TestTheHeadlineRefusesWheneverNoAmplitudeIsSafe:
 
         from test_verdict_core import pdf_text
 
+        pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)  # ledger 175
+
         from neurostim.gui.app import headline_text
         from neurostim.io.tabular import report_to_json
 
