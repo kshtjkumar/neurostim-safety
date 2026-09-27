@@ -580,18 +580,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gate", type=Path, metavar="RESULTS",
                         help="check a results file against the gate and exit")
     parser.add_argument("--named-only", action="store_true")
+    parser.add_argument(
+        "--seed", type=int, default=SEED,
+        help=(
+            "seed for the generated sample. After tests have been written against one "
+            "sample's survivors, re-running that seed measures a set the tests were tuned "
+            "to; pre-register a fresh seed to measure the suite (ledger 181)"
+        ),
+    )
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     parser.add_argument("--timeout", type=float, default=900.0,
                         help="seconds per pytest run before the mutant counts as killed")
     parser.add_argument("--output", type=Path, default=RESULTS)
     args = parser.parse_args(argv)
 
-    generated = [] if args.named_only else generated_sample()
+    generated = [] if args.named_only else generated_sample(seed=args.seed)
     if args.list:
         for m in (*NAMED, *generated):
             print(f"{m.id:40} {m.path:40} {m.description}")
         print(f"{len(NAMED)} named, {len(generated)} generated "
-              f"(from {len(enumerate_sites())} sites, seed {SEED})")
+              f"(from {len(enumerate_sites())} sites, seed {args.seed})")
         return 0
     if args.check_anchors:
         bad = []
@@ -624,7 +632,7 @@ def main(argv: list[str] | None = None) -> int:
             if dirty else f"commit {head} exactly"
         ),
         "date": _dt.date.today().isoformat(),
-        "seed": SEED,
+        "seed": args.seed,
         "sites": len(enumerate_sites()),
         "named_killed": sum(o["status"] in ("killed", "timeout") for o in named_out),
         "named_total": len(named_out),
