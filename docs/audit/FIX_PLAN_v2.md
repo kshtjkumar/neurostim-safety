@@ -1136,7 +1136,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 68/T21 | MED | PARTIAL | C7.6 | **FIXED** `500a2fb`; poppler in the test job |
 | 68/T25 | MED | PARTIAL | C7.6 | **FIXED** `500a2fb`; tools pinned; floor 71.0 |
 | 68/T26 | MED | PARTIAL | C7.6 | **FIXED** `506c589`; mypy neurostim tests; 188 fixed |
-| 68/G2 | MED | PARTIAL | C7.6 | scripts/mutation.py: 26 recoverable named mutants + >=150 generated (D3) |
+| 68/G2 | MED | PARTIAL | C7.6 | **FIXED** `6dbdd5d`; 26/26 named, 150/160 generated |
 | 69 | MED | PARTIAL | C0.2, C0.5, C1.11, C3.5 | **FIXED** `978c1da` (T18 landed at C3.5); ledger gate at C0.5 |
 | 70 | — | N/A | — | vindication |
 | 71 | HIGH | OK | C4.5 | **FIXED** `c375476` |
