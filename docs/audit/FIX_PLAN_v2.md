@@ -1130,8 +1130,8 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 68 | MED | PARTIAL | C0.1, C7.6 | branch floor now implementable (§3) |
 | 68/T22 | MED | PARTIAL | C7.6 | **FIXED** `6200de2`; strict against KNOWN_GAPS; 3 DOIs verified |
 | 68/D2 | MED | PARTIAL | C7.6 | **FIXED** `e773024`; --require-papers; local release gate |
-| 68/T21 | MED | PARTIAL | C7.6 | poppler-utils in the test job so the PDF-text tests run |
-| 68/T25 | MED | PARTIAL | C7.6 | pinned ruff/mypy; pytest-cov in the dev extra; coverage floor ratcheted |
+| 68/T21 | MED | PARTIAL | C7.6 | **FIXED** `500a2fb`; poppler in the test job |
+| 68/T25 | MED | PARTIAL | C7.6 | **FIXED** `500a2fb`; tools pinned; floor 71.0 |
 | 68/T26 | MED | PARTIAL | C7.6 | mypy neurostim tests, 188 test errors fixed (D4) |
 | 68/G2 | MED | PARTIAL | C7.6 | scripts/mutation.py: 26 recoverable named mutants + >=150 generated (D3) |
 | 69 | MED | PARTIAL | C0.2, C0.5, C1.11, C3.5 | **FIXED** `978c1da` (T18 landed at C3.5); ledger gate at C0.5 |
