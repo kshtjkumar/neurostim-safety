@@ -216,30 +216,32 @@ JUDGED_EQUIVALENT: dict[str, str] = {
     "G:neurostim/models/field.py:131:5704":
         "0-d array arithmetic returns an np.float64, which is a float, so both branches "
         "return a float",
-    "G:neurostim/models/strength_duration.py:304:12103":
-        "maxfev only caps iterations; the fits converge long before 2000 or 4000 "
-        "evaluations would bind",
-    "G:neurostim/models/strength_duration.py:312:12462":
-        "NOT proven equivalent: differs only for dof >= 1 with a non-finite curve_fit "
-        "covariance (SE inf instead of None); no design the fit accepts was found to "
-        "produce one",
-    "G:neurostim/models/vta.py:196:8128":
-        "differs only for a fitted offset of exactly 0.0, which float least squares does "
-        "not return for measured data",
-    "G:neurostim/safety/_limits.py:356:17506":
-        "the loop returns once the text reads on the right side of the bound, which a "
-        "double does within 17 decimals; places 18 and up never run",
-    "G:neurostim/safety/compliance.py:500:24635":
-        "at equality both branches give cap / active_slope, the same seed",
-    "G:neurostim/safety/compliance.py:736:34871":
-        "validate_counter refuses a counter without a separation, and a separation "
-        "without a counter, before this line, so both conditions always agree",
-    "G:neurostim/safety/current_density.py:204:9777":
+    "G:neurostim/models/strength_duration.py:359:14649":
+        "differs only when the singular-value ratio equals sqrt(eps) exactly",
+    "G:neurostim/safety/assessment.py:1262:59708":
+        "NOT proven equivalent: differs only where the average current density equals "
+        "the threshold exactly, one float, which moves the settled ceiling by an ulp; no "
+        "test pins the current-density ceiling to the ulp",
+    "G:neurostim/safety/assessment.py:1271:59990":
+        "NOT proven equivalent: the return phase's version of the one-ulp boundary above",
+    "G:neurostim/safety/assessment.py:2314:106534":
+        "counter_result is None exactly when counter_electrode is None (both are set "
+        "together in assess), so the two conditions always agree",
+    "G:neurostim/safety/charge.py:301:13042":
+        "differs only at a pulse width equal to the measured one, where the fold is 1 and "
+        "no warning (and so no direction) is printed",
+    "G:neurostim/safety/compliance.py:396:19416":
         "the width comparison: a return phase of zero width always carries zero current, "
         "so the current comparison already decides",
-    "G:neurostim/safety/envelope.py:78:3985":
-        "NOT equivalent: AREA_RANGE_CM2 carries no citation, so its 0.5 cm^2 cannot be "
-        "pinned against a source; left alive and reported as a provenance question",
+    "G:neurostim/safety/compliance.py:500:24635":
+        "at equality both branches give cap / active_slope, the same seed",
+    "G:neurostim/safety/current_density.py:329:15115":
+        "the width comparison, as for compliance.py:396",
+    "G:neurostim/safety/shannon.py:273:11346":
+        "NOT proven equivalent: the plateau is consulted only when floor_to_pass has "
+        "walked past its 4-step budget, which no Shannon back-solve reaches in the suite",
+    "G:neurostim/safety/shannon.py:329:13790":
+        "NOT proven equivalent: the same plateau, for the current back-solve",
 }
 
 

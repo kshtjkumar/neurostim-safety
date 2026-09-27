@@ -285,3 +285,106 @@ class TestAZeroOffsetIsNotRefusedForItsRounding:
         r = np.array([100.0, 200.0, 400.0])
         with pytest.raises(ValueError, match="negative"):
             vta.fit_current_distance(r, 1300.0 * (r * 1e-3) ** 2 - 1.0)
+
+
+class TestSecondGeneratedPass:
+    """Ledger 181 (Phase 7 review S7). The re-measurement at clean commit 4cacbf2 drew a new
+    generated sample, because S4 and S5 moved the site offsets, and 25 of its 160 survived
+    (84.4 %). These tests kill the ones that are real, each against a hand value or the
+    documented contract. The rest are argued equivalent in scripts/mutation.py."""
+
+    def test_anodic_headroom_is_edge_minus_peak(self) -> None:  # water_window.py:407
+        result = ww.evaluate("Pt", 20.0, anodic_first=True, capacitance_uF_cm2=100.0)
+        # 20 uC/cm^2 over 100 uF/cm^2 is 0.2 V above rest (0 V).
+        assert result.peak_potential_V == pytest.approx(0.2)
+        assert result.window is not None
+        assert result.headroom_V == pytest.approx(result.window.anodic_V - 0.2)
+
+    def test_a_number_over_an_interval(self) -> None:  # uncertainty.py:165
+        assert 6.0 / Interval(2.0, 3.0) == Interval(2.0, 3.0)
+
+    def test_a_zero_value_is_infinitely_far_from_its_reference(self) -> None:  # envelope.py:100
+        excursion = envelope.Excursion(
+            parameter="pulse width", value=0.0, reference=400.0, units="us", direction="unknown"
+        )
+        assert excursion.fold == math.inf
+
+    def test_no_requirement_has_no_ceiling(self) -> None:  # compliance.py:543
+        result = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 50.0, 1.0), compliance_V=10.0
+        ).assess().compliance
+        assert replace(result, required_V=0.0).max_current_uA == math.inf
+
+    @pytest.mark.parametrize("impedance", [math.nan, -5.0, 0.0])
+    def test_a_measured_impedance_must_be_finite_and_positive(self, impedance) -> None:
+        from neurostim.safety import compliance  # compliance.py:704
+
+        with pytest.raises(ValueError, match="measured_impedance_ohm"):
+            compliance.evaluate(
+                DiscElectrode(500.0, "Pt"),
+                StimProtocol(100.0, 200.0, 50.0, 1.0),
+                measured_impedance_ohm=impedance,
+            )
+
+    def test_an_activation_radius_equal_to_the_electrode_is_inside_it(self) -> None:  # vta.py:258
+        model = vta.CurrentDistanceModel()
+        result = vta.VTAResult(100.0, 50.0, 0.0005, model, electrode_radius_um=50.0)
+        assert not result.radius_exceeds_electrode
+        assert replace(result, radius_um=50.001).radius_exceeds_electrode
+
+    def test_a_threshold_at_zero_distance_can_be_fit(self) -> None:  # vta.py:194
+        r = np.array([0.0, 100.0, 200.0])
+        model = vta.fit_current_distance(r, 5.0 + 1300.0 * (r * 1e-3) ** 2)
+        assert model.threshold_offset_uA == pytest.approx(5.0)
+
+    def test_half_the_microelectrode_threshold_passes(self) -> None:  # assessment.py:1678
+        # 20 uA x 100 us = 2 nC exactly: half of Cogan's 4 nC/phase, the CAUTION edge.
+        assessment = SafetyCalculator(
+            DiscElectrode(20.0, "Pt"), StimProtocol(20.0, 100.0, 50.0, 1.0)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Microelectrode charge/phase")
+        assert check.status.value == "PASS"
+
+    def test_a_non_drifting_window_prints_no_drift(self) -> None:  # water_window.py:441
+        window = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 50.0, 1.0)
+        ).assess().water_window
+        assert window.drift is not None and not window.drift.drifts
+        assert window.drift.describe() not in window.describe()
+
+    def test_no_return_current_has_no_return_threshold(self) -> None:  # current_density.py:329
+        from neurostim.safety import current_density
+
+        result = current_density.evaluate(
+            100.0, 0.00196, 200.0, return_phase_current_uA=0.0, return_phase_width_us=200.0
+        )
+        assert result.return_threshold is None
+
+    def test_small_limits_print_in_scientific_notation(self) -> None:  # _limits.py:320
+        from neurostim.safety._limits import format_limit
+
+        assert format_limit(1.23e-5) == "1.230e-05"  # :.4g switches below 1e-4
+        assert format_limit(1.23e-4) == "0.0001230"
+
+    def test_a_value_on_its_bound_needs_no_extra_places(self) -> None:  # _limits.py:375
+        from neurostim.safety._limits import format_against
+
+        assert format_against(0.5, "0.50", exceeds=False) == "0.50"
+
+    def test_the_summary_rules_are_72_wide(self) -> None:  # assessment.py:770, 815
+        text = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 50.0, 1.0)
+        ).assess().describe()
+        rules = [line for line in text.splitlines() if line and set(line) <= {"=", "-"}]
+        assert rules and all(len(line) == 72 for line in rules)
+
+    def test_a_requirement_that_rounds_to_the_available_voltage_still_reads_above_it(
+        self,
+    ) -> None:  # assessment.py:1895
+        # 0.33299 V required against 0.33 V: at two places both print "0.33".
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(102.0, 200.0, 50.0, 1.0), compliance_V=0.33
+        ).assess()
+        assert f"{assessment.compliance.required_V:.2f}" == "0.33"  # the premise
+        check = next(c for c in assessment.checks if c.name == "Compliance voltage")
+        assert check.summary.startswith("needs 0.333 V but only 0.330 V available")
