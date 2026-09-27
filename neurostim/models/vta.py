@@ -164,6 +164,12 @@ class CurrentDistanceModel:
         return "\n".join(lines)
 
 
+OFFSET_RESOLUTION = math.sqrt(np.finfo(float).eps)
+"""Fraction of the largest threshold below which a fitted negative offset is float
+rounding, not a measurement (ledger 179). The numerical-rank cut used for the
+Lapicque covariance (``strength_duration.IDENTIFIABILITY_RCOND``)."""
+
+
 def fit_current_distance(
     distances_um: np.ndarray,
     thresholds_uA: np.ndarray,
@@ -193,6 +199,12 @@ def fit_current_distance(
         slope, intercept = np.polyfit(r2_mm2, i, 1)
         # A negative offset is refused, not clamped: clamping the intercept to 0 while
         # keeping the slope fitted with it gives a line that fits neither (ledger 41).
+        # Except within the float resolution of the fit itself: noise-free I = k r^2 data
+        # return intercepts of about -1e-14 uA, and 72 of 200 such designs were refused
+        # (ledger 179). Below sqrt(eps) of the largest threshold, an intercept is zero,
+        # and zeroing it moves the line by less than the data can resolve.
+        if -OFFSET_RESOLUTION * float(np.max(i)) <= intercept < 0:
+            intercept = 0.0
         if intercept < 0:
             raise ValueError(
                 f"fitted threshold offset is negative ({intercept:.4g} uA); a current "

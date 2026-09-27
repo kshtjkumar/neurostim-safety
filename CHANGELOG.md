@@ -461,6 +461,10 @@ raise `cells_per_radius`, or read those samples as lower bounds.
   the single-k point.
 - `fit_current_distance` refuses a negative fitted offset. It used to clamp the offset
   to 0 while keeping the slope fitted with it. Pass `fit_offset=False` to force I₀ = 0.
+  The refusal used to catch float rounding too: noise-free I = k r² data fit
+  intercepts of about −1e-14 µA, and 72 of 200 such designs were refused. An intercept
+  within √ε of the largest threshold (`vta.OFFSET_RESOLUTION`) now counts as zero, and a
+  real negative offset is still refused.
 - The sensitivity module no longer claims to cover every limit. It says the thermal and
   activation estimates are not varied there, and where their spreads are reported.
 

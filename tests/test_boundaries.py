@@ -256,3 +256,32 @@ class TestALapicqueFitCanNeedMoreThanTwentyEvaluations:
         # fractional maxfev, which the solver does not stop on.
         with pytest.raises(RuntimeError):
             sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS, max_iter=2)
+
+
+class TestAZeroOffsetIsNotRefusedForItsRounding:
+    """Ledger 179 (Phase 7 review S5). Noise-free ``I = k r^2`` data fit an intercept of
+    about -1e-14 uA by float least squares, and the negative-offset guard refused them: 64
+    of the review's 200 exact designs (72 of this test's 200). The guard now allows an intercept within
+    sqrt(eps) of the largest threshold, and a real negative offset is still refused."""
+
+    @staticmethod
+    def _exact_designs(count: int = 200) -> list[tuple[np.ndarray, np.ndarray]]:
+        rng = np.random.default_rng(179)
+        designs = []
+        for _ in range(count):
+            r = np.sort(rng.uniform(10.0, 3000.0, int(rng.integers(2, 10))))
+            k = rng.uniform(100.0, 30000.0)
+            designs.append((r, k * (r * 1e-3) ** 2))
+        return designs
+
+    def test_exact_zero_offset_designs_fit(self) -> None:
+        for r, thresholds in self._exact_designs():
+            model = vta.fit_current_distance(r, thresholds)
+            assert model.threshold_offset_uA >= 0.0
+            assert model.threshold_offset_uA <= 1.5e-8 * thresholds.max()
+
+    def test_a_real_negative_offset_is_still_refused(self) -> None:
+        # An offset of -1 uA against thresholds up to 207 uA: 0.5 % of the data scale.
+        r = np.array([100.0, 200.0, 400.0])
+        with pytest.raises(ValueError, match="negative"):
+            vta.fit_current_distance(r, 1300.0 * (r * 1e-3) ** 2 - 1.0)
