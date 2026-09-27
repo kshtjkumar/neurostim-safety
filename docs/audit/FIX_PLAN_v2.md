@@ -1258,6 +1258,13 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 172 | LOW | — (Phase 6 review R3) | **C7.0** | **FIXED** `e33bbbc`; sqrt and from_mean_sd round outward |
 | 173 | LOW | — (Phase 6 review R4) | C7.3 | **FIXED** `1619d5f`; CITATION wording corrected |
 | 174 | LOW | — (C7.6 mutation survivor) | open | needs the source of the 0.01-0.5 cm^2 range (McCreery/Shannon electrode areas); not pinned until read from the paper |
+| 175 | MED | — (Phase 7 review S1) | C7b.1 | |
+| 176 | MED | — (Phase 7 review S2) | C7b.2 | |
+| 177 | MED | — (Phase 7 review S3) | C7b.3 | |
+| 178 | LOW | — (Phase 7 review S4) | C7b.4 | |
+| 179 | LOW | — (Phase 7 review S5) | C7b.5 | |
+| 180 | LOW | — (Phase 7 review S6) | C7.1, C7.5 (author details) | |
+| 181 | LOW | — (Phase 7 review S7) | C7b.6 | |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
