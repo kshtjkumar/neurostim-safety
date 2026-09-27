@@ -131,14 +131,20 @@ The first run found real gaps:
   calculation.
 
 `tests/test_boundaries.py` and the new classes in `test_verdict_core`/`test_models_io_viz`
-cover them. The run now kills 26 of 26 named mutants and 150 of 160 generated ones
-(93.75 %). Of the 10 survivors, 8 were argued equivalent in the harness
-(`JUDGED_EQUIVALENT`), and one of those arguments was wrong. `maxfev = max_iter * 10`
-turned into `max_iter / 10` gives curve_fit 20 evaluations, which is not enough for 511
-of 2306 fits that succeed at the default (Phase 7 review, ledger 176). It survived only
-because no test fitted such a design. One now does, and the argument is withdrawn. One
-survivor is not proven equivalent and says so. The last, the envelope's
-0.01–0.5 cm² area range, has no citation to pin it against, and is logged as ledger 174.
+cover them. An earlier run killed 26 of 26 named mutants and 150 of 160 generated ones
+(93.75 %), but it measured an uncommitted tree. Of its 10 survivors, 8 were argued
+equivalent in the harness (`JUDGED_EQUIVALENT`), and one of those arguments was wrong.
+`maxfev = max_iter * 10` turned into `max_iter / 10` gives curve_fit 20 evaluations,
+which is not enough for 511 of 2306 fits that succeed at the default (Phase 7 review,
+ledger 176). It survived only because no test fitted such a design. One now does, and
+the argument is withdrawn. The envelope's 0.01–0.5 cm² area range has no citation to
+pin it against, and is logged as ledger 174.
+
+**Recorded result, at clean commit 1a47bd4** (ledger 181): 26 of 26 named mutants, and
+149 of 160 generated (93.1 %). The earlier fixes had moved code offsets, so the seed
+drew a new sample, and its first run at 4cacbf2 scored 84.4 %. 14 of those survivors
+were real, and tests now kill them. The 11 left are annotated: 7 argued equivalent, 4
+not proven.
 
 ### The provenance gate can fail
 
