@@ -605,12 +605,14 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(reasons) or "mutation gate met")
         return 1 if reasons else 0
 
-    outcomes = run([*NAMED, *generated], args.workers, args.timeout)
-    named_out = [asdict(o) for o in outcomes[: len(NAMED)]]
-    generated_out = [asdict(o) for o in outcomes[len(NAMED) :]]
+    # What the workspaces copy is the tree as it stands now, so record it now: a file
+    # edited during the hour-long run is not part of what was measured (ledger 181).
     head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO_ROOT,
                           capture_output=True, text=True, check=False).stdout.strip()
     dirty = _uncommitted_paths()
+    outcomes = run([*NAMED, *generated], args.workers, args.timeout)
+    named_out = [asdict(o) for o in outcomes[: len(NAMED)]]
+    generated_out = [asdict(o) for o in outcomes[len(NAMED) :]]
     killed = sum(o["status"] in ("killed", "timeout") for o in generated_out)
     report = {
         "head": head,
