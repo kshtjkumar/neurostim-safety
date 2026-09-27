@@ -1265,7 +1265,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 175 | MED | — (Phase 7 review S1) | C7b.1 | **FIXED** `a389ad7`; C7b.1 |
 | 176 | MED | — (Phase 7 review S2) | C7b.2 | **FIXED** `d6ac5d3`; C7b.2 |
 | 177 | MED | — (Phase 7 review S3) | C7b.3 | **FIXED** `a88efd6`; C7b.3 |
-| 178 | LOW | — (Phase 7 review S4) | C7b.4 | |
+| 178 | LOW | — (Phase 7 review S4) | C7b.4 | **FIXED** `415413c`; C7b.4 |
 | 179 | LOW | — (Phase 7 review S5) | C7b.5 | |
 | 180 | LOW | — (Phase 7 review S6) | C7.1, C7.5 (author details) | |
 | 181 | LOW | — (Phase 7 review S7) | C7b.6 | |
