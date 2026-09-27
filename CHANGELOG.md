@@ -140,11 +140,12 @@ ledger 176). It survived only because no test fitted such a design. One now does
 the argument is withdrawn. The envelope's 0.01–0.5 cm² area range has no citation to
 pin it against, and is logged as ledger 174.
 
-**Recorded result, at clean commit 1a47bd4** (ledger 181): 26 of 26 named mutants, and
-149 of 160 generated (93.1 %). The earlier fixes had moved code offsets, so the seed
-drew a new sample, and its first run at 4cacbf2 scored 84.4 %. 14 of those survivors
-were real, and tests now kill them. The 11 left are annotated: 7 argued equivalent, 4
-not proven.
+**The honest score is the pre-registered fresh seed: 129 of 160 generated mutants killed
+(80.6 %), with 26 of 26 named** (seed 20260928, clean commit 90c5cf1,
+`docs/audit/mutation_results_seed20260928.json`). That is below the 90 % gate. The
+tuned seed, 20260927, scored 149 of 160 (93.1 %) at clean commit 1a47bd4. But the tests
+in 1a47bd4 were written against that seed's own survivors, at 4cacbf2 (84.4 %), so its
+score overstates the suite.
 
 ### The provenance gate can fail
 
