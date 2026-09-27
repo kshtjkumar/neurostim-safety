@@ -14,6 +14,23 @@ bump is where incompatible changes go, and these are incompatible:
 0.15.0. All three now say 0.16.0, and `__version__` is read from the installed
 distribution, which `pyproject.toml` writes, so there is one place to change it.
 
+### The provenance gate can fail
+
+CI ran `scripts/provenance_audit.py` without `--strict`, so it always exited 0. It could
+not pass `--strict`, because six gaps were listed and none of them could be closed:
+- Three were references without a DOI. Each now carries the DOI of its Crossref record,
+  matched on title, authors, year, venue and pages:
+  - `elwassif2006`: 10.1109/IEMBS.2006.259425, pp. 3580-3583. The conference PDF the
+    values were read from prints no DOI; this is the publisher's record of the same paper.
+  - `wang_weiland2012`: 10.1109/EMBC.2012.6347150.
+  - `mccreery2008`: 10.1016/j.heares.2007.11.014.
+- Three are data that no source in the library gives: TIROF's and SS316LVM's pulse widths,
+  and Ta2O5's water window. They are listed in `provenance_audit.KNOWN_GAPS` and still
+  printed on every run.
+
+`--strict` now fails on any gap not in that list, and on a listed gap that has been
+closed, so the list can only shrink. CI runs it with `--strict`.
+
 ### The Shannon panel draws the line its verdict was decided against
 
 The safe-operating-area panel drew separatrices at the reference values 1.5, 1.7 and 2.0

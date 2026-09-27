@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRANCH_FLOOR = REPO_ROOT / "scripts" / "branch_floor.py"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
@@ -729,3 +731,58 @@ class TestTheReadmeMatchesTheDatabase:
         assert "Primary sources:" not in text and "bibliography()" in text
         assert "0.35 S/m" in text
         assert "an order of magnitude across studies" not in text
+
+
+PROVENANCE_AUDIT = REPO_ROOT / "scripts" / "provenance_audit.py"
+
+
+def _load_provenance_audit() -> Any:
+    spec = importlib.util.spec_from_file_location("provenance_audit", PROVENANCE_AUDIT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["provenance_audit"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestTheProvenanceGateIsStrict:
+    """C7.6, T22 and G4. ``--strict`` failed on six gaps it could never close, so CI ran it
+    without the flag and the gate always exited 0. Three were missing DOIs, now added from
+    verified Crossref records (user decision D1). The three data gaps have no source and
+    stay in a committed baseline that can only shrink."""
+
+    @pytest.mark.parametrize(
+        ("key", "doi"),
+        [
+            ("elwassif2006", "10.1109/IEMBS.2006.259425"),
+            ("wang_weiland2012", "10.1109/EMBC.2012.6347150"),
+            ("mccreery2008", "10.1016/j.heares.2007.11.014"),
+        ],
+    )
+    def test_the_three_dois_are_the_verified_records(self, key: str, doi: str) -> None:
+        from neurostim.references import cite
+
+        assert cite(key).doi == doi
+
+    def test_the_audit_finds_exactly_the_baseline(self) -> None:
+        audit = _load_provenance_audit()
+        assert sorted(audit.audit()) == sorted(audit.KNOWN_GAPS)
+        assert len(audit.KNOWN_GAPS) == 3
+        assert audit.main(["--strict"]) == 0
+
+    def test_a_new_gap_fails_strict(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        audit = _load_provenance_audit()
+        seeded = [*audit.KNOWN_GAPS, "Pt: charge-injection limit not primary-sourced"]
+        monkeypatch.setattr(audit, "audit", lambda: seeded)
+        assert audit.main(["--strict"]) == 1
+        assert audit.main([]) == 0  # the report mode still never fails
+
+    def test_a_closed_gap_must_leave_the_baseline(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        audit = _load_provenance_audit()
+        monkeypatch.setattr(audit, "audit", lambda: list(audit.KNOWN_GAPS[1:]))
+        assert audit.main(["--strict"]) == 1
+        monkeypatch.setattr(audit, "audit", lambda: [])  # every gap closed, list not emptied
+        assert audit.main(["--strict"]) == 1
+
+    def test_ci_runs_it_strict(self) -> None:
+        assert "python scripts/provenance_audit.py --strict" in CI_WORKFLOW.read_text()

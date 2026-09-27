@@ -636,6 +636,9 @@ REFERENCES: dict[str, Reference] = {
         year=2012,
         venue="Conf Proc IEEE Eng Med Biol Soc",
         pages="5138-5141",
+        # Crossref record (C7.6): same title, Wang and Weiland, 2012, the 2012 IEEE EMBC
+        # proceedings, pp. 5138-5141.
+        doi="10.1109/EMBC.2012.6347150",
         pmid="23367085",
         source_type="conference",
         note=(
@@ -651,6 +654,8 @@ REFERENCES: dict[str, Reference] = {
         venue="Hearing Research",
         volume="242",
         pages="64-73",
+        # Crossref record (C7.6): same title, McCreery, Hearing Research 242(1-2):64-73, 2008.
+        doi="10.1016/j.heares.2007.11.014",
         note=(
             "Not in the library; cited via cogan2016 (author manuscript p. 11, reference "
             "list p. 18) for physiological thresholds of about 1-2 nC/phase on ~1000 um^2 "
@@ -782,11 +787,15 @@ REFERENCES: dict[str, Reference] = {
         # The paper the values were read from (ledger 75): the conference paper, as its PDF
         # prints (pages from its footers, ISBN 1-4244-0033-3). This entry used to give the
         # J Neural Eng 3(4) article's venue, pages, DOI and PMID. The conference PDF prints
-        # no DOI or PMID, so none is given.
+        # no DOI or PMID. The DOI (C7.6) is IEEE's record of this same paper, matched on
+        # Crossref by title, the four authors, 2006, the EMBS 2006 proceedings and pages
+        # 3580-3583; a second IEEE record of the title carries no pages and is not used.
         venue="Proceedings of the 28th IEEE EMBS Annual International Conference, New York",
         pages="3580-3583",
+        doi="10.1109/IEMBS.2006.259425",
         source_type="conference",
         note=(
+            "The PDF read prints no DOI; the DOI is the publisher's record of the same paper. "
             "Brain sigma = 0.35 S/m, thermal conductivity 0.527 W/m/K; "
             "clinical DBS temperature rise up to ~0.8 K. A longer treatment is in "
             "J Neural Eng 3(4):306-315 (doi 10.1088/1741-2560/3/4/008), which is not "

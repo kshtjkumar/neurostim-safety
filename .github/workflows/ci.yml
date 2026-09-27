@@ -160,8 +160,9 @@ jobs:
       - name: Reproduce published results from published inputs
         run: pytest tests/test_published_cases.py -v
 
-      - name: Report provenance gaps
-        run: python scripts/provenance_audit.py
+      - name: Provenance gaps match the acknowledged baseline
+        # --strict fails on a gap not in KNOWN_GAPS and on a listed gap that has closed.
+        run: python scripts/provenance_audit.py --strict
 
       - name: Verify transcribed constants against source PDFs
         # Papers are not redistributed with the repo, so this is informational in CI

@@ -4,9 +4,10 @@ Run standalone or from CI::
 
     python scripts/provenance_audit.py [--strict]
 
-Without ``--strict`` this always exits 0: it is a status report, and the gaps it lists
-are known and documented rather than defects. With ``--strict`` it exits non-zero if any
-gap is found, which is the mode to use once you intend the package to be gap-free.
+Without ``--strict`` this always exits 0: it is a status report. With ``--strict`` it
+exits non-zero when the gaps found differ from ``KNOWN_GAPS`` in either direction: a new
+gap fails, and so does a known gap that has been closed but is still listed, so the
+baseline can only shrink. CI runs it with ``--strict``.
 """
 
 from __future__ import annotations
@@ -17,6 +18,17 @@ import sys
 from neurostim import REFERENCES, list_materials
 from neurostim.models.thermal import BRAIN
 from neurostim.models.vta import CurrentDistanceModel
+
+# Gaps with no source to close them, acknowledged rather than hidden (C7.6, user decision
+# D1). Each is still printed on every run. Remove a line when its gap is closed; --strict
+# fails until you do.
+KNOWN_GAPS: tuple[str, ...] = (
+    "TIROF: no pulse width recorded for its limit, so its applicability at any given "
+    "pulse width is unknown",
+    "Ta2O5: no water window on record",
+    "SS316LVM: no pulse width recorded for its limit, so its applicability at any given "
+    "pulse width is unknown",
+)
 
 
 def audit() -> list[str]:
@@ -90,18 +102,22 @@ def main(argv: list[str] | None = None) -> int:
     print(f"tissue properties  {'fully sourced' if BRAIN.fully_verified else 'INCOMPLETE'}")
 
     gaps = audit()
-    if not gaps:
+    if gaps:
+        print(f"\n{len(gaps)} known provenance gap(s):")
+        for gap in gaps:
+            print(f"  - {gap}")
+    else:
         print("\nNo outstanding provenance gaps.")
-        return 0
 
-    print(f"\n{len(gaps)} known provenance gap(s):")
-    for gap in gaps:
-        print(f"  - {gap}")
-
-    if args.strict:
-        print("\n--strict: failing because gaps remain.")
+    new = [gap for gap in gaps if gap not in KNOWN_GAPS]
+    closed = [gap for gap in KNOWN_GAPS if gap not in gaps]
+    if args.strict and (new or closed):
+        for gap in new:
+            print(f"--strict: new gap not in KNOWN_GAPS: {gap}")
+        for gap in closed:
+            print(f"--strict: closed gap still in KNOWN_GAPS, remove it: {gap}")
         return 1
-    print("\nThese are documented limitations, not regressions. Run with --strict to fail on them.")
+    print("\nThese are documented limitations (KNOWN_GAPS), not regressions.")
     return 0
 
 

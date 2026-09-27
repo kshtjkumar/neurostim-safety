@@ -1561,18 +1561,23 @@ class TestTheElwassifCitationIsThePaperTheValuesCameFrom:
     def test_75_the_reference_is_the_conference_paper(self):
         """The module reads Table I from the Proc. 28th IEEE EMBS paper (pp. 3580-3583, the
         PDF's own page footers); references.py cited the J Neural Eng article, with that
-        article's DOI, volume, pages and PMID. The conference PDF prints no DOI, so none is
-        invented."""
+        article's DOI, volume, pages and PMID. The conference PDF prints no DOI.
+
+        C7.6 (G12: this test's ``doi == ""`` assertion changed on the user's decision D1):
+        the DOI is now the publisher's record of this same paper, verified against Crossref
+        (title, the four authors, 2006, the EMBS 2006 proceedings, pp. 3580-3583). It is
+        not the J Neural Eng article's 10.1088 DOI, and the PDF still prints none."""
         from neurostim.references import cite
 
         ref = cite("elwassif2006")
         assert ref.source_type == "conference"
         assert "28th" in ref.venue and "EMBS" in ref.venue
         assert ref.pages == "3580-3583"
-        assert ref.doi == "" and ref.pmid == ""
+        assert ref.doi == "10.1109/IEMBS.2006.259425" and ref.pmid == ""
+        assert "prints no DOI" in ref.note
         first, last = _pdf_page_text(self.PDF, 1), _pdf_page_text(self.PDF, 4)
         assert "3580" in first and "3583" in last
-        assert "10.1088" not in first + last
+        assert "10.1088" not in first + last and "10.1109" not in first + last
 
     def test_45_the_papers_rms_does_not_follow_from_its_setting(self):
         """p. 3581: 10 V, 185 pps, 210 us "using a constant Vrms of 1.56 Volt". The RMS of that
