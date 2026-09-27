@@ -918,6 +918,21 @@ class TestTheChangelogCarriesARecallNotice:
         for moved in ("9.11", "on-time", "Compliance", "8.061 mK"):
             assert moved in notice, moved
 
+    def test_it_lists_every_non_conservative_class(self) -> None:
+        """Ledger 177 (Phase 7 review S3): the classes where an old report erred unsafe,
+        each with the example booked in FIX_PLAN_v2.md §6."""
+        notice = " ".join(self._section().split("\n### ")[1].split())
+        for example in (
+            "1.529e+04", "0.256 s",  # monophasic
+            "15285.51", "9565.66",  # asymmetric return
+            "refuses a number", "0.42 s", "988.34",  # unbalanced and continuous trains
+            "\u00d72/\u03c0", "\u00d7\u03c0/2", "28571",  # access resistance
+            "\u00d72.00",  # planar field
+            "117.48",  # small-electrode current density
+            "NOT_EVALUATED", "never PASS", "fit on discs",  # status vocabulary
+        ):
+            assert example in notice, example
+
 
 MUTATION = REPO_ROOT / "scripts" / "mutation.py"
 

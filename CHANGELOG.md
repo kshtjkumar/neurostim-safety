@@ -54,6 +54,52 @@ beyond the defect:
 - **Tissue heating** uses the electro-thermal source radius. The worked example's DBS
   rise goes from 3.435 to 8.061 mK. The old figure was not conservative.
 
+The old release was also **not conservative** in these classes. A report in any of them
+is wrong in the unsafe direction:
+
+- **Monophasic protocols** got biphasic-measured limits. The 3389 band at 3000 µA,
+  90 µs, 130 Hz, monophasic, 1 s printed `Limiting current: 1.529e+04 uA` with a
+  Water window PASS and 0.58 V of headroom. Now no amplitude is safe: Charge balance
+  FAILs, and the DC drift reaches the window edge at 0.256 s (FAIL).
+- **Asymmetric return phases** were never evaluated. The band (1270/1500 µm PtIr) at
+  1000 µA, 90 µs, 130 Hz, return ratio 0.2 (C = 250 µF/cm²) went from **15285.51 to
+  9565.66 µA** (Current density binds). The return phase's compliance requirement went
+  from 0.52 to 1.65 V.
+- **Unbalanced and continuous trains.**
+  - A train whose limit-bearing ceiling is zero now refuses a number: a resting
+    potential on the window edge, or a continuous train with unrecovered charge. It
+    used to print `0 uA`.
+  - Under-recovering trains drift towards the edge faster than the old budget allowed.
+    A 500 µm Pt disc at 1227.18 µA, 200 µs, 50 Hz, 1 s, 99 % recovery,
+    C = 250 µF/cm²: Water window CAUTION ("2.4 s") becomes **FAIL at 0.42 s**. Its
+    ceiling goes from 1472.62 to 988.34 µA.
+- **Immersed electrodes' access resistance.**
+  - Bands and microwires were given a half-space disc's resistance. They now get the
+    full-space sphere's, exactly ×2/π (dbs_kuncel 519.57 → 330.77 Ω). The required
+    compliance voltage falls, and the binding check of the worked example's DBS case
+    moves from Compliance voltage to Shannon.
+  - A bare flat microwire tip goes the other way, ×π/2: 50 µm, 18189 → 28571 Ω. Its
+    old compliance ceiling was too high (84.84 → 72.13 µA at 10 µA, 100 µs, 5 V).
+- **Planar field and activation values** (disc, ring, rectangle) were half the true
+  half-space value. `potential_V`, every field panel and the VTA estimate double (×2.00,
+  e.g. 22.74 → 45.47 mV).
+- **Small electrodes' current-density threshold.** Below 200 µm, Butterwick's
+  single-pulse relief is no longer applied. On `mccreery_microelectrode` at 10 µA,
+  100 µs, one pulse, the Current density ceiling goes from 822.38 to 117.48 µA.
+- **Over-recovering waveforms with a derived capacitance** time their drift on the
+  polarity it charges. The water-window ceiling moves by ×0.5 to ×2, in either
+  direction. In a 16 848-configuration sweep, 34 verdicts went CAUTION → FAIL and 254
+  limiting currents fell.
+- **Early transient temperatures** no longer depend on the other times requested. The
+  thermal profile's first default sample (1 mW, 500 µm, brain, 0.1 s) goes from 0.0557
+  to 0.0640 K (+15 %).
+- **Status vocabulary.**
+  - A macroelectrode shows PASS, CAUTION or FAIL where it showed NOT_EVALUATED.
+  - A monopolar Compliance voltage check is never PASS; it is CAUTION with its
+    assumption stated.
+  - A non-disc Shannon check is never an unqualified PASS; it is CAUTION, "fit on
+    discs".
+
 Each is detailed in its own entry below.
 
 ### A mutation gate, and the tests it asked for
