@@ -14,6 +14,48 @@ bump is where incompatible changes go, and these are incompatible:
 0.15.0. All three now say 0.16.0, and `__version__` is read from the installed
 distribution, which `pyproject.toml` writes, so there is one place to change it.
 
+### Recall notice: reports from 0.15.0 and every earlier release
+
+**Do not rely on a limiting current from a report made by 0.15.0 or any earlier release.
+Regenerate the report with 0.16.0.**
+
+- **The defect.** The headline limiting current was a minimum over three checks
+  (Shannon, charge injection, compliance) while the assessment ran nine. The ceilings of
+  four checks never reached it: microelectrode charge/phase, chronic degradation, current
+  density and the water window. On the package's own worked example (330/270 µm Pt ring,
+  80 µA, 200 µs, 130 Hz, 10 V) it printed **141.4 µA**. The highest amplitude at which no
+  check fails is **20.00 µA**: **7.07× too high**, and not conservative. How far off an
+  old report is depends on its protocol. It was right only where one of the three checks
+  bound, and even then it was rounded to nearest, which can sit above the limit.
+- **Affected versions.** Confirmed at 0.15.0, the release this repository's audit started
+  from. Earlier releases are not in this repository's history, and nothing in their
+  entries below says the headline covered more checks. Treat every earlier release that
+  printed a limiting current as affected too.
+- **Telling them apart.** A 0.16.0 PDF has a "Reproducibility" section with the package
+  version and the audit digest. A report without it is from an affected release.
+
+Other headline numbers also move in 0.16.0, so an old report can disagree for reasons
+beyond the defect:
+
+- **Limiting current**: floored instead of rounded, and the minimum over every
+  limit-bearing check. Worked example: 141.4 → 20.00 µA.
+- **In-vivo platinum derating** (Leung et al. 2015): ÷14 → ÷9.11 (35/3.84 at matched
+  100 µs), at every pulse width. In-vivo Pt and PtIr limits relax by ×1.536.
+- **Water-window DC drift** is timed over the train's on-time, not its wall-clock
+  duration. Duty-cycled unbalanced trains relax by up to 1/duty. A 3389 band at 3000 µA,
+  90 µs, 130 Hz, monophasic, 1 s at 20 % duty goes FAIL → CAUTION.
+- **Compliance voltage**:
+  - the budget includes an unbalanced train's DC offset (500 µm Pt disc, 100 µA,
+    95 % recovery, 1 s: 0.326 → 0.589 V);
+  - with a counter electrode, it includes the return path (two 3389 contacts 2 mm apart:
+    1.006 → 1.349 V);
+  - without a counter, the check is CAUTION, never PASS;
+  - the available voltage is floored.
+- **Tissue heating** uses the electro-thermal source radius. The worked example's DBS
+  rise goes from 3.435 to 8.061 mK. The old figure was not conservative.
+
+Each is detailed in its own entry below.
+
 ### The provenance gate can fail
 
 CI ran `scripts/provenance_audit.py` without `--strict`, so it always exited 0. It could

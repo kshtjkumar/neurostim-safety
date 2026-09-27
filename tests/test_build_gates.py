@@ -881,3 +881,32 @@ class TestTheCiToolchainIsPinnedAndComplete:
 def test_ci_type_checks_the_tests() -> None:
     """C7.6, T26: the tests are type-checked with the package."""
     assert "run: mypy neurostim tests\n" in _ci_job("lint")
+
+class TestTheChangelogCarriesARecallNotice:
+    """C7.7. Reports made before 0.16.0 print a limiting current up to 7.07x too high, and
+    copies of them exist outside the repository where no commit can reach them. The
+    CHANGELOG is where a user of an old report will look, so the notice leads 0.16.0."""
+
+    @staticmethod
+    def _section() -> str:
+        text = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        start = text.index("## 0.16.0")
+        return text[start : text.index("\n## ", start + 1)]
+
+    def test_the_notice_leads_the_release(self) -> None:
+        section = self._section()
+        first_heading = section.index("\n### ")
+        assert section[first_heading:].startswith("\n### Recall notice")
+
+    def test_it_names_the_defect_the_factor_and_the_versions(self) -> None:
+        notice = self._section().split("\n### ")[1]
+        text = " ".join(notice.split())
+        assert "7.07" in text and "141.4" in text and "20.00" in text
+        assert "0.15.0" in text and "every earlier release" in text
+        assert "three" in text and "nine" in text  # the three-check minimum over nine
+
+    def test_it_lists_the_headline_numbers_that_move(self) -> None:
+        notice = " ".join(self._section().split("\n### ")[1].split())
+        for moved in ("9.11", "on-time", "Compliance", "8.061 mK"):
+            assert moved in notice, moved
+
