@@ -984,3 +984,34 @@ class TestTheMutationGate:
         assert "workflow_dispatch:" in workflow and "schedule:" in workflow
         assert "python scripts/mutation.py --check-anchors" in workflow
         assert "push:" not in workflow and "pull_request:" not in workflow
+
+
+class TestContributingCarriesTheRulesTheGatesDependOn:
+    """C7.5. The ledger gate asserts recorded hashes exist, which a squash-merge or rebase
+    breaks; the transcription and mutation gates only block when run by hand."""
+
+    @staticmethod
+    def _text() -> str:
+        return " ".join((REPO_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
+
+    def test_the_merge_policy(self) -> None:
+        text = self._text()
+        assert "no squash-merge, no rebase onto the default branch" in text
+        assert "do not squash" in text and "do not force-push the default branch" in text
+
+    def test_the_release_checklist(self) -> None:
+        text = self._text()
+        assert "python scripts/verify_transcriptions.py --strict --require-papers" in text
+        assert "python scripts/mutation.py" in text and "mutation_results.json" in text
+
+    def test_the_gates_match_ci(self) -> None:
+        text = self._text()
+        ci = CI_WORKFLOW.read_text(encoding="utf-8")
+        for command in (
+            "ruff check neurostim tests examples",
+            "mypy neurostim tests",
+            "python scripts/ledger_check.py",
+            "python scripts/regenerate_example_output.py --check",
+            "python scripts/provenance_audit.py --strict",
+        ):
+            assert command in text and command in ci, command

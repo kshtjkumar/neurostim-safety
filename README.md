@@ -287,6 +287,10 @@ solution against an independent limit — the Pennes steady state against both i
 classical unperfused form and a finite-difference solve, the point-source field against
 the electrode's own access resistance.
 
+`python scripts/mutation.py` checks that the suite notices wrong arithmetic (26 named and 160 generated
+mutants; results in `docs/audit/mutation_results.json`). `CONTRIBUTING.md` has the gates, the
+merge policy the mistakes ledger depends on, and the release checklist.
+
 ## Known limitations
 
 - **Shannon** — an empirical separatrix through cat cortex histology, largely from
