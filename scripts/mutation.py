@@ -242,6 +242,34 @@ JUDGED_EQUIVALENT: dict[str, str] = {
         "walked past its 4-step budget, which no Shannon back-solve reaches in the suite",
     "G:neurostim/safety/shannon.py:329:13790":
         "NOT proven equivalent: the same plateau, for the current back-solve",
+    # Survivors of the pre-registered seed 20260928 (ledger 181). Ids are site-based, so
+    # an entry applies to whichever seed draws that site.
+    "G:neurostim/models/field.py:111:4877":
+        "potential_V's return: 0-d array arithmetic returns an np.float64, as field.py:131",
+    "G:neurostim/models/strength_duration.py:237:9746":
+        "NOT proven equivalent: differs only for a fitted slope of exactly 0.0; np.polyfit "
+        "on 1/W thresholds returns about 4e-15, not 0.0",
+    "G:neurostim/models/strength_duration.py:308:12315":
+        "NOT proven equivalent: the curve_fit lower bound 1e-12 vs 2e-12 binds only for fits that collapse to "
+        "zero, which the accepted-fit guards and the identifiability note already refuse "
+        "or flag",
+    "G:neurostim/safety/_limits.py:184:9183":
+        "with reach 0, low = value, and value fails its own check on this path, so both "
+        "conditions raise",
+    "G:neurostim/safety/assessment.py:246:10902":
+        "Status.rank is used only to order statuses (max in _worst), and 6 keeps FAIL "
+        "highest",
+    "G:neurostim/safety/assessment.py:1134:53882":
+        "NOT proven equivalent: the counter ceiling's predicate at exact equality, a "
+        "one-float boundary no test reaches (the round-trip test does not)",
+    "G:neurostim/safety/compliance.py:820:39074":
+        "with return_factor 0 the return phase draws no current and "
+        "return_required_voltage_V gives 0.0, as the skipped branch does",
+    "G:neurostim/safety/shannon.py:271:11298":
+        "NOT proven equivalent: the Shannon plateau again (shannon.py:273)",
+    "G:neurostim/safety/water_window.py:541:26336":
+        "NOT proven equivalent: the balance tolerance at exact equality; recovered/leading lands exactly on "
+        "1 +/- CHARGE_BALANCE_REL_TOLERANCE for no protocol the suite builds",
 }
 
 

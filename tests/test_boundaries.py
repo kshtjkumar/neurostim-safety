@@ -19,7 +19,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from neurostim import DiscElectrode, SafetyCalculator, StimProtocol
+from neurostim import DiscElectrode, SafetyCalculator, StimProtocol, get_material
 from neurostim.models import strength_duration as sd
 from neurostim.models import vta
 from neurostim.safety import charge, envelope, shannon
@@ -388,3 +388,138 @@ class TestSecondGeneratedPass:
         assert f"{assessment.compliance.required_V:.2f}" == "0.33"  # the premise
         check = next(c for c in assessment.checks if c.name == "Compliance voltage")
         assert check.summary.startswith("needs 0.333 V but only 0.330 V available")
+
+
+class TestFreshSeedSurvivors:
+    """Ledger 181, user decision after the pre-registered fresh-seed pass (seed 20260928
+    at 90c5cf1: 129/160 = 80.6 %). The real survivors of that sample, each checked against
+    a hand value or the documented contract. A third, untouched seed measures the suite
+    afterwards; this sample is now a tuned one."""
+
+    def test_distance_for_potential_refuses_zero_conductivity(self) -> None:  # field.py:164
+        from neurostim.models import field
+
+        with pytest.raises(ValueError, match="sigma_S_per_m"):
+            field.distance_for_potential_um(100.0, 0.01, 0.0)
+
+    def test_a_two_point_profile_is_allowed(self) -> None:  # field.py:205
+        from neurostim.models import field
+
+        profile = field.radial_profile(100.0, 100.0, 1000.0, n_points=2)
+        assert list(profile.distance_um) == pytest.approx([100.0, 1000.0])
+
+    def test_a_zero_width_in_a_weiss_fit_is_refused(self) -> None:  # strength_duration.py:225
+        with pytest.raises(ValueError, match="must all be > 0"):
+            sd.fit_weiss(np.array([0.0, 100.0, 200.0]), np.array([80.0, 40.0, 30.0]))
+
+    def test_constant_thresholds_have_no_chronaxie(self) -> None:  # strength_duration.py:245
+        # Q = I W exactly proportional to W: the fitted intercept is exactly 0.0.
+        with pytest.raises(ValueError, match="chronaxie is non-positive"):
+            sd.fit_weiss(np.array([100.0, 200.0, 400.0]), np.array([20.0, 20.0, 20.0]))
+
+    def test_no_current_activates_no_radius(self) -> None:  # vta.py:142
+        assert vta.CurrentDistanceModel().activation_radius_um(0.0) == 0.0
+
+    def test_the_counter_ceiling_is_the_last_float_that_passes(self) -> None:
+        # A round-trip property of the counter ceiling. It does not kill the assessment.py:1134
+        # `<= -> <` mutant, which differs only if a float lands exactly on the limit.
+        from neurostim.safety.assessment import _counter_charge_scale
+
+        assessment = SafetyCalculator(
+            DiscElectrode(200.0, "Pt"),
+            StimProtocol(10.0, 200.0, 50.0, 1.0),
+            counter_electrode=DiscElectrode(50.0, "Pt"),
+            counter_separation_um=50000.0,
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Counter charge injection")
+        counter = assessment.counter_charge
+        assert counter is not None
+        area = DiscElectrode(50.0, "Pt").area_cm2
+        scale = _counter_charge_scale(assessment.protocol)
+
+        def density(current_uA: float) -> float:
+            return charge.charge_density_uC_cm2(current_uA * 200.0 * 1e-6 * scale, area)
+
+        assert density(check.ceiling_uA) <= counter.cic_limit_uC_cm2
+        assert density(math.nextafter(check.ceiling_uA, math.inf)) > counter.cic_limit_uC_cm2
+
+    def test_a_biphasic_pulse_recovering_nothing_is_named_as_such(self) -> None:  # assessment.py:1811
+        def summary(protocol: StimProtocol) -> str:
+            checks = SafetyCalculator(DiscElectrode(500.0, "Pt"), protocol).assess().checks
+            return next(c for c in checks if c.name == "Charge balance").summary
+
+        assert summary(StimProtocol(100.0, 200.0, 50.0, 1.0, waveform="monophasic")).startswith(
+            "monophasic waveform"
+        )
+        assert summary(
+            StimProtocol(100.0, 200.0, 50.0, 1.0, charge_recovery_ratio=0.0)
+        ).startswith("return phase recovers no charge")
+
+    def test_the_compliance_detail_prints_the_requirement_to_the_millivolt(self) -> None:  # compliance.py:623
+        result = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(102.0, 200.0, 50.0, 1.0), compliance_V=10.0
+        ).assess().compliance
+        assert "  required      0.333 V" in result.describe().splitlines()
+
+    def test_the_dbs_reference_is_kuncel_and_grills_one_number(self) -> None:  # current_density.py:98
+        # Kuncel & Grill (2004): "Average current density is 0.0993 A/cm2", also held by
+        # the data module the literature tests pin.
+        from neurostim.data import current_distribution
+        from neurostim.safety import current_density
+
+        assert current_density.DBS_CLINICAL_REFERENCE_A_PER_CM2 == 0.0993
+        assert (
+            current_density.DBS_CLINICAL_REFERENCE_A_PER_CM2
+            == current_distribution.DBS_AVERAGE_CURRENT_DENSITY_A_PER_CM2
+        )
+
+    @pytest.mark.parametrize("area", [math.nan, -1.0, 0.0])
+    def test_average_current_density_refuses_a_bad_area(self, area: float) -> None:  # current_density.py:128
+        from neurostim.safety import current_density
+
+        with pytest.raises(ValueError, match="area_cm2"):
+            current_density.average_current_density_A_per_cm2(100.0, area)
+
+    def test_an_in_range_area_draws_no_area_warning(self) -> None:  # envelope.py:183
+        result = envelope.evaluate(StimProtocol(10.0, 400.0, 50.0, 7 * 3600.0), 0.1)
+        assert result.area_in_range and "outside the" not in result.describe()
+        assert "outside the" in envelope.evaluate(
+            StimProtocol(10.0, 400.0, 50.0, 7 * 3600.0), 5.0
+        ).describe()
+
+    def test_exactly_the_fit_duration_is_conservative(self) -> None:  # envelope.py:255
+        result = envelope.evaluate(StimProtocol(10.0, 400.0, 50.0, 7 * 3600.0), 0.1)
+        duration = next(e for e in result.excursions if e.parameter == "duration")
+        assert duration.direction == "conservative"
+
+    def test_a_threefold_pulse_width_draws_the_extrapolation_warning(self) -> None:  # shannon.py:207
+        assert "3.0x from the 400 us" in shannon.conditions_warning(1200.0)
+        assert shannon.conditions_warning(800.0) == ""
+
+    @pytest.mark.parametrize("width", [math.nan, -1.0, 0.0])
+    def test_the_shannon_current_refuses_a_bad_width(self, width: float) -> None:  # shannon.py:318
+        with pytest.raises(ValueError, match="pulse_width_us"):
+            shannon.shannon_max_current_uA(0.001, width)
+
+    def test_no_requested_charge_has_infinite_margin(self) -> None:  # shannon.py:362
+        result = shannon.evaluate(0.02, 0.001, 200.0)
+        assert replace(result, charge_per_phase_uC=0.0).current_margin == math.inf
+
+    def test_the_shannon_line_prints_k_to_three_places(self) -> None:  # shannon.py:370
+        line = shannon.evaluate(0.02, 0.001, 200.0, k=1.5).describe().splitlines()[0]
+        assert line == "Shannon k = -0.398 vs threshold 1.50 -> PASS"
+
+    def test_anodic_window_charge_counts_from_rest(self) -> None:  # water_window.py:615
+        window = get_material("Pt").water_window
+        assert window is not None
+        q = ww.max_charge_density_in_window_uC_cm2(
+            "Pt", anodic_first=True, resting_potential_V=-0.2, capacitance_uF_cm2=100.0
+        )
+        assert q == pytest.approx((window.anodic_V + 0.2) * 100.0)
+
+    def test_a_zero_interval_spans_one_fold(self) -> None:  # uncertainty.py:112
+        assert Interval(0.0, 0.0).fold_range == 1.0
+        assert Interval(0.0, 1.0).fold_range == math.inf
+
+    def test_touching_intervals_overlap_from_either_side(self) -> None:  # uncertainty.py:121
+        assert Interval(1.0, 2.0).overlaps(Interval(0.0, 1.0))
