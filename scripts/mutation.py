@@ -216,9 +216,6 @@ JUDGED_EQUIVALENT: dict[str, str] = {
     "G:neurostim/models/field.py:131:5704":
         "0-d array arithmetic returns an np.float64, which is a float, so both branches "
         "return a float",
-    "G:neurostim/models/strength_duration.py:304:12101":
-        "maxfev only caps iterations; the fits converge long before 20 (or 2000) "
-        "evaluations would bind",
     "G:neurostim/models/strength_duration.py:304:12103":
         "maxfev only caps iterations; the fits converge long before 2000 or 4000 "
         "evaluations would bind",

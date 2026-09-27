@@ -226,3 +226,33 @@ class TestChronaxieRangesAbut:
         """The docstring's own statement: axons up to the 7 ms at which cell bodies start
         (7-31 ms, Nowak & Bullier 1998 and Ranck 1975 via Tehovnik et al. 2006)."""
         assert vta.AXON_CHRONAXIE_RANGE_MS[1] == vta.CELL_BODY_CHRONAXIE_RANGE_MS[0] == 7.0
+
+
+class TestALapicqueFitCanNeedMoreThanTwentyEvaluations:
+    """Ledger 176 (Phase 7 review S2). ``maxfev = max_iter * 10`` gives curve_fit 2000
+    evaluations at the default. The generated mutant ``* -> /`` leaves it 20, and survived
+    because no test fitted a design that needs more. This one does: at ``max_iter=2``
+    (the same 20) curve_fit gives up. The default must converge to the least-squares
+    minimum, checked against an independent ``least_squares`` solve from another start."""
+
+    WIDTHS = np.array([50.0, 100.0, 200.0, 400.0, 800.0, 1600.0])
+    THRESHOLDS = np.array([114.739, 66.021, 42.949, 30.284, 16.124, 13.143])
+
+    def test_the_default_converges_to_the_minimum(self) -> None:
+        from scipy.optimize import least_squares
+
+        fit = sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS)
+        independent = least_squares(
+            lambda p: p[0] / (1.0 - np.exp(-self.WIDTHS / p[1])) - self.THRESHOLDS,
+            x0=[10.0, 1000.0],
+            bounds=([1e-9, 1e-9], [np.inf, np.inf]),
+            xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=100_000,
+        )
+        assert fit.rheobase_uA == pytest.approx(independent.x[0], rel=1e-5)
+        assert fit.membrane_tau_us == pytest.approx(independent.x[1], rel=1e-5)
+
+    def test_twenty_evaluations_are_not_enough(self) -> None:
+        # The premise. Runs after the convergence test: under the mutant this call gets a
+        # fractional maxfev, which the solver does not stop on.
+        with pytest.raises(RuntimeError):
+            sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS, max_iter=2)

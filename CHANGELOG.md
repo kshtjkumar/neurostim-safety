@@ -77,8 +77,12 @@ The first run found real gaps:
 
 `tests/test_boundaries.py` and the new classes in `test_verdict_core`/`test_models_io_viz`
 cover them. The run now kills 26 of 26 named mutants and 150 of 160 generated ones
-(93.75 %). Of the 10 survivors, 8 are argued equivalent in the harness
-(`JUDGED_EQUIVALENT`). One is not proven equivalent and says so. The last, the envelope's
+(93.75 %). Of the 10 survivors, 8 were argued equivalent in the harness
+(`JUDGED_EQUIVALENT`), and one of those arguments was wrong. `maxfev = max_iter * 10`
+turned into `max_iter / 10` gives curve_fit 20 evaluations, which is not enough for 511
+of 2306 fits that succeed at the default (Phase 7 review, ledger 176). It survived only
+because no test fitted such a design. One now does, and the argument is withdrawn. One
+survivor is not proven equivalent and says so. The last, the envelope's
 0.01–0.5 cm² area range, has no citation to pin it against, and is logged as ledger 174.
 
 ### The provenance gate can fail
