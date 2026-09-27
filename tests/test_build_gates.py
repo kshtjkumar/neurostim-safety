@@ -841,3 +841,44 @@ class TestTheTranscriptionCheckCanRequireItsPapers:
         ]
         assert runs and not any("--require-papers" in line for line in runs)
         assert "informational" in ci
+
+
+def _ci_job(name: str) -> str:
+    """The text of one job in ci.yml, from its key to the next top-level job key."""
+    text = CI_WORKFLOW.read_text(encoding="utf-8")
+    start = text.index(f"\n  {name}:\n")
+    nxt = [m for m in (text.find(f"\n  {j}:\n", start + 1) for j in ("test", "lint", "coverage", "literature", "mutation")) if m > start]
+    return text[start : min(nxt) if nxt else len(text)]
+
+
+class TestTheCiToolchainIsPinnedAndComplete:
+    """C7.6, T21 and T25. The PDF-text tests skipped on every CI interpreter because the
+    test job had no poppler. Every run resolved the latest ruff and mypy, so a new release
+    could turn CI red with no change in the repository. pytest-cov was not in the dev extra.
+    The branch-point floor sat at the audit baseline of 48.0 % against 71.49 % measured."""
+
+    @staticmethod
+    def _dev_extra() -> list[str]:
+        import re
+
+        text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        line = next(ln for ln in text.splitlines() if ln.startswith("dev = ["))
+        return re.findall(r'"([^"]+)"', line)
+
+    def test_ruff_and_mypy_are_pinned_exactly(self) -> None:
+        dev = self._dev_extra()
+        for tool in ("ruff", "mypy", "pytest", "pytest-cov", "coverage"):
+            pins = [d for d in dev if d.split("=")[0].split(">")[0] == tool]
+            assert len(pins) == 1 and "==" in pins[0], (tool, dev)
+
+    def test_the_test_job_can_read_pdfs(self) -> None:
+        job = _ci_job("test")
+        assert "poppler-utils" in job
+        assert "brew install poppler" in job
+
+    def test_the_coverage_floor_is_ratcheted(self) -> None:
+        import re
+
+        job = _ci_job("coverage")
+        floor = float(re.search(r"branch_floor\.py --json coverage\.json --min ([0-9.]+)", job)[1])
+        assert floor >= 71.0

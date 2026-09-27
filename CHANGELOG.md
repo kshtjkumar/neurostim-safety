@@ -40,6 +40,22 @@ is. `--strict --require-papers` is the release gate, run locally against the lib
 (86 of 86 values found today). The papers are not redistributed, so CI still runs the
 check informationally, and the workflow says so.
 
+### CI runs the PDF tests, pins its tools and gates coverage where it stands
+
+- The test job installs poppler (`poppler-utils` on Linux, `brew install poppler` on
+  macOS). Without it, the tests that read the generated PDF report's text skipped on
+  every CI interpreter. The tests that read the paper library still skip in CI, because
+  the papers are not redistributed.
+- The `dev` extra pins its tools exactly: pytest 9.1.1, pytest-cov 7.1.0, coverage
+  7.16.1, ruff 0.16.1 and mypy 2.3.0. Every run used to resolve the latest ruff and mypy,
+  so a new release could turn CI red with no change here. pytest-cov is now in the extra.
+- The branch-point floor rises from the audit baseline of 48.0 % to 71.0 %. It measures
+  71.49 % (474 of 663 points). The exit target of 80 % overall and 60 % per module is not
+  met yet. Ten modules with at least 4 points sit below 60 %: `data/ta2o5_capacitor.py`
+  (0 %), `data/asanuma1976.py`, `models/vta.py`, `models/field.py`,
+  `data/iso14708_3.py`, `io/fem.py`, `transient.py`, `models/thermal.py`,
+  `models/strength_duration.py` and `data/gabriel1996.py`.
+
 ### The Shannon panel draws the line its verdict was decided against
 
 The safe-operating-area panel drew separatrices at the reference values 1.5, 1.7 and 2.0
