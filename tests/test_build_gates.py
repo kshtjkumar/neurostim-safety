@@ -872,10 +872,16 @@ class TestTheCiToolchainIsPinnedAndComplete:
         import re
 
         job = _ci_job("coverage")
-        match = re.search(r"branch_floor\.py --json coverage\.json --min ([0-9.]+)", job)
+        match = re.search(
+            r"branch_floor\.py --json coverage\.json --min ([0-9.]+) "
+            r"--module-min ([0-9.]+) --module-min-points ([0-9]+)",
+            job,
+        )
         assert match is not None
-        floor = float(match[1])
-        assert floor >= 71.0
+        # G12: was `floor >= 71.0` (C7.6c). G3 is now met, so the floor is its target or
+        # above, overall and per module.
+        assert float(match[1]) >= 80.0
+        assert float(match[2]) >= 60.0 and int(match[3]) <= 4
 
 
 def test_ci_type_checks_the_tests() -> None:

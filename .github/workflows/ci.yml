@@ -137,10 +137,10 @@ jobs:
           coverage json -o coverage.json
 
       - name: Enforce the branch-point floor
-        # Ratcheted at C7.6 to the measured 71.49 % (474/663 points; the audit baseline
-        # was 48.30 %). Raise it as coverage rises. The exit target, 80 % total with a 60 %
-        # per-module floor for modules of >= 4 points (G3), is not yet met.
-        run: python scripts/branch_floor.py --json coverage.json --min 71.0
+        # G3, met at C7.6: 84.77 % measured (562/663 points; the audit baseline was
+        # 48.30 %), and every module of >= 4 points at or above 60 %. Raise it as coverage
+        # rises; never lower it.
+        run: python scripts/branch_floor.py --json coverage.json --min 84.0 --module-min 60 --module-min-points 4
 
   literature:
     name: Literature provenance

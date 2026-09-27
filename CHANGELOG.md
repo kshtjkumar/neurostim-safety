@@ -116,12 +116,17 @@ check informationally, and the workflow says so.
 - The `dev` extra pins its tools exactly: pytest 9.1.1, pytest-cov 7.1.0, coverage
   7.16.1, ruff 0.16.1 and mypy 2.3.0. Every run used to resolve the latest ruff and mypy,
   so a new release could turn CI red with no change here. pytest-cov is now in the extra.
-- The branch-point floor rises from the audit baseline of 48.0 % to 71.0 %. It measures
-  71.49 % (474 of 663 points). The exit target of 80 % overall and 60 % per module is not
-  met yet. Ten modules with at least 4 points sit below 60 %: `data/ta2o5_capacitor.py`
-  (0 %), `data/asanuma1976.py`, `models/vta.py`, `models/field.py`,
-  `data/iso14708_3.py`, `io/fem.py`, `transient.py`, `models/thermal.py`,
-  `models/strength_duration.py` and `data/gabriel1996.py`.
+- The branch-point floor rises from the audit baseline of 48.0 % to **84.0 % overall,
+  and 60 % for every module of at least 4 points**. It measures 84.77 % (562 of 663).
+  Ten modules had been below 60 %: `data/ta2o5_capacitor.py` at 0 %, then
+  `data/asanuma1976.py`, `models/vta.py`, `models/field.py`, `data/iso14708_3.py`,
+  `io/fem.py`, `transient.py`, `models/thermal.py`, `models/strength_duration.py` and
+  `data/gabriel1996.py`. The refusal side of most of their input guards had never run,
+  and several reported quantities had never been checked: a fitted curve's own
+  predictions, the FEM field's gradient, a measured transient's coarse-trace fallback,
+  the CEM43 dose's below-39 °C rule. `tests/test_model_contracts.py` checks each against
+  a closed form or a published number, or checks that the guard refuses what it says it
+  refuses. All ten are now at 100 %.
 
 ### The tests are type-checked
 
