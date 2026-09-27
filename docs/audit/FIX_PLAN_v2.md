@@ -1261,7 +1261,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 173 | LOW | — (Phase 6 review R4) | C7.3 | **FIXED** `1619d5f`; CITATION wording corrected |
 | 174 | LOW | — (C7.6 mutation survivor) | open | needs the source of the 0.01-0.5 cm^2 range (McCreery/Shannon electrode areas); not pinned until read from the paper |
 | 175 | MED | — (Phase 7 review S1) | C7b.1 | **FIXED** `a389ad7`; C7b.1 |
-| 176 | MED | — (Phase 7 review S2) | C7b.2 | |
+| 176 | MED | — (Phase 7 review S2) | C7b.2 | **FIXED** `d6ac5d3`; C7b.2 |
 | 177 | MED | — (Phase 7 review S3) | C7b.3 | |
 | 178 | LOW | — (Phase 7 review S4) | C7b.4 | |
 | 179 | LOW | — (Phase 7 review S5) | C7b.5 | |
