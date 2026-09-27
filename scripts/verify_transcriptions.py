@@ -23,10 +23,13 @@ The per-constant notes in the data modules exist so a reader can check that quic
 
 Usage
 -----
-    python scripts/verify_transcriptions.py [papers_dir] [--strict]
+    python scripts/verify_transcriptions.py [papers_dir] [--strict] [--require-papers]
 
 Requires ``pdftotext`` (poppler). Papers that are absent are reported as skipped rather
-than failed, so the script is useful even with a partial library.
+than failed, so the script is useful even with a partial library. That also means an
+absent library passes ``--strict`` with every claim skipped, so ``--require-papers`` fails
+on any absent paper. ``--strict --require-papers`` is the release gate, run locally
+against the library (CONTRIBUTING.md); CI has no library and runs it informationally.
 """
 
 from __future__ import annotations
@@ -235,16 +238,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--strict", action="store_true", help="exit non-zero if any value is not found"
     )
+    parser.add_argument(
+        "--require-papers",
+        action="store_true",
+        help=(
+            "exit non-zero if any cited paper is absent, so that a missing library "
+            "cannot pass as a clean check (the local release gate)"
+        ),
+    )
     args = parser.parse_args(argv)
+    blocking = args.strict or args.require_papers
 
     if shutil.which("pdftotext") is None:
         print("pdftotext not found (install poppler); cannot verify.")
-        return 0 if not args.strict else 1
+        return 1 if blocking else 0
 
     papers_dir = Path(args.papers_dir)
     if not papers_dir.is_dir():
         print(f"No papers directory at {papers_dir}; nothing to verify.")
-        return 0 if not args.strict else 1
+        return 1 if blocking else 0
 
     cache: dict[Path, str] = {}
     found = missing = skipped = 0
@@ -282,6 +294,9 @@ def main(argv: list[str] | None = None) -> int:
         "\nNote: this checks that a number appears in the right paper. It cannot "
         "detect a\nvalue attached to the wrong material, polarity or condition."
     )
+    if args.require_papers and skipped:
+        print(f"\n--require-papers: failing because {skipped} cited paper(s) are absent.")
+        return 1
     return 1 if (args.strict and missing) else 0
 
 

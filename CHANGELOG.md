@@ -31,6 +31,15 @@ not pass `--strict`, because six gaps were listed and none of them could be clos
 `--strict` now fails on any gap not in that list, and on a listed gap that has been
 closed, so the list can only shrink. CI runs it with `--strict`.
 
+### The transcription check can require its papers
+
+`scripts/verify_transcriptions.py --strict` exited 0 with no paper library present: every
+claim was skipped, so there was nothing to be "not found". The new `--require-papers`
+fails when any cited paper is absent, when the directory is missing, or when `pdftotext`
+is. `--strict --require-papers` is the release gate, run locally against the library
+(86 of 86 values found today). The papers are not redistributed, so CI still runs the
+check informationally, and the workflow says so.
+
 ### The Shannon panel draws the line its verdict was decided against
 
 The safe-operating-area panel drew separatrices at the reference values 1.5, 1.7 and 2.0

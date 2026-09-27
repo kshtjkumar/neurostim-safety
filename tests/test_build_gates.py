@@ -786,3 +786,58 @@ class TestTheProvenanceGateIsStrict:
 
     def test_ci_runs_it_strict(self) -> None:
         assert "python scripts/provenance_audit.py --strict" in CI_WORKFLOW.read_text()
+
+
+VERIFY_TRANSCRIPTIONS = REPO_ROOT / "scripts" / "verify_transcriptions.py"
+
+
+def _load_verify_transcriptions() -> Any:
+    spec = importlib.util.spec_from_file_location("verify_transcriptions", VERIFY_TRANSCRIPTIONS)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["verify_transcriptions"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestTheTranscriptionCheckCanRequireItsPapers:
+    """C7.6, user decision D2. The papers are not redistributed, so a checkout without the
+    library skipped every claim and ``--strict`` still exited 0: the check could not fail
+    where it could not look. ``--require-papers`` makes an absent paper a failure. It is
+    the blocking gate in the local release checklist; CI has no library and stays
+    informational, and says so."""
+
+    def test_an_empty_library_passes_strict_but_fails_require_papers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        vt = _load_verify_transcriptions()
+        monkeypatch.setattr(vt.shutil, "which", lambda name: "/usr/bin/" + name)
+        assert vt.main([str(tmp_path), "--strict"]) == 0  # the hole: all skipped
+        assert vt.main([str(tmp_path), "--strict", "--require-papers"]) == 1
+
+    def test_a_missing_directory_or_tool_fails_require_papers(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        vt = _load_verify_transcriptions()
+        assert vt.main([str(tmp_path / "absent"), "--require-papers"]) == 1
+        monkeypatch.setattr(vt.shutil, "which", lambda name: None)
+        assert vt.main([str(tmp_path), "--require-papers"]) == 1
+
+    def test_the_full_library_passes(self) -> None:
+        import shutil
+
+        vt = _load_verify_transcriptions()
+        if shutil.which("pdftotext") is None or not vt.DEFAULT_PAPERS_DIR.is_dir():
+            pytest.skip("paper library or poppler not present")
+        assert vt.main(["--strict", "--require-papers"]) == 0
+
+    def test_ci_stays_informational_and_says_so(self) -> None:
+        ci = CI_WORKFLOW.read_text()
+        assert "python scripts/verify_transcriptions.py\n" in ci
+        runs = [
+            line
+            for line in ci.splitlines()
+            if "python scripts/verify_transcriptions.py" in line and not line.strip().startswith("#")
+        ]
+        assert runs and not any("--require-papers" in line for line in runs)
+        assert "informational" in ci

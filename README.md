@@ -275,6 +275,7 @@ pytest -q                              # the full suite
 ruff check neurostim tests examples    # clean
 mypy neurostim                         # clean
 python scripts/provenance_audit.py     # provenance status report; --strict gates CI
+python scripts/verify_transcriptions.py --strict --require-papers  # release gate; needs the local paper library
 ```
 
 `tests/test_literature.py` pins the package to its sources: every Cogan Table 2 row and

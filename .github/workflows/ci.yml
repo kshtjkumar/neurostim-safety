@@ -165,8 +165,9 @@ jobs:
         run: python scripts/provenance_audit.py --strict
 
       - name: Verify transcribed constants against source PDFs
-        # Papers are not redistributed with the repo, so this is informational in CI
-        # and authoritative when run locally against the paper library.
+        # Papers are not redistributed with the repo, so every claim is skipped here and
+        # this step is informational in CI. The blocking form is the local release gate
+        # in CONTRIBUTING.md: `--strict --require-papers` against the paper library.
         run: |
           sudo apt-get update && sudo apt-get install -y poppler-utils
           python scripts/verify_transcriptions.py
