@@ -436,7 +436,9 @@ unchanged.
   interval coverage was 0.46. Such a fit now carries `uncertainty_note`, "the chronaxie
   is not identifiable from this design", and `describe()` prints it. The test is the
   relative-sensitivity Jacobian's singular-value ratio against √ε. The remaining 82
-  intervals cover at 0.87.
+  intervals cover at 0.87 on one seeded set. The Phase 7b re-review measured 0.71–0.86
+  across noise levels (0.705 at 5 %), still short of 0.95. The cut catches only fully
+  degenerate fits, so the under-coverage warning above still applies (ledger 183).
 - The fitted values themselves are unchanged.
 - A design with every pulse width equal raises. It used to return a rheobase and a
   chronaxie behind a numpy RankWarning.
