@@ -1126,7 +1126,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 67(b) | HIGH | OK | C2.1 | **re-assigned from C1.10** (Phase 1 review F9). The unbalanced-biphasic Charge-balance FAIL branch cannot be reached until imbalance is expressible, which is C2.1; C1.10 could not close it and correctly did not. The row was unsatisfiable as written and must not be used as a Phase-2 exit criterion against C1.10 |
 | 67(c) | HIGH | OK | C1.1 | |
 | 68 | MED | PARTIAL | C0.1, C7.6 | branch floor now implementable (§3) |
-| 68/T22 | MED | PARTIAL | C7.6 | provenance_audit --strict in CI; three DOIs verified, three data gaps baselined (D1) |
+| 68/T22 | MED | PARTIAL | C7.6 | **FIXED** `6200de2`; strict against KNOWN_GAPS; 3 DOIs verified |
 | 68/D2 | MED | PARTIAL | C7.6 | verify_transcriptions --require-papers, blocking in the local release checklist (D2) |
 | 68/T21 | MED | PARTIAL | C7.6 | poppler-utils in the test job so the PDF-text tests run |
 | 68/T25 | MED | PARTIAL | C7.6 | pinned ruff/mypy; pytest-cov in the dev extra; coverage floor ratcheted |
