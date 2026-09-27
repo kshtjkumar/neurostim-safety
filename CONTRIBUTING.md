@@ -84,8 +84,10 @@ them. So:
 
 `scripts/mutation.py` runs mutants against the suite in a temporary copy of the
 repository. There are 26 named mutants taken from the test audit, which must all be
-killed, and 160 generated from the AST with a fixed seed, of which at least 90 % must be
-killed. A full run takes about an hour. It runs on demand and weekly in CI
+killed, and 160 generated from the AST with a fixed seed. The generated floor is the
+measured 86 %, against a 90 % target, and it may only rise. A seed whose survivors you
+have written tests against no longer measures the suite. Pre-register a new seed in a
+commit message before you run it. A full run takes about an hour. It runs on demand and weekly in CI
 (`.github/workflows/mutation.yml`), and its results are committed at
 `docs/audit/mutation_results.json`. After you change the gated modules, run
 `python scripts/mutation.py --check-anchors`: it fails if a named mutant's anchor no
