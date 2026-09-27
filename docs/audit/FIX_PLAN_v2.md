@@ -1132,14 +1132,14 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 67(a) | HIGH | OK | C1.10, C2.5 | assigned once in §9, as in v1's §2 |
 | 67(b) | HIGH | OK | C2.1 | **re-assigned from C1.10** (Phase 1 review F9). The unbalanced-biphasic Charge-balance FAIL branch cannot be reached until imbalance is expressible, which is C2.1; C1.10 could not close it and correctly did not. The row was unsatisfiable as written and must not be used as a Phase-2 exit criterion against C1.10 |
 | 67(c) | HIGH | OK | C1.1 | |
-| 68 | MED | PARTIAL | C0.1, C7.6 | branch floor now implementable (§3) |
+| 68 | MED | PARTIAL | C0.1, C7.6 | **FIXED** `6c6cfd0`; all sub-items 68/T22, D2, T21, T25, T26, G2, G3 closed |
 | 68/T22 | MED | PARTIAL | C7.6 | **FIXED** `6200de2`; strict against KNOWN_GAPS; 3 DOIs verified |
 | 68/D2 | MED | PARTIAL | C7.6 | **FIXED** `e773024`; --require-papers; local release gate |
 | 68/T21 | MED | PARTIAL | C7.6 | **FIXED** `500a2fb`; poppler in the test job |
 | 68/T25 | MED | PARTIAL | C7.6 | **FIXED** `500a2fb`; tools pinned; floor 71.0 |
 | 68/T26 | MED | PARTIAL | C7.6 | **FIXED** `506c589`; mypy neurostim tests; 188 fixed |
 | 68/G2 | MED | PARTIAL | C7.6 | **FIXED** `6dbdd5d`; 26/26 named, 150/160 generated |
-| 68/G3 | MED | PARTIAL | C7.6 | branch-point floor 80 % overall and 60 % per module (user: meet it) |
+| 68/G3 | MED | PARTIAL | C7.6 | **FIXED** `6c6cfd0`; 84.77 %, every module >= 60 % |
 | 69 | MED | PARTIAL | C0.2, C0.5, C1.11, C3.5 | **FIXED** `978c1da` (T18 landed at C3.5); ledger gate at C0.5 |
 | 70 | — | N/A | — | vindication |
 | 71 | HIGH | OK | C4.5 | **FIXED** `c375476` |
