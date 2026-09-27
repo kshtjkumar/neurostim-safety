@@ -56,6 +56,16 @@ check informationally, and the workflow says so.
   `data/iso14708_3.py`, `io/fem.py`, `transient.py`, `models/thermal.py`,
   `models/strength_duration.py` and `data/gabriel1996.py`.
 
+### The tests are type-checked
+
+CI runs `mypy neurostim tests`. The tests had 188 type errors. Most read an Optional
+(`derating_for(...)`, `water_window`, `drift`, `limiting_current_uA`, a regex match)
+without narrowing it, so a `None` would have failed as an `AttributeError` instead of as
+an assertion. Each read now asserts the value is present first. Keyword dictionaries
+passed as `**kwargs` are annotated, and 11 `type: ignore` comments that no longer
+suppressed anything are gone. No assertion was loosened. `explicit_package_bases` is set,
+so a stray `__init__.py` above the checkout cannot make mypy see the package twice.
+
 ### The Shannon panel draws the line its verdict was decided against
 
 The safe-operating-area panel drew separatrices at the reference values 1.5, 1.7 and 2.0

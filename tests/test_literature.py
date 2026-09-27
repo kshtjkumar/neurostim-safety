@@ -9,6 +9,7 @@ fails with the citation in the message.
 from __future__ import annotations
 
 import math
+from typing import Literal
 
 import pytest
 
@@ -700,9 +701,11 @@ class TestCogan2016:
         from neurostim.data import cogan2016 as c
 
         # G12, C4.5: Leung's matched 8.7x; G12 again, C4b.2 (ledger 156): 35/3.84.
-        assert c.derating_for("Pt").worst == pytest.approx(35.0 / 3.84)
-        assert c.derating_for("AIROF").worst == pytest.approx(10.0)
-        assert c.derating_for("SIROF").worst == pytest.approx(4.0)
+        pt, airof, sirof = (c.derating_for(k) for k in ("Pt", "AIROF", "SIROF"))
+        assert pt is not None and airof is not None and sirof is not None
+        assert pt.worst == pytest.approx(35.0 / 3.84)
+        assert airof.worst == pytest.approx(10.0)
+        assert sirof.worst == pytest.approx(4.0)
         assert c.derating_for("TiN") is None
 
     def test_porous_platinum_derates_worst(self):
@@ -845,12 +848,15 @@ class TestBeebeRose1988Primary:
         from neurostim.data import cogan2016
 
         airof = get_material("AIROF")
+        assert airof.cic.measured_area_cm2 is not None
         assert airof.cic.measured_area_cm2 == pytest.approx(4.1e-4, rel=0.1)
         assert cogan2016.in_regime_transition(airof.cic.measured_area_cm2)
 
     def test_reference_electrode_caveat_is_recorded_on_the_window(self):
         """Both primary sources used SCE; Cogan restates the window vs Ag|AgCl."""
-        note = get_material("AIROF").water_window.note
+        window = get_material("AIROF").water_window
+        assert window is not None
+        note = window.note
         assert "SCE" in note
         assert "45 mV" in note
 
@@ -1031,6 +1037,7 @@ class TestMcCreery1995Frequency:
         at50 = m.point_at(50.0)
         at100 = m.point_at(100.0)
         at20 = m.point_at(20.0)
+        assert at50 is not None and at100 is not None and at20 is not None
         assert at50.slope_percent_ead_per_alpha_unit == pytest.approx(0.37)
         assert at100.slope_percent_ead_per_alpha_unit == pytest.approx(1.1)
         assert at50.threshold_alpha_units == pytest.approx(1.1)
@@ -1050,8 +1057,10 @@ class TestMcCreery1995Frequency:
     def test_twenty_hz_shows_no_amplitude_correlation(self):
         from neurostim.data import mccreery1995 as m
 
-        assert not m.point_at(20.0).amplitude_correlates
-        assert m.point_at(50.0).amplitude_correlates
+        at20, at50 = m.point_at(20.0), m.point_at(50.0)
+        assert at20 is not None and at50 is not None
+        assert not at20.amplitude_correlates
+        assert at50.amplitude_correlates
 
     def test_no_interpolation_between_measured_points(self):
         """Only three frequencies were measured; the module does not invent others."""
@@ -1236,6 +1245,7 @@ class TestInVivoDeratingSources:
         from neurostim.data import cogan2016 as c
 
         d = c.derating_for("Pt")
+        assert d is not None
         assert "Leung" in d.evidence
         # G12 (C4.5, ledger 71): Leung's own matched-pulse-width factors, p. 852. G12 again
         # (C4b.2, ledger 156): the high end is their 100 us pair, 35/3.84.
@@ -1245,12 +1255,14 @@ class TestInVivoDeratingSources:
     def test_airof_from_hu(self):
         from neurostim.data import cogan2016 as c
 
-        assert "Hu" in c.derating_for("AIROF").evidence
+        d = c.derating_for("AIROF")
+        assert d is not None and "Hu" in d.evidence
 
     def test_sirof_from_kane(self):
         from neurostim.data import cogan2016 as c
 
-        assert "Kane" in c.derating_for("SIROF").evidence
+        d = c.derating_for("SIROF")
+        assert d is not None and "Kane" in d.evidence
 
     def test_derated_platinum_overlaps_leungs_measured_in_vivo_range(self):
         """Cross-check: derating the saline limit should land on what Leung actually
@@ -1270,6 +1282,7 @@ class TestInVivoDeratingSources:
             medium="in_vivo",
         ).assess().charge
         leung = Interval(3.84, 16.6)
+        assert result.limit_interval_uC_cm2 is not None
         assert result.limit_interval_uC_cm2.overlaps(leung)
         assert result.cic_limit_uC_cm2 <= leung.high
 
@@ -1381,8 +1394,10 @@ class TestLeungsPulseWidthMatchedDerating:
         # pair, and the high end is now that pair from the quoted numbers, 35/3.84.
         for key in ("Pt", "PtIr"):
             d = c.derating_for(key)
+            assert d is not None
             assert (d.factor_low, d.factor_high) == (3.2, 35.0 / 3.84), key
-        assert "p. 852" in c.derating_for("Pt").evidence
+        pt = c.derating_for("Pt")
+        assert pt is not None and "p. 852" in pt.evidence
 
     def test_the_quote_is_on_page_852_of_the_pdf(self):
         import shutil
@@ -1466,7 +1481,9 @@ class TestTheStainlessSteelFiguresCarryTheirOwnSources:
         from neurostim.data import riedy_walter1996 as rw
 
         assert "[ 5 ]" in rw.REVERSIBLE_LIMIT_QUOTE or "[5]" in rw.REVERSIBLE_LIMIT_QUOTE
-        note = get_material("SS316LVM").water_window.note
+        window = get_material("SS316LVM").water_window
+        assert window is not None
+        note = window.note
         assert "ref. [5]" in note and "p. 662" in note
 
 
@@ -1504,6 +1521,7 @@ class TestLedger77ConditionsAndDerivations:
             "papers_stim_calc_ref/In_Vitro_and_In_Vivo_Charge_Capacity_of_AIROF_Microelectrodes.pdf", 3
         )
         d = c.derating_for("AIROF")
+        assert d is not None
         assert (d.factor_low, d.factor_high) == (10.0, 10.0)  # the number survives
         for text in (d.evidence, cite("hu2006").note):
             assert "same films" not in text, text
@@ -1698,6 +1716,7 @@ class TestRiedyAndWaltersCitedSourcesAreNamedAsCited:
         material = get_material("SS316LVM")
         assert "Robblee & Rose 1990" in material.cic.recommendation_note
         assert "cited via Riedy & Walter" in material.cic.recommendation_note
+        assert material.water_window is not None
         assert "Lan, Daroux & Mortimer" in material.water_window.note
         assert "cited via Riedy & Walter" in material.water_window.note
         assert "not verified primaries" in " ".join(rw.__doc__.split())
@@ -1748,6 +1767,7 @@ class TestLedger77ExponentAndDerating:
         from neurostim.data import cogan2016 as c
 
         d = c.derating_for("SIROF")
+        assert d is not None
         assert (d.factor_low, d.factor_high) == (2.0, 4.0)
         assert "factor of 2-3" in d.evidence and "Kane" in d.evidence
         assert "Cogan et al. 2016" in d.evidence and "factor of four" in d.evidence
@@ -1857,7 +1877,11 @@ class TestLedger77SmallElectrodeAnchor:
 
         assert b.threshold_A_per_cm2(600.0, 200.0) == pytest.approx(0.16912, rel=1e-4)
         assert b.measured_small_electrode_A_per_cm2(199.999) == pytest.approx(0.4425, rel=1e-3)
-        for tissue, low, high in (("retina", 2.61, 2.63), ("cam", 1.11, 1.13)):
+        tissues: tuple[tuple[Literal["retina", "cam"], float, float], ...] = (
+            ("retina", 2.61, 2.63),
+            ("cam", 1.11, 1.13),
+        )
+        for tissue, low, high in tissues:
             pw = b.SMALL_ELECTRODE_PULSE_WIDTH_US[tissue]
             for d in (20.0, 50.0, 100.0, 115.0, 150.0, 199.0):
                 ratio = b.measured_small_electrode_A_per_cm2(d, tissue) / (
@@ -2001,6 +2025,7 @@ class TestLedger78SourceRadius:
     def test_the_docstring_states_the_modelling_choice_and_the_reversal(self):
         from neurostim.data import elwassif2006 as e
 
+        assert e.implied_power_W.__doc__ and e.two_sphere_peak_rise_K.__doc__
         doc = " ".join((e.implied_power_W.__doc__ + e.two_sphere_peak_rise_K.__doc__).split())
         assert "not stated in the paper" in doc and "modelling choice" in doc
         assert "equal split" in doc and "S-23" in doc and "reversed" in doc
@@ -2027,6 +2052,7 @@ class TestLedger153CurrentDensityPassIsProvisional:
 
         from neurostim.safety import assessment
 
+        assert assessment._current_density_check.__doc__
         doc = " ".join(assessment._current_density_check.__doc__.split())
         assert "never returns a bare PASS" not in doc
         assert "can PASS" in doc and "provisional at every size" in doc
@@ -2081,9 +2107,11 @@ class TestLedger156PlatinumInVivoDerating:
         assert c.PT_IN_VIVO_DERATING == 35.0 / 3.84 == 9.114583333333334
         for key in ("Pt", "PtIr"):
             d = c.derating_for(key)
+            assert d is not None
             assert d.worst == c.PT_IN_VIVO_DERATING, key
             assert d.shortest_measured_pulse_width_us == 100.0, key
-        assert c.derating_for("SIROF").shortest_measured_pulse_width_us is None
+        sirof = c.derating_for("SIROF")
+        assert sirof is not None and sirof.shortest_measured_pulse_width_us is None
 
     def test_the_digitisation_is_recorded_and_calibrated(self):
         """Fig. 4, p. 853, read from the embedded raster: four points the text also quotes
@@ -2109,7 +2137,9 @@ class TestLedger156PlatinumInVivoDerating:
     def test_the_evidence_states_the_choice_and_the_slip(self):
         from neurostim.data import cogan2016 as c
 
-        evidence = c.derating_for("Pt").evidence
+        pt = c.derating_for("Pt")
+        assert pt is not None
+        evidence = pt.evidence
         doc = " ".join(c.PT_IN_VIVO_DERATING_DOC.split())
         for text in (evidence, doc):
             assert "35" in text and "3.84" in text and "9.11" in text

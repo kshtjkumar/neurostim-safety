@@ -17,6 +17,7 @@ under test:
 from __future__ import annotations
 
 import math
+from typing import Any, Literal
 
 import pytest
 
@@ -462,6 +463,7 @@ class TestTheClimbIsBoundedByThePredicatesOwnResolution:
 
         limit = calc.assess().limiting_current_uA
 
+        assert limit is not None
         assert math.isfinite(limit)
         assert limit > 0.0
 
@@ -549,7 +551,8 @@ class TestTheClimbIsBoundedByThePredicatesOwnResolution:
             )
             constructed += 1
             try:
-                assert calc.assess().limiting_current_uA >= 0.0
+                limit = calc.assess().limiting_current_uA
+                assert limit is not None and limit >= 0.0
             except LimitDidNotSettle as exc:
                 raised.append(f"{key} at {resting_V!r}: {exc}"[:200])
 
@@ -656,6 +659,7 @@ class TestTheFarSideRestIsInsideThePlateau:
         for _ in range(4000):
             material = rng.choice(materials)
             window = get_material(material).water_window
+            assert window is not None
             anodic_first = rng.random() < 0.5
             rest = rng.choice((0.2, 0.35, 0.5)) * (-1.0 if anodic_first else 1.0)
             if not window.cathodic_V < rest < window.anodic_V:
@@ -700,7 +704,7 @@ class TestTheWaterWindowSeedInvertsItsOwnPredicate:
     without adding its inverse fails here and is not discovered as a crash inside C2.3.
     """
 
-    GRID = [
+    GRID: list[tuple[str, float, float, float, Literal["biphasic", "monophasic"]]] = [
         ("PtIr", 1270.0, 3000.0, 90.0, "monophasic"),
         ("Pt", 100.0, 80.0, 200.0, "monophasic"),
         ("Pt", 100.0, 80.0, 200.0, "biphasic"),
@@ -1601,7 +1605,7 @@ class TestSensitivityRefusesWhenNoAmplitudeIsSafe:
                 for sigma in (0.11, field_mod.GREY_MATTER_CONDUCTIVITY_S_PER_M)
             ]
         )
-        settings = {
+        settings: dict[str, Any] = {
             "k": base.k,
             "material": base.material,
             "policy": base.policy,
@@ -1856,7 +1860,7 @@ class TestTheDerivedChargeLimitsFloor:
                             1.0,
                             0.01,
                             200.0,
-                            policy=policy,  # type: ignore[arg-type]
+                            policy=policy,
                             medium=medium,
                             anodic_first=anodic_first,
                         )
@@ -1882,7 +1886,7 @@ class TestTheDerivedChargeLimitsFloor:
             assert match is not None, case
             applied_text, endorsed_text = match.groups()
             limit = (
-                get_material(key).cic_uC_cm2(policy, anodic_first)  # type: ignore[arg-type]
+                get_material(key).cic_uC_cm2(policy, anodic_first)
                 / result.derating_applied
             )
             assert float(applied_text) <= limit, case
@@ -1904,7 +1908,8 @@ class TestTheDerivedChargeLimitsFloor:
         """
         from neurostim.data import cogan2016
 
-        assert cogan2016.derating_for("Pt").worst == 35.0 / 3.84  # the fixture's premise
+        pt = cogan2016.derating_for("Pt")
+        assert pt is not None and pt.worst == 35.0 / 3.84  # the fixture's premise
         assert float("13.7143") > 125.0 / (35.0 / 3.84)  # the defect's direction, written out
         seen = {}
         for key, policy, anodic_first, medium, result, _ in self._warnings():
@@ -2138,7 +2143,7 @@ class TestCheckKindAndProvisional:
         assert get_material("Pt").cic.pulse_width_us == 200.0
         assert get_material("SS316LVM").cic.recommended_policy == "conservative"
 
-        fixtures = (
+        fixtures: tuple[tuple[str, float, Literal["conservative", "nominal", "optimistic"]], ...] = (
             ("TIROF", 200.0, "conservative"),
             ("Pt", 2000.0, "conservative"),
             ("SS316LVM", 100.0, "optimistic"),
@@ -2147,7 +2152,7 @@ class TestCheckKindAndProvisional:
             calc = SafetyCalculator(
                 DiscElectrode(100.0, material),
                 StimProtocol(1.0, pulse_width_us, 130.0, 1.0),
-                policy=policy,  # type: ignore[arg-type]
+                policy=policy,
             )
             charge = next(
                 c for c in calc.assess().checks if c.name == "Charge injection limit"
@@ -2502,7 +2507,7 @@ class TestLimitingCurrentIsTheMinimumOverLimitBearingChecks:
 
         expected = fail_ceiling_uA(calc, names=LIMIT_BEARING)
         assert assessment.limiting_current_uA == pytest.approx(expected, rel=1e-9)
-        assert assessment.limiting_current_uA > 0
+        assert assessment.limiting_current_uA is not None and assessment.limiting_current_uA > 0
         assert assessment.limiting_current_uA == pytest.approx(20.0)
         assert (
             cogan2016.MICROELECTRODE_DAMAGE_THRESHOLD_NC_PER_PHASE * 1e-9 / 200e-6 * 1e6
@@ -2588,19 +2593,19 @@ class TestLimitingCurrentIsTheMinimumOverLimitBearingChecks:
                         electrode,
                         protocol,
                         material=material,
-                        policy=policy,  # type: ignore[arg-type]
+                        policy=policy,
                         compliance_V=10.0,
                     )
                     assessment = calc.assess()
                     assert not assessment.unsafe_at_any_amplitude
                     limit = assessment.limiting_current_uA
-                    assert limit > 0, (material, policy)
+                    assert limit is not None and limit > 0, (material, policy)
 
                     at_limit = SafetyCalculator(
                         electrode,
                         replace(protocol, current_uA=limit),
                         material=material,
-                        policy=policy,  # type: ignore[arg-type]
+                        policy=policy,
                         compliance_V=10.0,
                     ).assess()
                     assert not at_limit.failed, (
@@ -2815,7 +2820,7 @@ class TestTheIntervalContainsThePointEstimate:
                         electrode,
                         replace(base, anodic_first=anodic_first),
                         material=material,
-                        policy=policy,  # type: ignore[arg-type]
+                        policy=policy,
                         compliance_V=10.0,
                     )
 
@@ -2884,6 +2889,7 @@ class TestTheIntervalContainsThePointEstimate:
 
         assert assessment.limiting_mechanism == "Chronic degradation"
         assert interval.fold_range == pytest.approx(50.0 / 20.0, rel=1e-6)
+        assert assessment.limiting_current_uA is not None
         assert interval.contains(assessment.limiting_current_uA)
 
     def test_a_check_that_did_not_run_does_not_narrow_the_interval(self):
@@ -2901,6 +2907,7 @@ class TestTheIntervalContainsThePointEstimate:
         shannon = next(c for c in assessment.checks if c.name == "Shannon criterion")
 
         assert shannon.status is Status.NOT_EVALUATED
+        assert assessment.limiting_current_uA is not None
         assert assessment.limiting_current_interval_uA.contains(
             assessment.limiting_current_uA
         )
@@ -3458,7 +3465,7 @@ class TestBothSidesOfEveryBoundary:
             else CylindricalBandElectrode(1270.0, 1500.0, "PtIr")
         )
         protocol = StimProtocol(80.0, 200.0, 130.0, 1.0)
-        settings = {"compliance_V": 10.0}
+        settings: dict[str, Any] = {"compliance_V": 10.0}
 
         def status_at(current_uA: float):
             calc = SafetyCalculator(
@@ -3541,7 +3548,7 @@ class TestMoreCurrentIsNeverSafer:
                 assessment = SafetyCalculator(
                     electrode,
                     StimProtocol(current_uA, 200.0, 50.0, 1.0),
-                    **settings,  # type: ignore[arg-type]
+                    **settings,
                 ).assess()
                 if previous is not None:
                     assert assessment.status.rank >= previous.status.rank, (
@@ -3560,7 +3567,7 @@ class TestMoreCurrentIsNeverSafer:
                 assessment = SafetyCalculator(
                     electrode,
                     StimProtocol(current_uA, 200.0, 50.0, 1.0),
-                    **settings,  # type: ignore[arg-type]
+                    **settings,
                 ).assess()
                 if previous is not None:
                     for check, before in zip(
@@ -3590,7 +3597,7 @@ class TestMoreCurrentIsNeverSafer:
                     for c in SafetyCalculator(
                         electrode,
                         StimProtocol(current_uA, 200.0, 50.0, 1.0),
-                        **settings,  # type: ignore[arg-type]
+                        **settings,
                     )
                     .assess()
                     .checks
@@ -3611,7 +3618,7 @@ class TestMoreCurrentIsNeverSafer:
                 SafetyCalculator(
                     electrode,
                     StimProtocol(current_uA, 200.0, 50.0, 1.0),
-                    **settings,  # type: ignore[arg-type]
+                    **settings,
                 )
                 .assess()
                 .limiting_current_uA
@@ -3825,10 +3832,11 @@ class TestIntervalContainmentAcrossPoliciesAndK:
                     electrode,
                     protocol,
                     k=k,
-                    policy=policy,  # type: ignore[arg-type]
+                    policy=policy,
                     compliance_V=10.0,
                 ).assess()
 
+                assert assessment.limiting_current_uA is not None
                 assert assessment.limiting_current_interval_uA.contains(
                     assessment.limiting_current_uA
                 ), (policy, k)
@@ -3878,6 +3886,7 @@ class TestAnExceedanceReadsAsOne:
         )
         pt = get_material("Pt")
         big = DiscElectrode(1000.0, "Pt")
+        assert pt.chronic_threshold is not None
         high = pt.chronic_threshold.high_uC_cm2
         yield "Chronic degradation", SafetyCalculator(
             big, StimProtocol(high * big.area_cm2 / 200e-6 * eps, 200, 130, 1)
@@ -3916,6 +3925,7 @@ class TestAnExceedanceReadsAsOne:
                 bound = float(rows["Charge-injection limit"].split()[0])
             else:
                 m = re.match(r"(\S+) \(threshold (\S+);", rows["Shannon k"])
+                assert m is not None
                 applied, bound = float(m.group(1)), float(m.group(2))
             assert applied > bound, (name, rows)
 
@@ -4113,13 +4123,16 @@ class TestTheAvailableVoltageFloorsInEveryBranch:
             )
             if check.status is Status.FAIL:
                 m = re.search(r"needs (\S+) V but only (\S+) V available", check.summary)
+                assert m is not None
                 required, available = float(m.group(1)), float(m.group(2))
                 ok = required > available
             else:
                 m = re.search(r"^(\S+) V of (\S+) V", check.summary)
+                assert m is not None
                 required, available = float(m.group(1)), float(m.group(2))
                 ok = required <= available
             d = re.search(r"required\s+(\S+) V\n\s+available\s+(\S+) V", check.detail)
+            assert d is not None
             d_required, d_available = float(d.group(1)), float(d.group(2))
             ok = ok and available <= given and d_available <= given
             ok = ok and (d_required > d_available) == (check.status is Status.FAIL)

@@ -19,6 +19,7 @@ a uniform 4 pi breaks the hemisphere by 2, and a uniform 2 pi breaks the sphere 
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
@@ -631,7 +632,7 @@ class TestShannonSaysItWasFitOnDiscs:
     ``provisional`` so the caveat is visible when it binds (physics m6).
     """
 
-    PROTOCOL_KW = {"current_uA": 50.0, "pulse_width_us": 400.0, "frequency_hz": 50.0,
+    PROTOCOL_KW: dict[str, Any] = {"current_uA": 50.0, "pulse_width_us": 400.0, "frequency_hz": 50.0,
                    "train_duration_s": 7 * 3600.0}
 
     @classmethod
@@ -725,7 +726,7 @@ class TestTheReturnPhaseOnlyPolarisesPastRest:
 
         active = DiscElectrode(500.0, material)
         counter = DiscElectrode(900.0, material)
-        kwargs = (
+        kwargs: dict[str, Any] = (
             {"counter_electrode": counter, "counter_separation_um": 20000.0}
             if with_counter else {}
         )
@@ -871,7 +872,7 @@ class TestTheTrainOffsetIsInTheBudget:
 
         active = DiscElectrode(500.0, material)
         counter = DiscElectrode(900.0, material)
-        kwargs = (
+        kwargs: dict[str, Any] = (
             {"counter_electrode": counter, "counter_separation_um": 20000.0}
             if with_counter else {}
         )
@@ -881,6 +882,7 @@ class TestTheTrainOffsetIsInTheBudget:
         result = self._calc(active, protocol, **kwargs).assess().compliance
         assert result.offset_V == result.offset_cap_V  # the premise: the cap binds
         window = get_material(material).water_window
+        assert window is not None
         expected = oracles.peak_stimulator_voltage_V(
             current_uA=300.0, pulse_width_us=200.0, return_phase_ratio=1.0,
             recovered_fraction=recovery, anodic_first=anodic_first,
@@ -969,7 +971,7 @@ class TestTheTrainOffsetIsInTheBudget:
 
         from neurostim import StimProtocol
 
-        kwargs = (
+        kwargs: dict[str, Any] = (
             {"counter_electrode": DiscElectrode(900.0, material), "counter_separation_um": 20000.0}
             if counter else {}
         )
@@ -1031,7 +1033,7 @@ class TestTheTrainOffsetIsInTheBudget:
                 for train in (0.05, 1.0, math.inf):
                     for counter in (False, True):
                         for compliance_V in (0.3, 1.0, 3.0, 10.0, 50.0):
-                            kwargs = (
+                            kwargs: dict[str, Any] = (
                                 {"counter_electrode": DiscElectrode(900.0, material),
                                  "counter_separation_um": 20000.0}
                                 if counter else {}
@@ -1114,13 +1116,17 @@ class TestTheElectrolysisExceptionIsBounded:
                     charge_recovery_ratio=recovery,
                 ),
                 compliance_V=1e6,
-                **({"counter_electrode": other, "counter_separation_um": 20000.0}
-                   if counter else {}),
+                **(
+                    {"counter_electrode": other, "counter_separation_um": 20000.0}
+                    if counter
+                    else dict[str, Any]()
+                ),
             )
             assessment = calc.assess()
             result = assessment.compliance
             assert math.ceil(calc.p.n_pulses) == pulses
             window = get_material(material).water_window
+            assert window is not None
             cathodic, anodic = -window.cathodic_V, window.anodic_V
             lead_H, opposite_H = (anodic, cathodic) if anodic_first else (cathodic, anodic)
             expected = oracles.peak_stimulator_voltage_V(
@@ -1220,11 +1226,11 @@ class TestAnUnboundedRequirementIsRefusedInWords:
             ("Pt", "Ta2O5", "TiN"), ("mono", 1.0, 0.9, 1.3), (1.0, math.inf), (None, 10.0),
             (False, True), (0.0, -0.2),
         ):
-            shape = (
+            shape: dict[str, Any] = (
                 {"waveform": "monophasic"} if recovery == "mono"
                 else {"charge_recovery_ratio": recovery}
             )
-            kwargs = (
+            kwargs: dict[str, Any] = (
                 {"counter_electrode": DiscElectrode(900.0, material),
                  "counter_separation_um": 20000.0}
                 if counter else {}
@@ -1309,7 +1315,7 @@ class TestAnUnboundedRequirementIsRefusedInWords:
     def test_the_refusal_names_why(self, material, counter, names):
         from neurostim import SafetyCalculator, StimProtocol
 
-        kwargs = (
+        kwargs: dict[str, Any] = (
             {"counter_electrode": DiscElectrode(900.0, material),
              "counter_separation_um": 20000.0}
             if counter else {}

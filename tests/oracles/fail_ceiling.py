@@ -462,7 +462,7 @@ def _assert_constructor_is_frozen(calculator_class: type) -> None:
     Cached on the class: the bisection rebuilds a calculator ~135 times per call and the
     signature cannot change between two of them.
     """
-    live = set(inspect.signature(calculator_class.__init__).parameters) - {"self"}
+    live = set(inspect.signature(calculator_class).parameters) - {"self"}
     added = sorted(live - CARRIED_ARGUMENTS)
     dropped = sorted(CARRIED_ARGUMENTS - live)
     if not added and not dropped:

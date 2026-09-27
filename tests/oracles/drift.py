@@ -178,6 +178,6 @@ def exits_within_delivered_pulses(
     else:
         pulses = _math.ceil(train_duration_s * frequency_hz * train_duty_cycle)
     exit_s = partial_recovery_exit_time_s(
-        frequency_hz=frequency_hz, max_pulses=pulses, **kwargs  # type: ignore[arg-type]
+        frequency_hz=frequency_hz, max_pulses=pulses, **kwargs
     )
     return _math.isfinite(exit_s)

@@ -89,6 +89,10 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
 check_untyped_defs = true
+# Module names come from the directories mypy is run from (C7.6, T26: `mypy neurostim tests`).
+# Without it, an unrelated __init__.py in a parent directory makes mypy see the package
+# twice under two names and stop.
+explicit_package_bases = true
 exclude = ["build/", "dist/"]
 
 [[tool.mypy.overrides]]

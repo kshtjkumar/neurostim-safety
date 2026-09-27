@@ -273,7 +273,7 @@ not run, and the incomplete-limits note says you dropped it.
 ```bash
 pytest -q                              # the full suite
 ruff check neurostim tests examples    # clean
-mypy neurostim                         # clean
+mypy neurostim tests                   # clean, tests included
 python scripts/provenance_audit.py     # provenance status report; --strict gates CI
 python scripts/verify_transcriptions.py --strict --require-papers  # release gate; needs the local paper library
 ```

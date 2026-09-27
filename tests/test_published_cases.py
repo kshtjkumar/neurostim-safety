@@ -333,6 +333,7 @@ class TestWaterWindowConsistency:
                     material.cic_uC_cm2("optimistic", anodic_first),
                     ww.effective_capacitance_uF_cm2(material, anodic_first=anodic_first),
                 )
+                assert material.water_window is not None
                 assert excursion <= material.water_window.width_V
 
 
@@ -444,6 +445,7 @@ class TestComplianceConsistency:
             material.cic_uC_cm2("optimistic", anodic_first=False),
             ww.effective_capacitance_uF_cm2(material, anodic_first=False),
         )
+        assert material.water_window is not None
         assert excursion == pytest.approx(abs(material.water_window.cathodic_V))
 
     def test_required_voltage_is_ohmic_plus_polarisation(self):
@@ -653,7 +655,7 @@ class TestAsanuma1976:
 
         soma = az.chronaxie_for("cell bodies")
         widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
-        thresholds = sd.weiss_threshold_uA(widths, 2.0, soma.median_us)
+        thresholds = np.asarray(sd.weiss_threshold_uA(widths, 2.0, soma.median_us))
         fit = sd.fit_weiss(widths, thresholds)
         assert fit.rheobase_uA == pytest.approx(2.0)
         assert fit.chronaxie_us == pytest.approx(soma.median_us)

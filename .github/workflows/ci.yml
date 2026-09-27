@@ -91,7 +91,9 @@ jobs:
         run: ruff check neurostim tests examples
 
       - name: Mypy
-        run: mypy neurostim
+        # The tests are type-checked too (T26): a test that reads an Optional without
+        # narrowing it fails on None with an AttributeError instead of an assertion.
+        run: mypy neurostim tests
 
       - name: Generated README transcript is current
         # The README quick-start block is output, not prose. It was stale by a whole

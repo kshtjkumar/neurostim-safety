@@ -843,14 +843,6 @@ class TestTheTranscriptionCheckCanRequireItsPapers:
         assert "informational" in ci
 
 
-def _ci_job(name: str) -> str:
-    """The text of one job in ci.yml, from its key to the next top-level job key."""
-    text = CI_WORKFLOW.read_text(encoding="utf-8")
-    start = text.index(f"\n  {name}:\n")
-    nxt = [m for m in (text.find(f"\n  {j}:\n", start + 1) for j in ("test", "lint", "coverage", "literature", "mutation")) if m > start]
-    return text[start : min(nxt) if nxt else len(text)]
-
-
 class TestTheCiToolchainIsPinnedAndComplete:
     """C7.6, T21 and T25. The PDF-text tests skipped on every CI interpreter because the
     test job had no poppler. Every run resolved the latest ruff and mypy, so a new release
@@ -880,5 +872,12 @@ class TestTheCiToolchainIsPinnedAndComplete:
         import re
 
         job = _ci_job("coverage")
-        floor = float(re.search(r"branch_floor\.py --json coverage\.json --min ([0-9.]+)", job)[1])
+        match = re.search(r"branch_floor\.py --json coverage\.json --min ([0-9.]+)", job)
+        assert match is not None
+        floor = float(match[1])
         assert floor >= 71.0
+
+
+def test_ci_type_checks_the_tests() -> None:
+    """C7.6, T26: the tests are type-checked with the package."""
+    assert "run: mypy neurostim tests\n" in _ci_job("lint")

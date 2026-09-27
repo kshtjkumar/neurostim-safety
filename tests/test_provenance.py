@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from typing import Any
 
 import pytest
 
@@ -71,7 +72,9 @@ class TestAChronicThresholdCarriesItsOwnVerifiedFlag:
     def test_describe_says_provisional(self):
         threshold = self._pt_with_unverified_threshold().chronic_threshold
         assert "PROVISIONAL" in threshold.describe()
-        assert "PROVISIONAL" not in get_material("Pt").chronic_threshold.describe()
+        shipped = get_material("Pt").chronic_threshold
+        assert shipped is not None
+        assert "PROVISIONAL" not in shipped.describe()
 
     def test_the_json_carries_each_constants_reference_and_flag(self):
         import json
@@ -143,6 +146,7 @@ class TestAUserMeasurementInheritsOnlyWhatItSays:
 
     def test_by_default_the_published_limits_stay_in_force_labelled_inherited(self):
         user = with_measured_cic(get_material("Pt"), 100.0)
+        assert user.chronic_threshold is not None and user.water_window is not None
         assert user.chronic_threshold.reference == "rose_robblee1990"
         assert user.chronic_threshold.inherited_from == "Platinum"
         assert user.water_window.inherited_from == "Platinum"
@@ -191,6 +195,7 @@ class TestAUserMeasurementInheritsOnlyWhatItSays:
             get_material("Pt"), 100.0, chronic_threshold=(10.0, 30.0),
             water_window=(-0.5, 0.7),
         )
+        assert user.chronic_threshold is not None and user.water_window is not None
         assert user.chronic_threshold.reference == "user_measurement"
         assert user.chronic_threshold.verified is False
         assert user.chronic_threshold.inherited_from == ""
@@ -215,7 +220,8 @@ class TestAUserMeasurementInheritsOnlyWhatItSays:
     def test_a_dropped_constant_is_recorded_where_the_limit_goes_missing(
         self, keyword, check, phrase
     ):
-        user = with_measured_cic(get_material("Pt"), 100.0, **{keyword: None})
+        dropped: dict[str, Any] = {keyword: None}
+        user = with_measured_cic(get_material("Pt"), 100.0, **dropped)
         assert getattr(user, keyword) is None
         assessment = self._assess(user)
         result = next(c for c in assessment.checks if c.name == check)
@@ -246,8 +252,10 @@ class TestTheWindowSeedReadsTheWindowItIsGiven:
         from neurostim.materials import WaterWindow
         from neurostim.safety import assessment as assessment_mod
 
+        cathodic_V, anodic_V = window
         material = replace(
-            get_material("Pt"), water_window=WaterWindow(*window, reference="cogan2008")
+            get_material("Pt"),
+            water_window=WaterWindow(cathodic_V, anodic_V, reference="cogan2008"),
         )
         calc = SafetyCalculator(
             DiscElectrode(100.0, "Pt"),
@@ -344,6 +352,7 @@ class TestAnUnverifiedLimitMarksEverythingDerivedFromIt:
     def test_an_unverified_chronic_threshold_makes_its_check_provisional(self):
         """Ledger 30 gave the threshold a flag; the check now reads it."""
         pt = get_material("Pt")
+        assert pt.chronic_threshold is not None
         material = replace(pt, chronic_threshold=replace(pt.chronic_threshold, verified=False))
         assessment = SafetyCalculator(
             DiscElectrode(100.0, "Pt"), self.PROTOCOL, material=material
@@ -985,6 +994,7 @@ class TestTheAnswerCoversTheIntervalAndTheKinds:
     def test_the_docstring_states_what_old_records_cannot_see(self):
         from neurostim import audit
 
+        assert audit.reproduces.__doc__
         doc = " ".join(audit.reproduces.__doc__.split())
         assert "cannot see" in doc and "single check's status" in doc
         assert "version 1 and 2" in doc.lower()

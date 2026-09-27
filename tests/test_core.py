@@ -621,6 +621,7 @@ class TestInVivoDerating:
             DiscElectrode(500.0, "Pt"), StimProtocol(10, 200, 50, 1), medium="in_vivo"
         ).assess().charge
         # G12 (C4.5, ledger 71): Leung's 8.7x; G12 again (C4b.2, ledger 156): 35/3.84.
+        assert result.limit_interval_uC_cm2 is not None
         assert result.limit_interval_uC_cm2.high == pytest.approx(150.0 / (35.0 / 3.84))
 
     def test_invalid_medium_rejected(self):
@@ -666,7 +667,7 @@ class TestElectrodePresets:
         assessment = SafetyCalculator(
             electrode("dbs_3389"), StimProtocol(3000, 60, 130, 1), compliance_V=10.0
         ).assess()
-        assert assessment.limiting_current_uA > 0
+        assert assessment.limiting_current_uA is not None and assessment.limiting_current_uA > 0
 
     def test_unknown_preset_raises(self):
         from neurostim import get_preset
@@ -858,6 +859,7 @@ class TestVoltageTransient:
         result = transient.analyse(
             t, v, current_uA=500.0, pulse_width_us=200.0, area_cm2=9.5e-3
         )
+        assert material.water_window is not None
         limit = transient.charge_injection_limit_uC_cm2(
             result, material.water_window.cathodic_V
         )

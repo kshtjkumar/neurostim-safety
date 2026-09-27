@@ -199,11 +199,12 @@ class TestInvalidInputSurfaces:
         from neurostim.gui import app as app_mod
 
         opened: list[str] = []
-        monkeypatch.setattr(
-            app_mod.QFileDialog,
-            "getSaveFileName",
-            lambda *a, **k: (opened.append("dialog"), ("", ""))[1],
-        )
+
+        def refuse_dialog(*a, **k):
+            opened.append("dialog")
+            return ("", "")
+
+        monkeypatch.setattr(app_mod.QFileDialog, "getSaveFileName", refuse_dialog)
         monkeypatch.setattr(app_mod.QMessageBox, "warning", lambda *a, **k: None)
 
         window.frequency.setValue(1000.0)
@@ -619,7 +620,7 @@ class TestTheProtocolFormCanExpressPhase2Faults:
         assert "Charge balance" in detail
         balance = next(
             c
-            for c in window._calc.assess().checks  # type: ignore[union-attr]
+            for c in window._calc.assess().checks
             if c.name == "Charge balance"
         )
         assert balance.status is Status.CAUTION

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from typing import Any
 
 import pytest
 
@@ -81,7 +82,7 @@ class TestTheDriftArgumentsAreAllOrNone:
     drifted; and ``recovered_charge_uC`` defaulted to 0.0, so omitting it made a partial
     recovery look monophasic (2.4 s and no exit, where assess() gives 0.42 s and FAIL)."""
 
-    KW = {"net_dc_current_uA": 1.0, "area_cm2": 0.001963, "train_duration_s": 1.0}
+    KW: dict[str, Any] = {"net_dc_current_uA": 1.0, "area_cm2": 0.001963, "train_duration_s": 1.0}
 
     @pytest.mark.parametrize("missing", ["net_dc_current_uA", "area_cm2", "train_duration_s"])
     def test_a_partial_set_raises_and_names_what_is_missing(self, missing):
@@ -126,7 +127,9 @@ class TestTheDriftArgumentsAreAllOrNone:
             train_duration_s=p.train_duration_s,
             recovered_charge_uC=p.charge_per_phase_uC * p.recovered_fraction,
         )
-        assert direct.drift.time_to_exit_s == calc.assess().water_window.drift.time_to_exit_s
+        via_calc = calc.assess().water_window.drift
+        assert direct.drift is not None and via_calc is not None
+        assert direct.drift.time_to_exit_s == via_calc.time_to_exit_s
 
 
 class TestTheChargeIntervalRaisesInsteadOfCollapsing:
@@ -177,6 +180,7 @@ class TestTheDriftRunsOverTheOnTime:
         )
         assessment = calc.assess()
         drift = assessment.water_window.drift
+        assert drift is not None
         assert drift.time_to_exit_s == pytest.approx(0.2557578634653229, rel=1e-12)
         assert drift.window_charge_uC == pytest.approx(8.977, abs=5e-4)
         delivered = calc.p.net_charge_per_pulse_uC * calc.p.n_pulses
@@ -191,6 +195,7 @@ class TestTheDriftRunsOverTheOnTime:
         assessment = SafetyCalculator(
             self._band(), StimProtocol(3000.0, 90.0, 130.0, 1.0, waveform="monophasic")
         ).assess()
+        assert assessment.water_window.drift is not None
         assert assessment.water_window.drift.time_to_exit_s == pytest.approx(0.2558, rel=1e-3)
         check = next(c for c in assessment.checks if c.name == "Water window")
         assert check.status.value == "FAIL"
@@ -244,6 +249,7 @@ class TestTheDriftRunsOverTheOnTime:
         at_ceiling = SafetyCalculator(
             DiscElectrode(500.0, "Pt"), dc_replace(protocol, current_uA=check.ceiling_uA)
         ).assess().water_window.drift
+        assert at_ceiling is not None
         assert at_ceiling.time_to_exit_s == pytest.approx(0.25, rel=1e-9)
         full = SafetyCalculator(
             DiscElectrode(500.0, "Pt"), dc_replace(protocol, train_duty_cycle=1.0)
@@ -259,6 +265,7 @@ class TestTheDriftRunsOverTheOnTime:
             StimProtocol(80.0, 200.0, 130.0, 1.0, charge_recovery_ratio=0.9,
                          train_duty_cycle=0.5),
         ).assess().water_window.drift
+        assert drift is not None
         text = drift.describe()
         assert "(on-time)" in text
         assert "0.5 s of on-time" in text

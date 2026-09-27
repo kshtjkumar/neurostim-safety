@@ -25,6 +25,7 @@ from __future__ import annotations
 import itertools
 import math
 from dataclasses import asdict
+from typing import Any
 
 import pytest
 
@@ -1636,7 +1637,7 @@ class TestTheRefusalContractHoldsInBothDirections:
 
     def _sweep(self):
         """Every configuration and a short label, built once."""
-        cases = []
+        cases: list[tuple[str, Any, StimProtocol, dict[str, Any]]] = []
         for material in ("Pt", "SIROF", "Ta2O5"):
             for diameter_um in (100.0, 500.0, 2000.0):
                 electrode = DiscElectrode(diameter_um, material)
@@ -1676,7 +1677,7 @@ class TestTheRefusalContractHoldsInBothDirections:
         # -- the counter, whose window is not assessed, and Ta2O5, which has none -- beside
         # a capped one that leaves a positive ceiling.
         continuous = StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9)
-        counter = {"counter_electrode": DiscElectrode(900.0, "Pt"),
+        counter: dict[str, Any] = {"counter_electrode": DiscElectrode(900.0, "Pt"),
                    "counter_separation_um": 20000.0}
         cases += [
             ("Ta2O5/continuous-unbalanced/compliance", DiscElectrode(500.0, "Ta2O5"),
@@ -1808,9 +1809,10 @@ class TestTheRefusalContractHoldsInBothDirections:
         """
         import oracles
 
-        for label, settings in (
+        edges: tuple[tuple[str, dict[str, Any]], ...] = (
             ("edge resting potential", {"resting_potential_V": -0.6}),
-        ):
+        )
+        for label, settings in edges:
             calc = SafetyCalculator(
                 DiscElectrode(100.0, "Pt"),
                 StimProtocol(80.0, 200.0, 130.0, 1.0),
@@ -1866,6 +1868,7 @@ class TestAnOverRecoveryDriftChargesTheOppositeBranch:
         p = calc.p
         material = get_material(calc.e.material)
         window = material.water_window
+        assert window is not None
         rest = calc.resting_potential_V
         cathodic, anodic = rest - window.cathodic_V, window.anodic_V - rest
         lead, opposite = (anodic, cathodic) if p.anodic_first else (cathodic, anodic)
@@ -1924,6 +1927,7 @@ class TestAnOverRecoveryDriftChargesTheOppositeBranch:
             StimProtocol(300.0, 200.0, 130.0, 1.0, charge_recovery_ratio=1.3),
         )
         drift = calc.assess().water_window.drift
+        assert drift is not None
         assert drift.window_headroom_V == 0.8
         assert drift.window_charge_uC == pytest.approx(0.1963495408493621, rel=1e-15)
         assert drift.time_to_exit_s == pytest.approx(0.16782012038407015 / 2.0, rel=1e-12)
@@ -1936,6 +1940,7 @@ class TestAnOverRecoveryDriftChargesTheOppositeBranch:
             capacitance_uF_cm2=250.0,
         )
         drift = calc.assess().water_window.drift
+        assert drift is not None
         assert drift.window_charge_uC == pytest.approx(0.8 * 250.0 * calc.e.area_cm2, rel=1e-15)
 
     def test_a_capped_compliance_offset_means_the_window_fails(self) -> None:
@@ -2137,6 +2142,7 @@ class TestTheUnrecoveredChargeIsExactlyLinear:
         assessment = calc.assess()
         balance = next(c for c in assessment.checks if c.name == "Charge balance")
         assert balance.status is Status.PASS
+        assert assessment.water_window.drift is not None
         assert not assessment.water_window.drift.drifts
         assert assessment.limiting_current_uA is not None
 
@@ -2213,6 +2219,7 @@ class TestTheDriftBudgetCarriesThePulseRidingOnIt:
         window = next(c for c in assessment.checks if c.name == "Water window")
         assert window.status is Status.FAIL, window.summary
         # One pulse, with a float of slack: 0.42 s against the oracle's pulse-22 0.44 s.
+        assert assessment.water_window.drift is not None
         assert abs(assessment.water_window.drift.time_to_exit_s - exit_s) <= (1.0 / 50.0) * (
             1.0 + 1e-9
         )
@@ -2309,6 +2316,7 @@ class TestTheDriftBudgetCarriesThePulseRidingOnIt:
             capacitance_uF_cm2=250.0,
         )
         drift = calc.assess().water_window.drift
+        assert drift is not None
         assert drift.net_dc_current_uA < 0.0
         assert drift.window_headroom_V == pytest.approx(self.PT_ANODIC_V, rel=1e-15)
         assert drift.window_charge_uC == pytest.approx(0.8 * 250.0 * calc.e.area_cm2)

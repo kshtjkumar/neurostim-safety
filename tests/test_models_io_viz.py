@@ -165,14 +165,14 @@ class TestThermal:
 class TestStrengthDuration:
     def test_weiss_fit_recovers_its_own_parameters(self):
         widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
-        thresholds = sd.weiss_threshold_uA(widths, 20.0, 150.0)
+        thresholds = np.asarray(sd.weiss_threshold_uA(widths, 20.0, 150.0))
         fit = sd.fit_weiss(widths, thresholds)
         assert fit.rheobase_uA == pytest.approx(20.0)
         assert fit.chronaxie_us == pytest.approx(150.0)
 
     def test_lapicque_fit_recovers_its_own_parameters(self):
         widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
-        thresholds = sd.lapicque_threshold_uA(widths, 20.0, 200.0)
+        thresholds = np.asarray(sd.lapicque_threshold_uA(widths, 20.0, 200.0))
         fit = sd.fit_lapicque(widths, thresholds)
         assert fit.rheobase_uA == pytest.approx(20.0, rel=1e-4)
         assert fit.membrane_tau_us == pytest.approx(200.0, rel=1e-4)
@@ -687,6 +687,7 @@ class TestTheExampleAndTheFemComparisonAgreeWithThemselves:
         spec = importlib.util.spec_from_file_location(
             "worked_example", Path(__file__).resolve().parents[1] / "examples" / "worked_example.py"
         )
+        assert spec is not None and spec.loader is not None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         assert module.main(tmp_path) == 0
@@ -818,6 +819,7 @@ class TestAStrengthDurationFitIsPhysicalAndSaysHowSure:
         covered, estimates = 0, []
         for _ in range(2000):
             fit = sd.fit_weiss(widths, truth * (1.0 + 0.05 * rng.standard_normal(widths.size)))
+            assert fit.chronaxie_ci95_us is not None
             low, high = fit.chronaxie_ci95_us
             covered += low <= 200.0 <= high
             estimates.append(fit.chronaxie_us)
@@ -828,7 +830,9 @@ class TestAStrengthDurationFitIsPhysicalAndSaysHowSure:
         widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
         thresholds = np.array([82.0, 50.0, 34.0, 26.0, 22.0])
         for fit in (sd.fit_weiss(widths, thresholds), sd.fit_lapicque(widths, thresholds)):
+            assert fit.rheobase_se_uA is not None and fit.chronaxie_se_us is not None
             assert fit.rheobase_se_uA > 0 and fit.chronaxie_se_us > 0
+            assert fit.chronaxie_ci95_us is not None
             low, high = fit.chronaxie_ci95_us
             assert low < fit.chronaxie_us < high
             assert "95 % CI" in fit.describe()
