@@ -1064,3 +1064,41 @@ class TestFieldAndFitBoundaries:
         fit = sd.fit_lapicque(widths, thresholds)
         model = fit.rheobase_uA / (1.0 - np.exp(-widths / fit.membrane_tau_us))
         assert fit.rss == pytest.approx(float(np.sum((thresholds - model) ** 2)), rel=1e-12)
+
+
+class TestAnUnidentifiableChronaxieReportsNoUncertainty:
+    """Ledger 178 (Phase 7 review S4). With every width far above the chronaxie the
+    Lapicque thresholds do not depend on tau, and ``curve_fit`` reported an SE of 0.0 and
+    a zero-width CI for exactly that parameter. The review's two designs."""
+
+    def test_constant_thresholds_at_long_widths(self):
+        fit = sd.fit_lapicque(np.array([1e5, 2e5, 3e5]), np.array([20.0, 20.0, 20.0]))
+        assert fit.chronaxie_se_us is None and fit.chronaxie_ci95_us is None
+        assert "not identifiable" in fit.describe()
+
+    def test_long_only_widths_at_five_percent_noise(self):
+        widths = np.array([2000.0, 4000.0, 6000.0, 8000.0])
+        tau = 200.0 / math.log(2.0)
+        rng = np.random.default_rng(1)
+        reported = covered = 0
+        for _ in range(300):
+            noisy = 20.0 / (1.0 - np.exp(-widths / tau)) * (1 + 0.05 * rng.standard_normal(4))
+            try:
+                fit = sd.fit_lapicque(widths, noisy)
+            except (ValueError, RuntimeError):
+                continue
+            if fit.chronaxie_ci95_us is None:
+                assert "not identifiable" in fit.uncertainty_note
+                continue
+            assert fit.chronaxie_se_us is not None and fit.chronaxie_se_us > 0.0
+            reported += 1
+            low, high = fit.chronaxie_ci95_us
+            covered += low <= 200.0 <= high
+        # Measured: 82 intervals reported of 153 accepted fits, 71 cover (0.866). Before,
+        # 153 were reported and 71 of them covered (0.46): the rest were zero-width.
+        assert reported > 50 and covered / reported > 0.8
+
+    def test_an_informative_design_keeps_its_interval(self):
+        widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
+        fit = sd.fit_lapicque(widths, np.array([82.5, 49.0, 34.6, 25.7, 22.3]))
+        assert fit.chronaxie_ci95_us is not None and fit.uncertainty_note == ""

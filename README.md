@@ -134,7 +134,8 @@ Plus models, each documenting its own validity range:
 - **Thermal** — Pennes bioheat, analytic steady state plus an implicit transient solver
 - **Strength–duration** — Lapicque and Weiss forms, with fitting routines that report a
   95 % interval on the chronaxie (calibrated for Weiss; Lapicque's can under-cover on
-  designs whose widths do not span the chronaxie)
+  designs whose widths do not span the chronaxie, and is withheld, with the reason, when
+  every width is far above it)
 - **VTA** — current–distance activation radius (the weakest model here; read its docstring)
 
 Geometries: disc, ring, rectangle, cylindrical band, microwire (flat/hemispherical/conical

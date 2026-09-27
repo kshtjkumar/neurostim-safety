@@ -401,6 +401,15 @@ unchanged.
   whose widths do not span the chronaxie: 0.82–0.90 at 10–20 % noise. Its `describe()`
   says so.
 - A two-point fit says its uncertainty is not estimable.
+- **A Lapicque fit whose widths all sit far above the chronaxie reports no SE and no
+  interval.** Before, it reported an SE of 0.0. Such thresholds do not depend on the
+  chronaxie, and `curve_fit`'s pseudo-inverse covariance gave zero variance for exactly
+  that parameter. Constant thresholds at 0.1–0.3 s printed a zero-width CI at
+  7e-11 µs. At widths 2–8 ms and 5 % noise, 71 of 153 accepted fits had a zero SE, and
+  interval coverage was 0.46. Such a fit now carries `uncertainty_note`, "the chronaxie
+  is not identifiable from this design", and `describe()` prints it. The test is the
+  relative-sensitivity Jacobian's singular-value ratio against √ε. The remaining 82
+  intervals cover at 0.87.
 - The fitted values themselves are unchanged.
 - A design with every pulse width equal raises. It used to return a rheobase and a
   chronaxie behind a numpy RankWarning.

@@ -145,6 +145,9 @@ class StrengthDurationFit:
     """95 % confidence interval, estimate +/- t(0.975, n - 2) x SE. At 5 % threshold noise,
     widths 50-800 us and a true chronaxie of 200 us it covers 94 % of 4000 synthetic
     replicates, whose estimates scatter with sd 27 us."""
+    uncertainty_note: str = ""
+    """Why no SE or interval is given, when the reason is the design rather than the
+    number of points (ledger 178)."""
 
     def threshold_uA(self, pulse_width_us: float | np.ndarray):
         """Evaluate the fitted curve."""
@@ -160,7 +163,9 @@ class StrengthDurationFit:
         """Multi-line summary, with the uncertainty the fit supports."""
         if self.chronaxie_ci95_us is None or self.rheobase_se_uA is None:
             spread = [
-                f"  uncertainty not estimable from {self.n_points} points "
+                f"  uncertainty not estimable: {self.uncertainty_note}"
+                if self.uncertainty_note
+                else f"  uncertainty not estimable from {self.n_points} points "
                 f"(no residual degrees of freedom)"
             ]
         else:
@@ -309,7 +314,8 @@ def fit_lapicque(
     # residual variance, so infinite when there are no degrees of freedom left.
     dof = int(w.size) - 2
     diag = np.diag(pcov)
-    finite = dof >= 1 and bool(np.all(np.isfinite(diag)))
+    note = _unidentifiable_note(w, rheobase, tau)
+    finite = dof >= 1 and bool(np.all(np.isfinite(diag))) and not note
     rheobase_se = float(math.sqrt(diag[0])) if finite else None
     chronaxie_se = float(math.log(2.0) * math.sqrt(diag[1])) if finite else None
     chronaxie = chronaxie_from_tau_us(tau)
@@ -324,6 +330,39 @@ def fit_lapicque(
         rheobase_se_uA=rheobase_se,
         chronaxie_se_us=chronaxie_se,
         chronaxie_ci95_us=_interval(chronaxie, chronaxie_se, dof),
+        uncertainty_note=note,
+    )
+
+
+IDENTIFIABILITY_RCOND = math.sqrt(np.finfo(float).eps)
+"""Smallest ratio of the relative-sensitivity Jacobian's singular values at which the
+Lapicque covariance is taken as estimable: the usual numerical-rank cut for least
+squares, below which the pseudo-inverse ``curve_fit`` returns reports zero variance for
+a direction the data cannot see (ledger 178)."""
+
+
+def _unidentifiable_note(w: np.ndarray, rheobase: float, tau: float) -> str:
+    """A reason the Lapicque covariance cannot be trusted at this design, or ``""``.
+
+    With every width far above the chronaxie, ``I = R / (1 - exp(-W/tau))`` is flat at
+    the rheobase and does not depend on ``tau``: its column of the Jacobian underflows
+    to zero, and ``curve_fit``'s covariance then reports an SE of 0 for exactly the
+    parameter the data say nothing about. The Phase 6/7 review measured widths 2-8 ms at
+    5 % noise: 124 of 246 accepted fits with a near-zero SE, CI coverage 0.41.
+    """
+    x = w / tau
+    decay = np.exp(-x)
+    denominator = -np.expm1(-x)
+    # Relative sensitivities d ln I / d ln R and d ln I / d ln tau, one row per width.
+    jac = np.column_stack([np.ones_like(w), -x * decay / denominator])
+    s = np.linalg.svd(jac, compute_uv=False)
+    if s[-1] > IDENTIFIABILITY_RCOND * s[0]:
+        return ""
+    return (
+        f"the chronaxie is not identifiable from this design: every width "
+        f"({float(w.min()):.4g} us and up) is far above the fitted chronaxie "
+        f"({chronaxie_from_tau_us(tau):.3g} us), so the thresholds do not depend on it. "
+        f"Include widths near the chronaxie"
     )
 
 
