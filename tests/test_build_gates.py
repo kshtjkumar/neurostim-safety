@@ -882,6 +882,7 @@ def test_ci_type_checks_the_tests() -> None:
     """C7.6, T26: the tests are type-checked with the package."""
     assert "run: mypy neurostim tests\n" in _ci_job("lint")
 
+
 class TestTheChangelogCarriesARecallNotice:
     """C7.7. Reports made before 0.16.0 print a limiting current up to 7.07x too high, and
     copies of them exist outside the repository where no commit can reach them. The
@@ -910,3 +911,76 @@ class TestTheChangelogCarriesARecallNotice:
         for moved in ("9.11", "on-time", "Compliance", "8.061 mK"):
             assert moved in notice, moved
 
+
+MUTATION = REPO_ROOT / "scripts" / "mutation.py"
+
+
+def _load_mutation() -> Any:
+    spec = importlib.util.spec_from_file_location("mutation", MUTATION)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["mutation"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestTheMutationGate:
+    """C7.6, G2 and user decision D3. The audit's 42 mutants came from a script that no
+    longer exists; 26 are recoverable from its report and are re-anchored by code text. A
+    generated set, sampled with a fixed seed, is what a fixed list cannot give."""
+
+    def test_the_26_recoverable_named_mutants_all_fit_the_code(self) -> None:
+        mutation = _load_mutation()
+        assert len(mutation.NAMED) == 26
+        assert len({m.id for m in mutation.NAMED}) == 26
+        for m in mutation.NAMED:
+            source = (REPO_ROOT / m.path).read_text(encoding="utf-8")
+            assert mutation.apply(m, source) != source, m.id
+
+    def test_a_stale_anchor_is_refused(self) -> None:
+        mutation = _load_mutation()
+        m = mutation.NAMED[0]
+        with pytest.raises(ValueError, match="expected once"):
+            mutation.apply(m, "nothing here\n")
+
+    def test_the_generated_set_is_fixed_and_large_enough(self) -> None:
+        mutation = _load_mutation()
+        first, second = mutation.generated_sample(), mutation.generated_sample()
+        assert first == second and len(first) == 160
+        assert len(mutation.enumerate_sites()) >= 150
+        for m in first:
+            source = (REPO_ROOT / m.path).read_text(encoding="utf-8")
+            assert mutation.apply(m, source) != source, m.id
+
+    @staticmethod
+    def _report(mutation: Any, named: str = "killed", killed: int = 160) -> dict[str, Any]:
+        return {
+            "named": [{"id": m.id, "status": named, "description": ""} for m in mutation.NAMED],
+            "generated": [
+                {"id": str(i), "status": "killed" if i < killed else "survived"}
+                for i in range(160)
+            ],
+        }
+
+    def test_the_gate_fails_a_surviving_named_mutant(self) -> None:
+        mutation = _load_mutation()
+        assert mutation.gate(self._report(mutation)) == []
+        assert mutation.gate(self._report(mutation, named="survived"))
+        assert mutation.gate(self._report(mutation, named="stale"))
+
+    def test_the_gate_fails_a_generated_score_under_90_percent(self) -> None:
+        mutation = _load_mutation()
+        assert mutation.gate(self._report(mutation, killed=144)) == []  # 90.0 %
+        assert mutation.gate(self._report(mutation, killed=143))
+
+    def test_the_committed_results_meet_the_gate(self) -> None:
+        mutation = _load_mutation()
+        report = json.loads(mutation.RESULTS.read_text(encoding="utf-8"))
+        assert mutation.gate(report) == []
+        assert [o["id"] for o in report["named"]] == [m.id for m in mutation.NAMED]
+
+    def test_ci_runs_it_on_demand_and_weekly(self) -> None:
+        workflow = (REPO_ROOT / ".github" / "workflows" / "mutation.yml").read_text()
+        assert "workflow_dispatch:" in workflow and "schedule:" in workflow
+        assert "python scripts/mutation.py --check-anchors" in workflow
+        assert "push:" not in workflow and "pull_request:" not in workflow

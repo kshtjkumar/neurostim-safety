@@ -1,0 +1,48 @@
+# Security note: no `github.event.*` value is interpolated into any `run:` block.
+name: Mutation
+
+# A full run is about an hour, so it is not a per-push gate: it runs on demand and weekly.
+# The committed docs/audit/mutation_results.json is the record; this job re-measures it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: Named and generated mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The suite includes the ledger gate, which needs the history (see ci.yml).
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Qt runtime dependencies and poppler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils \
+            libegl1 libgl1 libxkbcommon-x11-0 libdbus-1-3 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-cursor0
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Every named anchor still fits the code
+        run: python scripts/mutation.py --check-anchors
+
+      - name: Run the mutants and enforce the gate
+        # 26 named mutants must all be killed; >= 90 % of 160 generated ones.
+        run: python scripts/mutation.py --workers 2 --output mutation_results.json

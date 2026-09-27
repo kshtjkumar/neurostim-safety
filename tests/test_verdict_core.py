@@ -4139,3 +4139,57 @@ class TestTheAvailableVoltageFloorsInEveryBranch:
             if not ok:
                 wrong.append((given, check.summary))
         assert not wrong, (len(wrong), wrong[:3])
+
+
+class TestTheCautionGatesHaveTwoSides:
+    """C7.6 (G2, mutants A3 and A4). The water-window CAUTION gate at 0.1 V of headroom and
+    the compliance CAUTION gate at 80 % utilisation were never approached from either side
+    (audit_tests.md §5): moving either threshold changed no test's outcome. Each is pinned
+    here by one protocol on each side of it. The oracle is the stated threshold, applied to
+    the quantity the check reports."""
+
+    @staticmethod
+    def _window(current_uA: float) -> tuple[float, Status]:
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(current_uA, 200.0, 50.0, 1.0)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Water window")
+        return assessment.water_window.headroom_V, check.status
+
+    def test_the_water_window_cautions_below_a_tenth_of_a_volt(self) -> None:
+        # Headroom falls linearly with current for a balanced pulse: solve for 0.05 and
+        # 0.15 V from two points, then read the status on each side of 0.1 V.
+        h0, _ = self._window(100.0)
+        h1, _ = self._window(200.0)
+        slope = (h1 - h0) / 100.0
+        near, far = (100.0 + (target - h0) / slope for target in (0.05, 0.15))
+        headroom, status = self._window(near)
+        assert 0.0 < headroom < 0.1 and status is Status.CAUTION, (headroom, status)
+        headroom, status = self._window(far)
+        assert 0.1 <= headroom < 0.2 and status is Status.PASS, (headroom, status)
+
+    @staticmethod
+    def _compliance(compliance_V: float) -> tuple[float, Status]:
+        assessment = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(100.0, 200.0, 50.0, 1.0),
+            compliance_V=compliance_V,
+            counter_electrode=DiscElectrode(900.0, "Pt"),
+            counter_separation_um=20000.0,
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Compliance voltage")
+        return assessment.compliance.utilisation, check.status
+
+    def test_compliance_cautions_above_eighty_percent(self) -> None:
+        # A counter electrode is modelled, so the single-interface CAUTION does not apply.
+        required = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"),
+            StimProtocol(100.0, 200.0, 50.0, 1.0),
+            compliance_V=10.0,
+            counter_electrode=DiscElectrode(900.0, "Pt"),
+            counter_separation_um=20000.0,
+        ).assess().compliance.required_V
+        utilisation, status = self._compliance(required / 0.7)
+        assert utilisation == pytest.approx(0.7) and status is Status.PASS
+        utilisation, status = self._compliance(required / 0.9)
+        assert utilisation == pytest.approx(0.9) and status is Status.CAUTION

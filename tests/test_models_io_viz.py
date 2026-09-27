@@ -976,3 +976,91 @@ class TestAnUnresolvedEarlyTimeWarns:
         exact = 1e-3 / (4 * math.pi * 0.527 * 500e-6) * (1 - erfcx(math.sqrt(tau)))
         num = thermal.pennes_transient_sphere(1e-3, 500.0, np.array([t]), self._unperfused())[0]
         assert abs(num / exact - 1) < 0.015
+
+
+class TestTheCurrentDensityIsTheCurrentOverTheShell:
+    """C7.6 (G2, mutant M1). ``current_density_A_per_m2`` was never asserted numerically,
+    so its 1/r^2 could become 1/r^3 unnoticed (audit_tests.md §5). The oracle is the shell
+    area: 100 uA through a full sphere of radius 1 mm, and through a hemisphere for a
+    source in a half-space."""
+
+    def test_full_space(self) -> None:
+        expected = 100e-6 / (4.0 * math.pi * 1e-3**2)
+        assert field_mod.current_density_A_per_m2(100.0, 1000.0) == pytest.approx(
+            expected, rel=1e-12
+        )
+        assert field_mod.current_density_A_per_m2(100.0, 2000.0) == pytest.approx(
+            expected / 4.0, rel=1e-12
+        )
+
+    def test_half_space_and_ohms_law(self) -> None:
+        from neurostim import DiscElectrode
+
+        disc = DiscElectrode(100.0, "Pt")
+        j = field_mod.current_density_A_per_m2(100.0, 1000.0, electrode=disc)
+        assert j == pytest.approx(100e-6 / (2.0 * math.pi * 1e-3**2), rel=1e-12)
+        e = field_mod.field_V_per_m(100.0, 1000.0, 0.35, electrode=disc)
+        assert j == pytest.approx(0.35 * e, rel=1e-12)  # J = sigma E
+
+
+class TestFieldAndFitBoundaries:
+    """C7.6 (G2, generated mutants). Each input guard below had no test on its boundary, so
+    ``<=`` could become ``<`` or ``or`` become ``and`` unnoticed. The expected behaviour is
+    the guard's own message: the value is refused."""
+
+    @pytest.mark.parametrize("sigma", [0.0, -0.35, math.nan, math.inf])
+    def test_the_field_refuses_a_conductivity_that_is_not_finite_and_positive(self, sigma):
+        with pytest.raises(ValueError, match="sigma_S_per_m"):
+            field_mod.field_V_per_m(100.0, 1000.0, sigma)
+        with pytest.raises(ValueError, match="sigma_S_per_m"):
+            field_mod.potential_V(100.0, 1000.0, sigma)
+
+    def test_a_zero_dimensional_array_distance_returns_a_float(self):
+        assert isinstance(field_mod.field_V_per_m(100.0, np.array(1000.0)), float)
+        assert isinstance(field_mod.potential_V(100.0, np.array(1000.0)), float)
+        assert isinstance(field_mod.current_density_A_per_m2(100.0, np.array(1000.0)), float)
+
+    def test_a_zero_target_potential_is_refused(self):
+        with pytest.raises(ValueError, match="target_V"):
+            field_mod.distance_for_potential_um(100.0, 0.0)
+
+    def test_a_zero_minimum_distance_is_refused(self):
+        with pytest.raises(ValueError, match="min_distance_um"):
+            field_mod.radial_profile(100.0, 0.0, 1000.0)
+
+    def test_a_zero_pulse_width_is_refused(self):
+        with pytest.raises(ValueError, match="pulse_width_us"):
+            sd.weiss_threshold_uA(0.0, 20.0, 150.0)
+        with pytest.raises(ValueError, match="pulse_width_us"):
+            sd.weiss_threshold_uA(np.array([100.0, 0.0]), 20.0, 150.0)
+
+    def test_the_weiss_chronaxie_se_is_the_delta_method(self):
+        """The oracle is a numerical Jacobian of intercept/slope against numpy's own OLS
+        covariance (``np.polyfit(..., cov="unscaled")`` scaled by s^2), not the module's
+        closed form."""
+        widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
+        # Noisy on purpose: 82, 50, 34, 26, 22 is an exact Weiss curve (rheobase 18,
+        # chronaxie 177.8 us) whose SE is float noise of order 1e-13.
+        thresholds = np.array([82.5, 49.0, 34.6, 25.7, 22.3])
+        fit = sd.fit_weiss(widths, thresholds)
+        assert fit.chronaxie_se_us is not None and fit.chronaxie_se_us > 1.0
+        charge = thresholds * widths
+        (s, b), unscaled = np.polyfit(widths, charge, 1, cov="unscaled")
+        rss = float(np.sum((charge - (s * widths + b)) ** 2))
+        cov = unscaled * rss / (widths.size - 2)
+        eps = 1e-6
+        grad = np.array(
+            [
+                ((b / (s + eps * s)) - (b / (s - eps * s))) / (2 * eps * s),
+                (((b + eps * b) / s) - ((b - eps * b) / s)) / (2 * eps * b),
+            ]
+        )
+        assert fit.chronaxie_se_us == pytest.approx(math.sqrt(grad @ cov @ grad), rel=1e-6)
+        assert fit.rss == pytest.approx(rss, rel=1e-12)
+
+    def test_the_lapicque_rss_is_the_sum_of_squared_residuals(self):
+        widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
+        thresholds = np.array([82.0, 50.0, 34.0, 26.0, 22.0])
+        fit = sd.fit_lapicque(widths, thresholds)
+        model = fit.rheobase_uA / (1.0 - np.exp(-widths / fit.membrane_tau_us))
+        assert fit.rss == pytest.approx(float(np.sum((thresholds - model) ** 2)), rel=1e-12)

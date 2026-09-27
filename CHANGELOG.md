@@ -56,6 +56,31 @@ beyond the defect:
 
 Each is detailed in its own entry below.
 
+### A mutation gate, and the tests it asked for
+
+`scripts/mutation.py` checks whether the suite notices wrong arithmetic. The test audit's
+42 mutants came from a script that no longer exists, and its report names only 26 of
+them. Those 26 are anchored by code text rather than line number, and must all be
+killed. 160 more are generated from the AST of the gated modules with a fixed seed, and at
+least 90 % of them must be killed. Every run happens in a temporary copy, never in the
+checkout. CI runs it on demand and weekly (`.github/workflows/mutation.yml`), and the
+results are in `docs/audit/mutation_results.json`.
+
+The first run found real gaps:
+- Three named mutants survived. The water-window CAUTION gate at 0.1 V of headroom and
+  the compliance CAUTION gate at 80 % utilisation had no protocol on either side, and
+  `current_density_A_per_m2` was never checked against I/(4πr²).
+- The generated set scored 71.9 %. Most survivors were input guards whose boundary (zero)
+  or NaN case was never tried, and reported quantities (the Shannon margin, the fits'
+  SEs and residuals, the through-origin slope) that were never checked against a hand
+  calculation.
+
+`tests/test_boundaries.py` and the new classes in `test_verdict_core`/`test_models_io_viz`
+cover them. The run now kills 26 of 26 named mutants and 150 of 160 generated ones
+(93.75 %). Of the 10 survivors, 8 are argued equivalent in the harness
+(`JUDGED_EQUIVALENT`). One is not proven equivalent and says so. The last, the envelope's
+0.01–0.5 cm² area range, has no citation to pin it against, and is logged as ledger 174.
+
 ### The provenance gate can fail
 
 CI ran `scripts/provenance_audit.py` without `--strict`, so it always exited 0. It could
