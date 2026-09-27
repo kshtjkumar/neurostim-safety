@@ -1035,6 +1035,7 @@ class TestContributingCarriesTheRulesTheGatesDependOn:
             "python scripts/ledger_check.py",
             "python scripts/regenerate_example_output.py --check",
             "python scripts/provenance_audit.py --strict",
+            "python scripts/build_api_docs.py",
         ):
             assert command in text and command in ci, command
 
@@ -1075,3 +1076,47 @@ def test_the_coverage_job_installs_what_the_test_job_installs() -> None:
 
     assert "poppler-utils" in packages("coverage")
     assert packages("coverage") == packages("test")
+
+
+BUILD_API_DOCS = REPO_ROOT / "scripts" / "build_api_docs.py"
+
+
+def _load_build_api_docs() -> Any:
+    spec = importlib.util.spec_from_file_location("build_api_docs", BUILD_API_DOCS)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["build_api_docs"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class TestTheApiReferenceBuilds:
+    """Phase 7 review (7) and the user's request: an API reference generated from the
+    docstrings with pdoc, built locally and in CI with every warning an error, not hosted."""
+
+    def test_every_module_gets_a_page(self, tmp_path: Path) -> None:
+        pytest.importorskip("pdoc")
+        pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)  # neurostim.gui
+        docs = _load_build_api_docs()
+        pages = {p.relative_to(tmp_path).as_posix() for p in docs.build(tmp_path)}
+        for name in docs.modules():
+            assert name.replace(".", "/") + ".html" in pages, name
+        text = (tmp_path / "neurostim" / "models" / "strength_duration.html").read_text()
+        assert "fit_lapicque" in text and "not identifiable" in text
+
+    def test_a_warning_fails_the_build(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        pytest.importorskip("pdoc")
+        docs = _load_build_api_docs()
+        (tmp_path / "noisy_module.py").write_text(
+            '"""A module that warns on import."""\nimport warnings\nwarnings.warn("seeded")\n'
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+        # pdoc reports the warning, raised as an error, as a failed import of the module.
+        with pytest.raises(RuntimeError, match="Error importing noisy_module"):
+            docs.build(tmp_path / "out", names=["noisy_module"])
+
+    def test_ci_builds_it_and_the_tool_is_pinned(self) -> None:
+        assert "python scripts/build_api_docs.py" in _ci_job("api-docs")
+        pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        assert '"pdoc==' in pyproject
+        assert "docs/api/" in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")

@@ -44,7 +44,7 @@ report = ["reportlab>=4.0"]
 all = ["PyQt6>=6.5", "reportlab>=4.0"]
 # The tools are pinned exactly (C7.6, T25): a new ruff or mypy release must not turn CI red
 # with no change in the repository. Raise a pin in its own commit, with the fixes it needs.
-dev = ["pytest==9.1.1", "pytest-cov==7.1.0", "coverage==7.16.1", "PyQt6>=6.5", "reportlab>=4.0", "ruff==0.16.1", "mypy==2.3.0"]
+dev = ["pytest==9.1.1", "pytest-cov==7.1.0", "coverage==7.16.1", "PyQt6>=6.5", "reportlab>=4.0", "ruff==0.16.1", "mypy==2.3.0", "pdoc==16.0.0"]
 
 [project.scripts]
 neurostim-gui = "neurostim.gui.app:main"

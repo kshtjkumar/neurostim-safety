@@ -269,6 +269,16 @@ electrode". To replace one with your own value, pass
 which is then cited as your measurement. To drop one, pass `None`: that check then does
 not run, and the incomplete-limits note says you dropped it.
 
+## API reference
+
+Generated from the docstrings with pdoc, and not hosted: build it locally with
+
+```bash
+python scripts/build_api_docs.py       # then open docs/api/index.html
+```
+
+CI builds it with every warning an error.
+
 ## Tests
 
 ```bash

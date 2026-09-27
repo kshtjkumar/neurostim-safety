@@ -102,6 +102,15 @@ is wrong in the unsafe direction:
 
 Each is detailed in its own entry below.
 
+### An API reference, generated from the docstrings
+
+`python scripts/build_api_docs.py` renders every module's docstrings to
+`docs/api/index.html` with pdoc (pinned in the `dev` extra). The pages are not
+committed and not hosted. The script lists each of the 52 modules explicitly, because pdoc
+given only the package documents just the submodules its `__all__` names. CI builds the
+reference in its own job with every warning an error, so a docstring that does not
+render or a module that does not import fails the build.
+
 ### A mutation gate, and the tests it asked for
 
 `scripts/mutation.py` checks whether the suite notices wrong arithmetic. The test audit's

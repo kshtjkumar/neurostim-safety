@@ -26,10 +26,12 @@ mypy neurostim tests
 python scripts/ledger_check.py
 python scripts/regenerate_example_output.py --check
 python scripts/provenance_audit.py --strict
+python scripts/build_api_docs.py
 pytest -q
 ```
 
-CI runs the same commands (`.github/workflows/ci.yml`). It also runs the branch-point
+CI runs the same commands (`.github/workflows/ci.yml`); the API reference is built into a
+temporary directory there and not kept. It also runs the branch-point
 coverage floor (`scripts/branch_floor.py`), which may be raised but never lowered.
 
 ## Changing a number

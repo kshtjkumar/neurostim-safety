@@ -33,3 +33,7 @@ example_output/
 
 # transient hook scratch file
 _history_inprogress.tmp
+
+# docs/api/ is generated from the docstrings by `python scripts/build_api_docs.py`
+# and is not committed or hosted; CI builds it with every warning an error.
+docs/api/
