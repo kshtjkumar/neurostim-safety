@@ -1088,17 +1088,78 @@ class TestAnUnidentifiableChronaxieReportsNoUncertainty:
             except (ValueError, RuntimeError):
                 continue
             if fit.chronaxie_ci95_us is None:
-                assert "not identifiable" in fit.uncertainty_note
+                # G12 (ledger 183): the extrapolation rule withholds too, with its own note.
+                assert (
+                    "not identifiable" in fit.uncertainty_note
+                    or "below the shortest width" in fit.uncertainty_note
+                )
                 continue
             assert fit.chronaxie_se_us is not None and fit.chronaxie_se_us > 0.0
             reported += 1
             low, high = fit.chronaxie_ci95_us
             covered += low <= 200.0 <= high
-        # Measured: 82 intervals reported of 153 accepted fits, 71 cover (0.866). Before,
-        # 153 were reported and 71 of them covered (0.46): the rest were zero-width.
-        assert reported > 50 and covered / reported > 0.8
+        # Measured at C7b.4: 82 intervals reported of 153 accepted fits, 71 cover (0.866).
+        # G12 (ledger 183): the extrapolation rule now withholds most of the rest; what is
+        # still reported covers at >= 0.93, the rule's own target.
+        assert reported > 0 and covered / reported >= 0.93
 
     def test_an_informative_design_keeps_its_interval(self):
         widths = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
         fit = sd.fit_lapicque(widths, np.array([82.5, 49.0, 34.6, 25.7, 22.3]))
         assert fit.chronaxie_ci95_us is not None and fit.uncertainty_note == ""
+
+
+class TestALapicqueIntervalBelowEveryWidthIsWithheld:
+    """Ledger 183 (Phase 7b re-review T1; user decision A). The sqrt(eps) cut caught only
+    fully degenerate fits: on widths 2-8 ms the intervals still reported covered 0.71-0.86.
+    An interval whose upper end lies below the shortest width tested places the chronaxie
+    wholly below the design, an extrapolation, and is withheld. Measured on 600 seeded
+    replicates per cell: the long design's reported intervals cover 1.000/1.000/1.000/0.986
+    at 2/5/10/20 % noise, and 0-0.4 % of 50-800, 20-3200 and 50-200 us fits are withheld."""
+
+    TAU = 200.0 / math.log(2.0)
+
+    def _replicates(self, widths, noise, n, seed):
+        rng = np.random.default_rng(seed)
+        for _ in range(n):
+            noisy = 20.0 / (1.0 - np.exp(-widths / self.TAU)) * (
+                1 + noise * rng.standard_normal(widths.size)
+            )
+            try:
+                yield sd.fit_lapicque(widths, noisy)
+            except (ValueError, RuntimeError):
+                continue
+
+    def test_the_long_design_covers_when_it_reports(self):
+        widths = np.array([2000.0, 4000.0, 6000.0, 8000.0])
+        reported = covered = 0
+        for fit in self._replicates(widths, 0.05, 300, 183):
+            if fit.chronaxie_ci95_us is None:
+                continue
+            reported += 1
+            low, high = fit.chronaxie_ci95_us
+            assert high >= widths.min()  # never below every width
+            covered += low <= 200.0 <= high
+        assert reported == 0 or covered / reported >= 0.93
+
+    @pytest.mark.parametrize(
+        "widths",
+        [
+            [50.0, 100.0, 200.0, 400.0, 800.0],
+            [20.0, 50.0, 100.0, 200.0, 400.0, 800.0, 1600.0, 3200.0],
+            [50.0, 100.0, 150.0, 200.0],
+        ],
+    )
+    def test_informative_designs_are_not_withheld(self, widths):
+        fits = list(self._replicates(np.array(widths), 0.05, 200, 1830))
+        withheld = sum(fit.chronaxie_ci95_us is None for fit in fits)
+        assert withheld <= 0.01 * len(fits)
+
+    def test_the_reason_is_stated(self):
+        widths = np.array([400.0, 800.0, 1600.0, 3200.0])
+        fit = sd.fit_lapicque(widths, 20.0 / (1.0 - np.exp(-widths / self.TAU)) * (
+            1 + np.array([0.01, -0.01, 0.005, -0.005])
+        ))
+        assert fit.chronaxie_ci95_us is None
+        assert "below the shortest width" in fit.uncertainty_note
+        assert "below the shortest width" in fit.describe()

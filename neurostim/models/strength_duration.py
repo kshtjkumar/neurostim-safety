@@ -128,6 +128,24 @@ class StrengthDurationFit:
     only 50-200 us, 0.85 with widths only 400-3200 us, 0.90 at 10 % noise on 50-200 us --
     and on such designs up to 29 % of noisy replicates are refused outright, so coverage
     is conditional on the fit being accepted. Spread the widths across the chronaxie.
+
+    A Lapicque interval lying wholly below the shortest width tested is withheld, with
+    :attr:`uncertainty_note` saying so (ledger 183). Measured on 600 seeded replicates per
+    cell (true chronaxie 200 us), coverage of the intervals still reported, and the
+    fraction withheld, at 2 / 5 / 10 / 20 % threshold noise:
+
+    ============  ================================  ===============================
+    widths (us)   coverage of reported intervals    withheld
+    ============  ================================  ===============================
+    50-800        0.978 / 0.957 / 0.962 / 0.890      0 %
+    20-3200       0.965 / 0.967 / 0.952 / 0.915      0 %
+    50-200        0.953 / 0.915 / 0.908 / 0.796      0 / 0 / 0 / 0.4 %
+    400-3200      -     / 1.000 / 1.000 / 0.986      100 / 97 / 60 / 27 %
+    2000-8000     1.000 / 1.000 / 1.000 / 0.986      99 / 95 / 80 / 51 %
+    ============  ================================  ===============================
+
+    The informative designs' under-coverage at 10-20 % noise is the local covariance's
+    own, and sits in the fits whose SE looks small, not in those with a large one.
     """
 
     model: str
@@ -319,6 +337,18 @@ def fit_lapicque(
     rheobase_se = float(math.sqrt(diag[0])) if finite else None
     chronaxie_se = float(math.log(2.0) * math.sqrt(diag[1])) if finite else None
     chronaxie = chronaxie_from_tau_us(tau)
+    interval = _interval(chronaxie, chronaxie_se, dof)
+    # An interval wholly below the shortest width places the chronaxie below every pulse
+    # the design tested: an extrapolation, and on the long-only designs the Phase 7b
+    # review measured, one that covered 0.71-0.86 (ledger 183). Withheld, with the reason.
+    if interval is not None and float(w.min()) > interval[1]:
+        note = (
+            f"the chronaxie's whole 95 % interval ({interval[0]:.4g}-{interval[1]:.4g} us) "
+            f"lies below the shortest width tested ({float(w.min()):.4g} us), so it is an "
+            f"extrapolation below the design. Include widths near the chronaxie"
+        )
+        rheobase_se = chronaxie_se = None
+        interval = None
 
     return StrengthDurationFit(
         model="lapicque",
@@ -329,7 +359,7 @@ def fit_lapicque(
         n_points=int(w.size),
         rheobase_se_uA=rheobase_se,
         chronaxie_se_us=chronaxie_se,
-        chronaxie_ci95_us=_interval(chronaxie, chronaxie_se, dof),
+        chronaxie_ci95_us=interval,
         uncertainty_note=note,
     )
 

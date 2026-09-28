@@ -534,6 +534,13 @@ unchanged.
   intervals cover at 0.87 on one seeded set. The Phase 7b re-review measured 0.71–0.86
   across noise levels (0.705 at 5 %), still short of 0.95. The cut catches only fully
   degenerate fits, so the under-coverage warning above still applies (ledger 183).
+- **A Lapicque interval lying wholly below the shortest width tested is withheld**
+  (ledger 183). Such an interval puts the chronaxie below every pulse in the design, an
+  extrapolation. On the long-only 2–8 ms design, the intervals still reported now cover
+  1.000/1.000/1.000/0.986 at 2/5/10/20 % noise; they covered 0.71–0.86 before. It
+  withholds 0–0.4 % of fits on 50–800, 20–3200 and 50–200 µs designs. It withholds most
+  400–3200 µs fits at low noise (100 % at 2 %), because there the true 200 µs chronaxie
+  does lie below every width. The full table is in the `StrengthDurationFit` docstring.
 - The fitted values themselves are unchanged.
 - A design with every pulse width equal raises. It used to return a rheobase and a
   chronaxie behind a numpy RankWarning.
