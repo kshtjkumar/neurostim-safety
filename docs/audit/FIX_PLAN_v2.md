@@ -1283,7 +1283,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 182 | LOW | — (official-seed mutation gap) | open | generated 86.9 % vs 90 % target; gate floor 0.86, rise only; triage of 18 unjudged survivors deferred; re-review T2 (G2 unmet) and T3 (real gaps among them: uncertainty:81, charge:101, compliance:698, assessment:568) folded in |
 | 183 | LOW | — (Phase 7b re-review T1) | open (documented) | Lapicque long-width CIs still under-cover (0.71-0.86) after the √ε cut; documented limitation; a stricter cut is the fix if wanted |
 | 184 | LOW | — (found at C7.5) | open (source choice) | **FIXED** `f810214`; decided by user |
-| 185 | LOW | — (Phase 8, user run) | C8.1a | |
+| 185 | LOW | — (Phase 8, user run) | C8.1a | **FIXED** `5b8bfc0`; C8.1a |
 | 186 | LOW | — (Phase 8, user run) | C8.1b (physics decision pending) | |
 | 187 | LOW | — (Phase 8, user run) | C8.1c | |
 
