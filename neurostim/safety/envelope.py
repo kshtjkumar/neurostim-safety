@@ -76,6 +76,16 @@ PULSE_WIDTH_US = 400.0
 FREQUENCY_HZ = 50.0
 DURATION_H = 7.0
 AREA_RANGE_CM2 = (0.01, 0.5)
+AREA_RANGE_REFERENCE = "mccreery1990"
+AREA_RANGE_QUOTE = (
+    "The geometric areas of the electrode surfaces facing the pia were 0.01,0.02,0.1, "
+    "and 0.5 cm2."
+)
+AREA_RANGE_QUOTE_PAGE = "McCreery et al. (1990), p. 997, of their disk-shaped platinum surface electrodes"
+"""Where the area range comes from (ledger 174). It had no citation: the smallest and
+largest of McCreery et al.'s four surface-disc areas, the electrodes behind Shannon's fit.
+Their penetrating iridium microelectrodes (6.5e-5 cm^2) are not surface discs and are not
+in the range."""
 PREPARATION = "cat parietal cortex, platinum surface discs"
 WAVEFORM = "anodic-first, charge-balanced, symmetric biphasic"
 
@@ -184,7 +194,7 @@ class EnvelopeResult:
             lines.append(
                 f"  ! electrode area {self.area_cm2:.3g} cm^2 is outside the "
                 f"{AREA_RANGE_CM2[0]:g}-{AREA_RANGE_CM2[1]:g} cm^2 range of the "
-                f"platinum discs the fit was derived from"
+                f"platinum discs the fit was derived from (McCreery et al. 1990, p. 997)"
             )
         if not self.supports_unqualified_pass:
             lines.append(

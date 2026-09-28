@@ -2248,3 +2248,30 @@ class TestLedger32And34TheThermalSourceRadius:
 
         source = (Path(__file__).resolve().parents[1] / "examples" / "worked_example.py").read_text()
         assert "source_radius_um(dbs" in source and "dbs.equivalent_radius_um" not in source
+
+
+class TestTheEnvelopeAreaRangeIsMcCreerys:
+    """Ledger 174. envelope.AREA_RANGE_CM2 = (0.01, 0.5) cm^2 carried no citation. It is the
+    range of McCreery et al. (1990)'s surface electrodes, p. 997 (page 2 of the PDF):
+    "Disk-shaped platinum stimulating electrodes ... The geometric areas of the electrode
+    surfaces facing the pia were 0.01, 0.02, 0.1, and 0.5 cm2"."""
+
+    PDF = "papers_stim_calc_ref/mccreery1990.pdf"
+
+    def test_the_constant_names_its_source(self):
+        from neurostim.safety import envelope
+
+        assert envelope.AREA_RANGE_CM2 == (0.01, 0.5)
+        assert envelope.AREA_RANGE_REFERENCE == "mccreery1990"
+        assert "p. 997" in envelope.AREA_RANGE_QUOTE_PAGE
+
+    def test_the_quote_is_on_the_page(self):
+        from neurostim.safety import envelope
+
+        page = _pdf_page_text(self.PDF, 2)
+        # The two-column layout interleaves the sentence with the next column at
+        # "electrode", so it is found as its two halves.
+        quote = "".join(envelope.AREA_RANGE_QUOTE.split())
+        head, tail = quote.split("electrode", 1)
+        assert head + "electrode" in page and tail in page
+        assert "Disk-shapedplatinumstimulatingelectrodes" in page

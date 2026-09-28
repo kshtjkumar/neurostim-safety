@@ -102,6 +102,15 @@ is wrong in the unsafe direction:
 
 Each is detailed in its own entry below.
 
+### The envelope's electrode-area range is cited
+
+`envelope.AREA_RANGE_CM2 = (0.01, 0.5)` cm² had no citation (ledger 174). It is the range
+of McCreery et al. (1990)'s surface electrodes, on p. 997: "Disk-shaped platinum
+stimulating electrodes ... The geometric areas of the electrode surfaces facing the pia
+were 0.01, 0.02, 0.1, and 0.5 cm2." The constant now names this source and quote, the
+envelope's area warning cites it, and the transcription check looks for the areas in
+the paper. The value is unchanged.
+
 ### The pulse width says it is per phase
 
 `pulse_width_us` has always been the width of the leading phase alone. A user read "200

@@ -68,6 +68,8 @@ CLAIMS: tuple[Claim, ...] = (
     Claim("50 Hz", "stimulation frequency", "mccreery1990*"),
     Claim("0.052", "microelectrode charge per phase (uC)", "mccreery1990*"),
     Claim("12", "lowest damaging charge density", "mccreery1990*"),
+    Claim("0.5 cm2", "largest surface-disc area (envelope AREA_RANGE_CM2)", "mccreery1990*"),
+    Claim("0.01,0.02,0.1", "surface-disc areas (envelope AREA_RANGE_CM2)", "mccreery1990*"),
     # --- Rose & Robblee 1990 ---
     Claim("50", "Pt anodic-first lower bound", "rose1990*"),
     Claim("150", "Pt cathodic-first upper bound", "rose1990*"),
