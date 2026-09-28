@@ -1286,7 +1286,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 180 | LOW | — (Phase 7 review S6) | C7.1, C7.5 (author details) | **FIXED** `948ac44`; C7b.8 |
 | 181 | LOW | — (Phase 7 review S7) | C7b.6 | **FIXED** `5b8885e`; C7b.6 |
 | 182 | LOW | — (official-seed mutation gap) | open | generated 86.9 % vs 90 % target; gate floor 0.86, rise only; triage of 18 unjudged survivors deferred; re-review T2 (G2 unmet) and T3 (real gaps among them: uncertainty:81, charge:101, compliance:698, assessment:568) folded in |
-| 183 | LOW | — (Phase 7b re-review T1) | open (documented) | Lapicque long-width CIs still under-cover (0.71-0.86) after the √ε cut; documented limitation; a stricter cut is the fix if wanted |
+| 183 | LOW | — (Phase 7b re-review T1) | open (documented) | **FIXED** `0fbaa14`; C8.3 (3288d1a) + C8.3b |
 | 184 | LOW | — (found at C7.5) | open (source choice) | **FIXED** `f810214`; decided by user |
 | 185 | LOW | — (Phase 8, user run) | C8.1a | **FIXED** `5b8bfc0`; C8.1a |
 | 186 | LOW | — (Phase 8, user run) | C8.1b (physics decision pending) | **FIXED** `3c32ea6`; C8.1b |
