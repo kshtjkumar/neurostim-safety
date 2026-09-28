@@ -1008,6 +1008,15 @@ class TestTheMutationGate:
         assert mutation.gate(report) == []
         assert [o["id"] for o in report["named"]] == [m.id for m in mutation.NAMED]
 
+    def test_every_judgement_still_names_a_site(self) -> None:
+        """Ledger 182: judgements are keyed by site, and a stale one must not linger."""
+        mutation = _load_mutation()
+        sites = mutation.enumerate_sites()
+        for entry in mutation.JUDGEMENTS:
+            assert any(
+                site.path == entry[0] and mutation.judgement(site) == entry[4] for site in sites
+            ), entry[:4]
+
     def test_ci_runs_it_on_demand_and_weekly(self) -> None:
         workflow = (REPO_ROOT / ".github" / "workflows" / "mutation.yml").read_text()
         assert "workflow_dispatch:" in workflow and "schedule:" in workflow

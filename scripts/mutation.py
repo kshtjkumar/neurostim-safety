@@ -220,68 +220,111 @@ NAMED: tuple[Mutant, ...] = (
 )
 
 
-# Generated mutants that survive because no test *can* kill them, each with the argument.
-# They still count as survivors in the score; the note is so a reader can check the claim.
-# A mutant id carries its source offset, so an edit to the file drops its note.
-JUDGED_EQUIVALENT: dict[str, str] = {
-    "G:neurostim/models/field.py:131:5704":
-        "0-d array arithmetic returns an np.float64, which is a float, so both branches "
-        "return a float",
-    "G:neurostim/models/strength_duration.py:359:14649":
-        "differs only when the singular-value ratio equals sqrt(eps) exactly",
-    "G:neurostim/safety/assessment.py:1262:59708":
-        "NOT proven equivalent: differs only where the average current density equals "
-        "the threshold exactly, one float, which moves the settled ceiling by an ulp; no "
-        "test pins the current-density ceiling to the ulp",
-    "G:neurostim/safety/assessment.py:1271:59990":
-        "NOT proven equivalent: the return phase's version of the one-ulp boundary above",
-    "G:neurostim/safety/assessment.py:2314:106534":
-        "counter_result is None exactly when counter_electrode is None (both are set "
-        "together in assess), so the two conditions always agree",
-    "G:neurostim/safety/charge.py:301:13042":
-        "differs only at a pulse width equal to the measured one, where the fold is 1 and "
-        "no warning (and so no direction) is printed",
-    "G:neurostim/safety/compliance.py:396:19416":
-        "the width comparison: a return phase of zero width always carries zero current, "
-        "so the current comparison already decides",
-    "G:neurostim/safety/compliance.py:500:24635":
-        "at equality both branches give cap / active_slope, the same seed",
-    "G:neurostim/safety/current_density.py:329:15115":
-        "the width comparison, as for compliance.py:396",
-    "G:neurostim/safety/shannon.py:273:11346":
-        "NOT proven equivalent: the plateau is consulted only when floor_to_pass has "
-        "walked past its 4-step budget, which no Shannon back-solve reaches in the suite",
-    "G:neurostim/safety/shannon.py:329:13790":
-        "NOT proven equivalent: the same plateau, for the current back-solve",
-    # Survivors of the pre-registered seed 20260928 (ledger 181). Ids are site-based, so
-    # an entry applies to whichever seed draws that site.
-    "G:neurostim/models/field.py:111:4877":
-        "potential_V's return: 0-d array arithmetic returns an np.float64, as field.py:131",
-    "G:neurostim/models/strength_duration.py:237:9746":
-        "NOT proven equivalent: differs only for a fitted slope of exactly 0.0; np.polyfit "
-        "on 1/W thresholds returns about 4e-15, not 0.0",
-    "G:neurostim/models/strength_duration.py:308:12315":
-        "NOT proven equivalent: the curve_fit lower bound 1e-12 vs 2e-12 binds only for fits that collapse to "
-        "zero, which the accepted-fit guards and the identifiability note already refuse "
-        "or flag",
-    "G:neurostim/safety/_limits.py:184:9183":
-        "with reach 0, low = value, and value fails its own check on this path, so both "
-        "conditions raise",
-    "G:neurostim/safety/assessment.py:246:10902":
-        "Status.rank is used only to order statuses (max in _worst), and 6 keeps FAIL "
-        "highest",
-    "G:neurostim/safety/assessment.py:1134:53882":
-        "NOT proven equivalent: the counter ceiling's predicate at exact equality, a "
-        "one-float boundary no test reaches (the round-trip test does not)",
-    "G:neurostim/safety/compliance.py:820:39074":
-        "with return_factor 0 the return phase draws no current and "
-        "return_required_voltage_V gives 0.0, as the skipped branch does",
-    "G:neurostim/safety/shannon.py:271:11298":
-        "NOT proven equivalent: the Shannon plateau again (shannon.py:273)",
-    "G:neurostim/safety/water_window.py:541:26336":
-        "NOT proven equivalent: the balance tolerance at exact equality; recovered/leading lands exactly on "
-        "1 +/- CHARGE_BALANCE_REL_TOLERANCE for no protocol the suite builds",
-}
+# Generated mutants that survive because no test *can* kill them, each with the argument,
+# or marked NOT proven where the argument falls short. They still count as survivors in
+# the score; the note is so a reader can check the claim.
+#
+# Keyed by site, not by offset (ledger 182): (path, a fragment of the source line that
+# contains the mutated token, the old token, the new one). The token's place in the
+# fragment must be the mutant's column, so two comparisons on one line are told apart,
+# and an unrelated edit elsewhere in the file does not orphan the note.
+JUDGEMENTS: tuple[tuple[str, str, str, str, str], ...] = (
+    ("neurostim/models/field.py", "np.isscalar(distance_um) or result.ndim", "or", "and",
+     "0-d array arithmetic returns an np.float64, which is a float, so both branches "
+     "return a float"),
+    ("neurostim/models/strength_duration.py", "s[-1] > IDENTIFIABILITY_RCOND", ">", ">=",
+     "differs only when the singular-value ratio equals sqrt(eps) exactly"),
+    ("neurostim/models/strength_duration.py", "IDENTIFIABILITY_RCOND * s[0]", "*", "/",
+     "NOT proven equivalent: s[0] of the relative-sensitivity Jacobian is of order 1-2, "
+     "so dividing instead of multiplying moves the cut by that factor only"),
+    ("neurostim/models/strength_duration.py", "max_iter: int = 200", "200", "400",
+     "the default iteration cap: accepted fits converge far below 2000 evaluations, so "
+     "4000 changes nothing"),
+    ("neurostim/models/strength_duration.py", "if slope <= 0", "<=", "<",
+     "NOT proven equivalent: differs only for a fitted slope of exactly 0.0; np.polyfit "
+     "on 1/W thresholds returns about 4e-15, not 0.0"),
+    ("neurostim/models/strength_duration.py", "bounds=([1e-12, 1e-12]", "1e-12", "2e-12",
+     "NOT proven equivalent: the curve_fit lower bound binds only for fits that collapse "
+     "to zero, which the accepted-fit guards and the identifiability notes refuse or flag"),
+    ("neurostim/safety/assessment.py", "area_cm2) >= threshold", ">=", ">",
+     "NOT proven equivalent: differs only where the average current density equals the "
+     "threshold exactly, one float, which moves the settled ceiling by an ulp"),
+    ("neurostim/safety/assessment.py", "< return_comparison.threshold_A_per_cm2", "<", "<=",
+     "NOT proven equivalent: the return phase's version of the one-ulp boundary above"),
+    ("neurostim/safety/assessment.py", "counter_result is None or self.counter_electrode",
+     "or", "and",
+     "counter_result is None exactly when counter_electrode is None (both are set "
+     "together in assess), so the two conditions always agree"),
+    ("neurostim/safety/assessment.py", "Status.FAIL: 3", "3", "6",
+     "Status.rank is used only to order statuses (max in _worst), and 6 keeps FAIL "
+     "highest"),
+    ("neurostim/safety/assessment.py", "scale, area_cm2\n        )\n        <= limit", "<=", "<",
+     "NOT proven equivalent: the counter ceiling's predicate at exact equality, a "
+     "one-float boundary no test reaches"),
+    ("neurostim/safety/charge.py", "pulse_width_us > measured_pw", ">", ">=",
+     "differs only at a pulse width equal to the measured one, where the fold is 1 and "
+     "no warning (and so no direction) is printed"),
+    ("neurostim/safety/charge.py", 'self.medium == "in_vivo" and self.derating_note', "and",
+     "or", "in vivo the derating note is always set, and in saline it is always empty, so "
+     "the two conditions agree"),
+    ("neurostim/safety/compliance.py", "self.return_phase_width_us > 0.0", ">", ">=",
+     "the width comparison: a return phase of zero width always carries zero current, so "
+     "the current comparison already decides"),
+    ("neurostim/safety/compliance.py", "available_V <= (linear * cap", "<=", "<",
+     "at equality both branches give cap / active_slope, the same seed"),
+    ("neurostim/safety/compliance.py", "return_factor > 0.0 and", ">", ">=",
+     "with return_factor 0 the return phase draws no current and "
+     "return_required_voltage_V gives 0.0, as the skipped branch does"),
+    ("neurostim/safety/compliance.py", "if overshoot > 0.0", ">", ">=",
+     "a zero overshoot adds polarisation_V(0) = 0 V on both electrodes"),
+    ("neurostim/safety/compliance.py", "if fold > 1.5", ">", ">=",
+     "NOT proven equivalent: differs only at a conductivity exactly 1.5x Gabriel's, which "
+     "no default reaches"),
+    ("neurostim/safety/current_density.py", "and return_phase_width_us > 0.0", ">", ">=",
+     "the width comparison, as for compliance.py"),
+    ("neurostim/safety/_limits.py", "for places in range(decimals, 18)", "18", "36",
+     "the loop returns once the text reads on the right side of the bound, which a "
+     "double does within 17 decimals; places 18 and up never run"),
+    ("neurostim/safety/_limits.py", "if reach <= 0.0 or", "<=", "<",
+     "with reach 0, low = value, and value fails its own check on this path, so both "
+     "conditions raise"),
+    ("neurostim/safety/shannon.py", "math.ulp(larger) * charge_per_phase_uC", "*", "/",
+     "NOT proven equivalent: the plateau is consulted only when floor_to_pass has walked "
+     "past its 4-step budget, which no Shannon back-solve reaches in the suite"),
+    ("neurostim/safety/shannon.py", "math.log(10.0) / 2.0", "10.0", "20.0",
+     "NOT proven equivalent: the same plateau"),
+    ("neurostim/safety/shannon.py", "math.log(10.0) / 2.0", "/", "*",
+     "NOT proven equivalent: the same plateau"),
+    ("neurostim/safety/shannon.py", "charge_per_phase_uC / area_cm2)),", "/", "*",
+     "NOT proven equivalent: the same plateau (its larger-log term)"),
+    ("neurostim/safety/shannon.py", "_metric_plateau_uC(max_charge, area_cm2) / (", "/", "*",
+     "NOT proven equivalent: the same plateau, for the current back-solve"),
+    ("neurostim/safety/water_window.py", "<= CHARGE_BALANCE_REL_TOLERANCE", "<=", "<",
+     "NOT proven equivalent: the balance tolerance at exact equality; recovered/leading "
+     "lands exactly on 1 +/- CHARGE_BALANCE_REL_TOLERANCE for no protocol the suite "
+     "builds"),
+    ("neurostim/uncertainty.py", "return cls(mean - k * sd, mean + k * sd)", "+", "-",
+     "the non-finite-mean branch: mean +/- k*sd is the same infinity or NaN either way"),
+)
+
+
+def judgement(mutant: Mutant, root: Path = REPO_ROOT) -> str:
+    """The recorded argument for a generated mutant's survival, or ``"not judged"``."""
+    if not mutant.anchor.startswith("@"):
+        return "not judged"
+    offset, old = mutant.anchor[1:].split(":", 1)
+    at = int(offset)
+    source = (root / mutant.path).read_text(encoding="utf-8")
+    for path, fragment, token, replacement, note in JUDGEMENTS:
+        if path != mutant.path or token != old or replacement != mutant.replacement:
+            continue
+        fragment = fragment.replace("\\n", "\n")
+        start = source.find(fragment)
+        while start != -1:
+            if start + fragment.find(token) == at:
+                return note
+            start = source.find(fragment, start + 1)
+    return "not judged"
 
 
 # --- generated mutants ------------------------------------------------------------------
@@ -663,6 +706,7 @@ def main(argv: list[str] | None = None) -> int:
     named_out = [asdict(o) for o in outcomes[: len(NAMED)]]
     generated_out = [asdict(o) for o in outcomes[len(NAMED) :]]
     killed = sum(o["status"] in ("killed", "timeout") for o in generated_out)
+    by_id = {m.id: m for m in generated}
     report = {
         "head": head,
         "uncommitted_paths": dirty,
@@ -680,7 +724,7 @@ def main(argv: list[str] | None = None) -> int:
         "generated_score": round(killed / len(generated_out), 4) if generated_out else None,
         "generated_survivors": [
             {"id": o["id"], "description": o["description"],
-             "judged": JUDGED_EQUIVALENT.get(o["id"], "not judged")}
+             "judged": judgement(by_id[o["id"]])}
             for o in generated_out if o["status"] == "survived"
         ],
         "named": named_out,

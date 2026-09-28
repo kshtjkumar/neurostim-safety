@@ -644,3 +644,19 @@ class TestTheButterwickSizeIsTheLargerOfTwoDiameters:
         expected = bw.threshold_A_per_cm2(200.0, d_eq)
         assert d_eq == pytest.approx(200.0) and f"{expected:.4f}"[:5] in check.detail
         assert "equal-area diameter 200 um" in check.detail
+
+
+class TestOfficialSeedStrengthDurationSurvivors:
+    """Ledger 182, the four official-seed survivors in strength_duration.py, taken after
+    item 3 settled that file. Two are real and die here; 287 (the max_iter default) and
+    359 (the rank cut's scale) are argued in scripts/mutation.py."""
+
+    def test_three_points_have_one_degree_of_freedom_and_an_interval(self) -> None:  # sd:318
+        widths = np.array([50.0, 200.0, 800.0])
+        fit = sd.fit_lapicque(widths, np.array([82.0, 34.5, 22.3]))
+        assert fit.rheobase_se_uA is not None and fit.chronaxie_ci95_us is not None
+
+    @pytest.mark.parametrize("bad", [0.0, -1.0, math.nan])
+    def test_a_non_positive_rheobase_is_refused(self, bad: float) -> None:  # sd:370
+        with pytest.raises(ValueError, match="rheobase_uA"):
+            sd.lapicque_threshold_uA(100.0, bad, 200.0)
