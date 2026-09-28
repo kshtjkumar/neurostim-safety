@@ -1,0 +1,1798 @@
+{
+ "head": "02bfdc7",
+ "uncommitted_paths": [],
+ "measured": "commit 02bfdc7 exactly",
+ "date": "2026-09-28",
+ "seed": 20260929,
+ "sites": 845,
+ "named_killed": 26,
+ "named_total": 26,
+ "generated_killed": 139,
+ "generated_total": 160,
+ "generated_score": 0.8688,
+ "generated_survivors": [
+  {
+   "id": "G:neurostim/models/strength_duration.py:287:11627",
+   "description": "constant 200 -> 400 at line 287",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:318:12779",
+   "description": "compare >= -> > at line 318",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:359:14673",
+   "description": "arithmetic * -> / at line 359",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:370:15105",
+   "description": "compare <= -> < at line 370",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/protocol.py:417:20701",
+   "description": "compare != -> == at line 417",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:373:18196",
+   "description": "constant 18 -> 36 at line 373",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:568:26641",
+   "description": "compare < -> <= at line 568",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:101:4366",
+   "description": "compare <= -> < at line 101",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:212:9011",
+   "description": "boolean and -> or at line 212",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:301:13042",
+   "description": "compare > -> >= at line 301",
+   "judged": "differs only at a pulse width equal to the measured one, where the fold is 1 and no warning (and so no direction) is printed"
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:294:14840",
+   "description": "compare > -> >= at line 294",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:636:30566",
+   "description": "compare == -> != at line 636",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:698:33175",
+   "description": "boolean or -> and at line 698",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:719:34168",
+   "description": "compare > -> >= at line 719",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:820:39074",
+   "description": "compare > -> >= at line 820",
+   "judged": "with return_factor 0 the return phase draws no current and return_required_voltage_V gives 0.0, as the skipped branch does"
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:329:15115",
+   "description": "compare > -> >= at line 329",
+   "judged": "the width comparison, as for compliance.py:396"
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:78:3985",
+   "description": "constant 0.5 -> 1.0 at line 78",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:107:4899",
+   "description": "compare > -> >= at line 107",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/safety/shannon.py:273:11379",
+   "description": "constant 10.0 -> 20.0 at line 273",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:81:3826",
+   "description": "arithmetic + -> - at line 81",
+   "judged": "not judged"
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:81:3830",
+   "description": "arithmetic * -> / at line 81",
+   "judged": "not judged"
+  }
+ ],
+ "named": [
+  {
+   "id": "S3",
+   "path": "neurostim/safety/shannon.py",
+   "description": "ShannonResult.passes: the inclusive boundary <= becomes <",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 188.0
+  },
+  {
+   "id": "C2",
+   "path": "neurostim/safety/charge.py",
+   "description": "ChargeResult.passes: the inclusive boundary <= becomes <",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 68.3
+  },
+  {
+   "id": "C4",
+   "path": "neurostim/safety/charge.py",
+   "description": "cic_max_current_uA: the us->s conversion is dropped",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 68.2
+  },
+  {
+   "id": "P1",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compliance.evaluate: the lead resistance is subtracted",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 66.3
+  },
+  {
+   "id": "P3",
+   "path": "neurostim/safety/compliance.py",
+   "description": "ComplianceResult.passes: the inclusive boundary <= becomes <",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 66.4
+  },
+  {
+   "id": "A2",
+   "path": "neurostim/safety/assessment.py",
+   "description": "the CAUTION margin is halved",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 17.4
+  },
+  {
+   "id": "A3",
+   "path": "neurostim/safety/assessment.py",
+   "description": "water-window CAUTION gate: 0.1 V headroom becomes 0.0",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 68.8
+  },
+  {
+   "id": "A4",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compliance CAUTION gate: 0.8 utilisation becomes unreachable 2.0",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 69.5
+  },
+  {
+   "id": "A5",
+   "path": "neurostim/safety/assessment.py",
+   "description": "chronic FAIL: > the high threshold becomes >=",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 69.5
+  },
+  {
+   "id": "M1",
+   "path": "neurostim/models/field.py",
+   "description": "field.current_density_A_per_m2: 1/r^2 becomes 1/r^3",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 69.8
+  },
+  {
+   "id": "M4",
+   "path": "neurostim/models/vta.py",
+   "description": "CurrentDistanceModel.activated_volume_mm3: the 4/3 becomes 4",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 64.1
+  },
+  {
+   "id": "M5",
+   "path": "neurostim/models/vta.py",
+   "description": "CurrentDistanceModel.activated_volume_mm3: um->mm 1e-3 becomes 1e-6",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 64.1
+  },
+  {
+   "id": "M10",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "weiss_threshold_charge_uC: the 1e-6 is dropped",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 57.9
+  },
+  {
+   "id": "S1",
+   "path": "neurostim/safety/shannon.py",
+   "description": "shannon_max_charge_uC: the exponent 10**k becomes 10**(2k)",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.8
+  },
+  {
+   "id": "S2",
+   "path": "neurostim/safety/shannon.py",
+   "description": "shannon_k: log Q + log D becomes log Q - log D",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.7
+  },
+  {
+   "id": "C1",
+   "path": "neurostim/safety/charge.py",
+   "description": "charge.evaluate: the mC/cm^2 -> uC/cm^2 factor is inverted",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 19.3
+  },
+  {
+   "id": "C3",
+   "path": "neurostim/safety/charge.py",
+   "description": "charge.evaluate: the in-vivo derating relaxes instead of tightening",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 63.9
+  },
+  {
+   "id": "J1",
+   "path": "neurostim/safety/current_density.py",
+   "description": "average_current_density_A_per_cm2: uA->A 1e-6 becomes 1e-3",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 12.8
+  },
+  {
+   "id": "J2",
+   "path": "neurostim/safety/current_density.py",
+   "description": "the disc's primary-distribution rim ratio doubles",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 12.8
+  },
+  {
+   "id": "W1",
+   "path": "neurostim/safety/water_window.py",
+   "description": "effective_capacitance_uF_cm2: limit / V becomes limit * V",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.9
+  },
+  {
+   "id": "W3",
+   "path": "neurostim/safety/water_window.py",
+   "description": "water_window.evaluate: the excursion's sign is reversed",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.0
+  },
+  {
+   "id": "M3",
+   "path": "neurostim/models/field.py",
+   "description": "field._geometry_factor: the half-space 2*pi becomes pi",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 70.5
+  },
+  {
+   "id": "M6",
+   "path": "neurostim/models/thermal.py",
+   "description": "the Pennes sphere solution's 4*pi*kappa*a becomes 2*pi*kappa*a",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 40.1
+  },
+  {
+   "id": "M7",
+   "path": "neurostim/models/thermal.py",
+   "description": "joule_power_from_current: I^2 R becomes I R",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 34.5
+  },
+  {
+   "id": "M8",
+   "path": "neurostim/models/thermal.py",
+   "description": "perfusion unit conversion: the /60 (per minute -> per second) is dropped",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 39.8
+  },
+  {
+   "id": "M9",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "chronaxie from tau: tau * ln 2 becomes tau / ln 2",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 69.4
+  }
+ ],
+ "generated": [
+  {
+   "id": "G:neurostim/models/field.py:86:3867",
+   "path": "neurostim/models/field.py",
+   "description": "arithmetic * -> / at line 86",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 266.4
+  },
+  {
+   "id": "G:neurostim/models/field.py:105:4598",
+   "path": "neurostim/models/field.py",
+   "description": "compare <= -> < at line 105",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 285.4
+  },
+  {
+   "id": "G:neurostim/models/field.py:110:4801",
+   "path": "neurostim/models/field.py",
+   "description": "arithmetic * -> / at line 110",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 165.9
+  },
+  {
+   "id": "G:neurostim/models/field.py:111:4892",
+   "path": "neurostim/models/field.py",
+   "description": "compare == -> != at line 111",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 19.0
+  },
+  {
+   "id": "G:neurostim/models/field.py:130:5594",
+   "path": "neurostim/models/field.py",
+   "description": "arithmetic / -> * at line 130",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 207.5
+  },
+  {
+   "id": "G:neurostim/models/field.py:160:6653",
+   "path": "neurostim/models/field.py",
+   "description": "compare <= -> < at line 160",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 319.8
+  },
+  {
+   "id": "G:neurostim/models/field.py:201:8069",
+   "path": "neurostim/models/field.py",
+   "description": "compare <= -> < at line 201",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 321.8
+  },
+  {
+   "id": "G:neurostim/models/field.py:246:9666",
+   "path": "neurostim/models/field.py",
+   "description": "compare != -> == at line 246",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 262.2
+  },
+  {
+   "id": "G:neurostim/models/field.py:252:9898",
+   "path": "neurostim/models/field.py",
+   "description": "compare != -> == at line 252",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 240.6
+  },
+  {
+   "id": "G:neurostim/models/field.py:259:10245",
+   "path": "neurostim/models/field.py",
+   "description": "compare <= -> < at line 259",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 238.2
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:73:2846",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic / -> * at line 73",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 104.2
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:86:3327",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "compare <= -> < at line 86",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 142.9
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:88:3436",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic / -> * at line 88",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 97.8
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:116:4516",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "constant 2.0 -> 4.0 at line 116",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.1
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:203:8294",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "constant 0.975 -> 1.95 at line 203",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 137.8
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:218:8897",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "compare != -> == at line 218",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 8.1
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:225:9201",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "compare <= -> < at line 225",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 94.8
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:252:10433",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic + -> - at line 252",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 138.4
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:266:11042",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic * -> / at line 266",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 137.1
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:287:11627",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "constant 200 -> 400 at line 287",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 629.0
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:301:12146",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic / -> * at line 301",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 9.6
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:309:12373",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic * -> / at line 309",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 9.6
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:309:12375",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "constant 10 -> 20 at line 309",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 9.6
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:312:12463",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic - -> + at line 312",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 140.6
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:312:12493",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "constant 2 -> 4 at line 312",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 138.8
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:318:12779",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "compare >= -> > at line 318",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 619.6
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:359:14673",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "arithmetic * -> / at line 359",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 599.9
+  },
+  {
+   "id": "G:neurostim/models/strength_duration.py:370:15105",
+   "path": "neurostim/models/strength_duration.py",
+   "description": "compare <= -> < at line 370",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 598.2
+  },
+  {
+   "id": "G:neurostim/models/vta.py:59:2243",
+   "path": "neurostim/models/vta.py",
+   "description": "constant 1037.0 -> 2074.0 at line 59",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.7
+  },
+  {
+   "id": "G:neurostim/models/vta.py:62:2389",
+   "path": "neurostim/models/vta.py",
+   "description": "constant 27000.0 -> 54000.0 at line 62",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.1
+  },
+  {
+   "id": "G:neurostim/models/vta.py:72:2937",
+   "path": "neurostim/models/vta.py",
+   "description": "constant 2000.0 -> 4000.0 at line 72",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 16.3
+  },
+  {
+   "id": "G:neurostim/models/vta.py:133:5378",
+   "path": "neurostim/models/vta.py",
+   "description": "arithmetic * -> / at line 133",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.6
+  },
+  {
+   "id": "G:neurostim/models/vta.py:133:5380",
+   "path": "neurostim/models/vta.py",
+   "description": "constant 1e-3 -> 0.002 at line 133",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 18.2
+  },
+  {
+   "id": "G:neurostim/models/vta.py:136:5541",
+   "path": "neurostim/models/vta.py",
+   "description": "constant 2 -> 4 at line 136",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 40.3
+  },
+  {
+   "id": "G:neurostim/models/vta.py:191:7885",
+   "path": "neurostim/models/vta.py",
+   "description": "constant 2 -> 4 at line 191",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 16.1
+  },
+  {
+   "id": "G:neurostim/models/vta.py:194:8027",
+   "path": "neurostim/models/vta.py",
+   "description": "boolean or -> and at line 194",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.2
+  },
+  {
+   "id": "G:neurostim/models/vta.py:197:8133",
+   "path": "neurostim/models/vta.py",
+   "description": "arithmetic * -> / at line 197",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.5
+  },
+  {
+   "id": "G:neurostim/models/vta.py:197:8135",
+   "path": "neurostim/models/vta.py",
+   "description": "constant 1e-3 -> 0.002 at line 197",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.9
+  },
+  {
+   "id": "G:neurostim/models/vta.py:206:8762",
+   "path": "neurostim/models/vta.py",
+   "description": "arithmetic * -> / at line 206",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.4
+  },
+  {
+   "id": "G:neurostim/models/vta.py:265:10936",
+   "path": "neurostim/models/vta.py",
+   "description": "arithmetic / -> * at line 265",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 78.7
+  },
+  {
+   "id": "G:neurostim/protocol.py:149:7718",
+   "path": "neurostim/protocol.py",
+   "description": "boolean or -> and at line 149",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 20.5
+  },
+  {
+   "id": "G:neurostim/protocol.py:158:8164",
+   "path": "neurostim/protocol.py",
+   "description": "boolean or -> and at line 158",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 19.1
+  },
+  {
+   "id": "G:neurostim/protocol.py:163:8433",
+   "path": "neurostim/protocol.py",
+   "description": "compare <= -> < at line 163",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 21.5
+  },
+  {
+   "id": "G:neurostim/protocol.py:344:17421",
+   "path": "neurostim/protocol.py",
+   "description": "arithmetic - -> + at line 344",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.8
+  },
+  {
+   "id": "G:neurostim/protocol.py:379:18862",
+   "path": "neurostim/protocol.py",
+   "description": "constant 2 -> 4 at line 379",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.8
+  },
+  {
+   "id": "G:neurostim/protocol.py:379:18864",
+   "path": "neurostim/protocol.py",
+   "description": "arithmetic * -> / at line 379",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.5
+  },
+  {
+   "id": "G:neurostim/protocol.py:412:20464",
+   "path": "neurostim/protocol.py",
+   "description": "compare != -> == at line 412",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.0
+  },
+  {
+   "id": "G:neurostim/protocol.py:417:20701",
+   "path": "neurostim/protocol.py",
+   "description": "compare != -> == at line 417",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 596.9
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:70:3954",
+   "path": "neurostim/safety/_limits.py",
+   "description": "constant 1e-9 -> 2e-09 at line 70",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 66.3
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:145:7626",
+   "path": "neurostim/safety/_limits.py",
+   "description": "compare >= -> > at line 145",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 74.9
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:182:9136",
+   "path": "neurostim/safety/_limits.py",
+   "description": "arithmetic * -> / at line 182",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 77.7
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:183:9162",
+   "path": "neurostim/safety/_limits.py",
+   "description": "arithmetic - -> + at line 183",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 57.4
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:192:9687",
+   "path": "neurostim/safety/_limits.py",
+   "description": "compare > -> >= at line 192",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 58.1
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:201:9997",
+   "path": "neurostim/safety/_limits.py",
+   "description": "arithmetic + -> - at line 201",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 53.1
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:202:10053",
+   "path": "neurostim/safety/_limits.py",
+   "description": "compare >= -> > at line 202",
+   "status": "timeout",
+   "stage": "related",
+   "exit_code": null,
+   "seconds": 900.1
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:252:12600",
+   "path": "neurostim/safety/_limits.py",
+   "description": "arithmetic * -> / at line 252",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 8.6
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:307:15232",
+   "path": "neurostim/safety/_limits.py",
+   "description": "compare > -> >= at line 307",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 8.3
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:358:17571",
+   "path": "neurostim/safety/_limits.py",
+   "description": "compare == -> != at line 358",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 8.6
+  },
+  {
+   "id": "G:neurostim/safety/_limits.py:373:18196",
+   "path": "neurostim/safety/_limits.py",
+   "description": "constant 18 -> 36 at line 373",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 437.7
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:54:1824",
+   "path": "neurostim/safety/assessment.py",
+   "description": "constant 2.0 -> 4.0 at line 54",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.0
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:440:19738",
+   "path": "neurostim/safety/assessment.py",
+   "description": "boolean and -> or at line 440",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 85.7
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:461:20743",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compare == -> != at line 461",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 115.4
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:463:20866",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compare <= -> < at line 463",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 86.2
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:568:26641",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compare < -> <= at line 568",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 684.4
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:815:38304",
+   "path": "neurostim/safety/assessment.py",
+   "description": "constant 72 -> 144 at line 815",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.1
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:859:40517",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compare <= -> < at line 859",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.3
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:964:46373",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compare > -> >= at line 964",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 110.3
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:973:46926",
+   "path": "neurostim/safety/assessment.py",
+   "description": "arithmetic + -> - at line 973",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 86.7
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1020:49050",
+   "path": "neurostim/safety/assessment.py",
+   "description": "boolean or -> and at line 1020",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.3
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1055:50982",
+   "path": "neurostim/safety/assessment.py",
+   "description": "arithmetic / -> * at line 1055",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 284.0
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1132:53846",
+   "path": "neurostim/safety/assessment.py",
+   "description": "arithmetic * -> / at line 1132",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 265.2
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1289:60844",
+   "path": "neurostim/safety/assessment.py",
+   "description": "arithmetic * -> / at line 1289",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.8
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1358:63663",
+   "path": "neurostim/safety/assessment.py",
+   "description": "boolean or -> and at line 1358",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 264.6
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1360:63775",
+   "path": "neurostim/safety/assessment.py",
+   "description": "boolean or -> and at line 1360",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 88.0
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1575:72990",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compare > -> >= at line 1575",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 16.5
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:2107:96559",
+   "path": "neurostim/safety/assessment.py",
+   "description": "constant 2.0 -> 4.0 at line 2107",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.3
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:2271:104978",
+   "path": "neurostim/safety/assessment.py",
+   "description": "boolean and -> or at line 2271",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 12.8
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:2372:109382",
+   "path": "neurostim/safety/assessment.py",
+   "description": "compare == -> != at line 2372",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 212.2
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:41:2035",
+   "path": "neurostim/safety/charge.py",
+   "description": "constant 2.0 -> 4.0 at line 41",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.5
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:53:2389",
+   "path": "neurostim/safety/charge.py",
+   "description": "compare <= -> < at line 53",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.6
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:70:3047",
+   "path": "neurostim/safety/charge.py",
+   "description": "compare <= -> < at line 70",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.8
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:90:3855",
+   "path": "neurostim/safety/charge.py",
+   "description": "boolean or -> and at line 90",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.8
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:97:4231",
+   "path": "neurostim/safety/charge.py",
+   "description": "constant 1e-6 -> 2e-06 at line 97",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 71.2
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:101:4366",
+   "path": "neurostim/safety/charge.py",
+   "description": "compare <= -> < at line 101",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 696.0
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:109:4647",
+   "path": "neurostim/safety/charge.py",
+   "description": "arithmetic * -> / at line 109",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 16.1
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:109:4659",
+   "path": "neurostim/safety/charge.py",
+   "description": "arithmetic / -> * at line 109",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 19.6
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:160:6597",
+   "path": "neurostim/safety/charge.py",
+   "description": "boolean and -> or at line 160",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 259.8
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:171:7027",
+   "path": "neurostim/safety/charge.py",
+   "description": "arithmetic / -> * at line 171",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 17.7
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:186:7607",
+   "path": "neurostim/safety/charge.py",
+   "description": "boolean or -> and at line 186",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 309.2
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:212:9011",
+   "path": "neurostim/safety/charge.py",
+   "description": "boolean and -> or at line 212",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 715.3
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:301:13042",
+   "path": "neurostim/safety/charge.py",
+   "description": "compare > -> >= at line 301",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 718.5
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:315:13791",
+   "path": "neurostim/safety/charge.py",
+   "description": "boolean and -> or at line 315",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 258.6
+  },
+  {
+   "id": "G:neurostim/safety/charge.py:331:14697",
+   "path": "neurostim/safety/charge.py",
+   "description": "arithmetic * -> / at line 331",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.1
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:291:14696",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic * -> / at line 291",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 12.8
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:291:14704",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic * -> / at line 291",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 92.0
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:294:14840",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compare > -> >= at line 294",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 723.8
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:396:19385",
+   "path": "neurostim/safety/compliance.py",
+   "description": "boolean and -> or at line 396",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.5
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:429:21122",
+   "path": "neurostim/safety/compliance.py",
+   "description": "boolean and -> or at line 429",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.6
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:442:21750",
+   "path": "neurostim/safety/compliance.py",
+   "description": "boolean or -> and at line 442",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 267.9
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:445:21932",
+   "path": "neurostim/safety/compliance.py",
+   "description": "boolean or -> and at line 445",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 270.7
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:461:22824",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic / -> * at line 461",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.7
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:500:24646",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic * -> / at line 500",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 122.3
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:500:24652",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic / -> * at line 500",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 119.6
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:500:24668",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic + -> - at line 500",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 103.1
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:517:25255",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compare <= -> < at line 517",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 63.6
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:636:30566",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compare == -> != at line 636",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 690.6
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:679:32276",
+   "path": "neurostim/safety/compliance.py",
+   "description": "constant 0.35 -> 0.7 at line 679",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 15.3
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:698:33175",
+   "path": "neurostim/safety/compliance.py",
+   "description": "boolean or -> and at line 698",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 696.7
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:704:33465",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compare <= -> < at line 704",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.9
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:719:34168",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compare > -> >= at line 719",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 692.2
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:739:35113",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic / -> * at line 739",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 256.6
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:739:35179",
+   "path": "neurostim/safety/compliance.py",
+   "description": "constant 1e-6 -> 2e-06 at line 739",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 257.8
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:788:37796",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic - -> + at line 788",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 108.1
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:820:39074",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compare > -> >= at line 820",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 679.7
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:897:42235",
+   "path": "neurostim/safety/compliance.py",
+   "description": "compare > -> >= at line 897",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.0
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:920:43277",
+   "path": "neurostim/safety/compliance.py",
+   "description": "boolean and -> or at line 920",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 210.2
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:990:46971",
+   "path": "neurostim/safety/compliance.py",
+   "description": "arithmetic / -> * at line 990",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 189.1
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:98:4948",
+   "path": "neurostim/safety/current_density.py",
+   "description": "constant 0.0993 -> 0.1986 at line 98",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.7
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:128:6202",
+   "path": "neurostim/safety/current_density.py",
+   "description": "boolean or -> and at line 128",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.2
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:147:7072",
+   "path": "neurostim/safety/current_density.py",
+   "description": "arithmetic / -> * at line 147",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.2
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:222:10456",
+   "path": "neurostim/safety/current_density.py",
+   "description": "compare < -> <= at line 222",
+   "status": "killed",
+   "stage": "full",
+   "exit_code": 1,
+   "seconds": 181.7
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:229:10728",
+   "path": "neurostim/safety/current_density.py",
+   "description": "compare == -> != at line 229",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.9
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:329:15115",
+   "path": "neurostim/safety/current_density.py",
+   "description": "compare > -> >= at line 329",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 517.6
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:78:3985",
+   "path": "neurostim/safety/envelope.py",
+   "description": "constant 0.5 -> 1.0 at line 78",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 483.0
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:100:4599",
+   "path": "neurostim/safety/envelope.py",
+   "description": "compare == -> != at line 100",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.1
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:107:4899",
+   "path": "neurostim/safety/envelope.py",
+   "description": "compare > -> >= at line 107",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 480.2
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:162:6863",
+   "path": "neurostim/safety/envelope.py",
+   "description": "boolean and -> or at line 162",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 9.9
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:253:10300",
+   "path": "neurostim/safety/envelope.py",
+   "description": "arithmetic / -> * at line 253",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 9.7
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:278:11244",
+   "path": "neurostim/safety/envelope.py",
+   "description": "constant 100.0 -> 200.0 at line 278",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.2
+  },
+  {
+   "id": "G:neurostim/safety/envelope.py:279:11273",
+   "path": "neurostim/safety/envelope.py",
+   "description": "constant 100.0 -> 200.0 at line 279",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.7
+  },
+  {
+   "id": "G:neurostim/safety/shannon.py:56:2430",
+   "path": "neurostim/safety/shannon.py",
+   "description": "constant 1.5 -> 3.0 at line 56",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.9
+  },
+  {
+   "id": "G:neurostim/safety/shannon.py:71:2925",
+   "path": "neurostim/safety/shannon.py",
+   "description": "constant 1.7 -> 3.4 at line 71",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 48.8
+  },
+  {
+   "id": "G:neurostim/safety/shannon.py:246:10009",
+   "path": "neurostim/safety/shannon.py",
+   "description": "boolean or -> and at line 246",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.2
+  },
+  {
+   "id": "G:neurostim/safety/shannon.py:273:11368",
+   "path": "neurostim/safety/shannon.py",
+   "description": "arithmetic * -> / at line 273",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 165.1
+  },
+  {
+   "id": "G:neurostim/safety/shannon.py:273:11379",
+   "path": "neurostim/safety/shannon.py",
+   "description": "constant 10.0 -> 20.0 at line 273",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 549.5
+  },
+  {
+   "id": "G:neurostim/safety/shannon.py:288:12122",
+   "path": "neurostim/safety/shannon.py",
+   "description": "constant 10.0 -> 20.0 at line 288",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.8
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:66:3530",
+   "path": "neurostim/safety/water_window.py",
+   "description": "constant 20.0 -> 40.0 at line 66",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 40.2
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:108:5712",
+   "path": "neurostim/safety/water_window.py",
+   "description": "arithmetic / -> * at line 108",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.4
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:170:8830",
+   "path": "neurostim/safety/water_window.py",
+   "description": "boolean or -> and at line 170",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 7.7
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:192:9864",
+   "path": "neurostim/safety/water_window.py",
+   "description": "compare <= -> < at line 192",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 8.2
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:211:10649",
+   "path": "neurostim/safety/water_window.py",
+   "description": "arithmetic - -> + at line 211",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 14.4
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:223:11071",
+   "path": "neurostim/safety/water_window.py",
+   "description": "arithmetic * -> / at line 223",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 13.9
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:316:15841",
+   "path": "neurostim/safety/water_window.py",
+   "description": "arithmetic / -> * at line 316",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.4
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:406:19583",
+   "path": "neurostim/safety/water_window.py",
+   "description": "compare == -> != at line 406",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.4
+  },
+  {
+   "id": "G:neurostim/safety/water_window.py:441:21489",
+   "path": "neurostim/safety/water_window.py",
+   "description": "boolean and -> or at line 441",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 11.4
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:58:2702",
+   "path": "neurostim/uncertainty.py",
+   "description": "compare < -> <= at line 58",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 8.9
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:76:3497",
+   "path": "neurostim/uncertainty.py",
+   "description": "boolean or -> and at line 76",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 61.2
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:81:3826",
+   "path": "neurostim/uncertainty.py",
+   "description": "arithmetic + -> - at line 81",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 360.4
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:81:3830",
+   "path": "neurostim/uncertainty.py",
+   "description": "arithmetic * -> / at line 81",
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 336.3
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:82:3865",
+   "path": "neurostim/uncertainty.py",
+   "description": "arithmetic * -> / at line 82",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 60.3
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:98:4344",
+   "path": "neurostim/uncertainty.py",
+   "description": "arithmetic + -> - at line 98",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 61.0
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:165:6673",
+   "path": "neurostim/uncertainty.py",
+   "description": "arithmetic / -> * at line 165",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 9.0
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:265:11302",
+   "path": "neurostim/uncertainty.py",
+   "description": "boolean and -> or at line 265",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 8.8
+  },
+  {
+   "id": "G:neurostim/units.py:49:1503",
+   "path": "neurostim/units.py",
+   "description": "constant 1e3 -> 2000.0 at line 49",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 61.1
+  },
+  {
+   "id": "G:neurostim/units.py:56:1601",
+   "path": "neurostim/units.py",
+   "description": "constant 1e4 -> 20000.0 at line 56",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 60.8
+  },
+  {
+   "id": "G:neurostim/units.py:66:1748",
+   "path": "neurostim/units.py",
+   "description": "constant 1e-8 -> 2e-08 at line 66",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 60.2
+  },
+  {
+   "id": "G:neurostim/units.py:76:1955",
+   "path": "neurostim/units.py",
+   "description": "constant 1e5 -> 200000.0 at line 76",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 61.9
+  },
+  {
+   "id": "G:neurostim/units.py:124:3410",
+   "path": "neurostim/units.py",
+   "description": "constant 1e-8 -> 2e-08 at line 124",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 10.9
+  },
+  {
+   "id": "G:neurostim/units.py:129:3527",
+   "path": "neurostim/units.py",
+   "description": "constant 1e-4 -> 0.0002 at line 129",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 61.6
+  },
+  {
+   "id": "G:neurostim/units.py:144:3889",
+   "path": "neurostim/units.py",
+   "description": "arithmetic * -> / at line 144",
+   "status": "killed",
+   "stage": "related",
+   "exit_code": 1,
+   "seconds": 60.1
+  }
+ ]
+}

@@ -82,7 +82,7 @@ repository (`CODE_MISTAKES_LOG.md`, `docs/audit/`). The test suite checks:
 Continuous integration gates branch-point coverage (84.8 %), type checking of the
 package and its tests, a provenance audit, and a byte-for-byte check of the README's
 generated transcript. A mutation harness kills all 26 named mutants recovered from the
-audit, and 86.9 % of 160 generated mutants on a seed registered before it was run.
+audit, and 89.4 % of 160 generated mutants on a seed registered before it was run.
 
 # Limitations
 
@@ -98,10 +98,11 @@ published ones, with their known weaknesses:
   - A limit whose in-vivo derating was never measured at the requested pulse width is
     marked provisional.
 - **Open gaps in the record.**
-  - The electrode-area range of the Shannon envelope has no citation (ledger 174).
-  - The generated mutation score, 86.9 %, is below its 90 % target (ledger 182).
-  - Lapicque confidence intervals under-cover on designs whose widths all sit far above
-    the chronaxie (ledger 183).
+  - The generated mutation score, 89.4 %, is below its 90 % target (ledger 182), and ten
+    of its survivors are untested behaviour (ledger 188).
+  - The Lapicque confidence interval is withheld when it lies below every width tested,
+    and carries a caveat on designs spanning less than 8x, where its measured coverage
+    is 0.79-1.00 (ledger 183).
   - Three data gaps have no source: TIROF's and SS316LVM's pulse widths, and Ta₂O₅'s
     water window.
 - **Values not verified against their primary source.**

@@ -235,20 +235,21 @@ ledger 176). It survived only because no test fitted such a design. One now does
 the argument is withdrawn. The envelope's 0.01–0.5 cm² area range has no citation to
 pin it against, and is logged as ledger 174.
 
-**The official score, 139 of 160 generated mutants killed (86.9 %), with 26 of 26
-named.** This is seed 20260929, pre-registered in commit 02bfdc7 before any run with it,
-measured once at that clean commit, and never tuned against
-(`docs/audit/mutation_results.json`). It is below the 90 % target. The gate is therefore
-set to the measured floor, 86 %, and may only rise. The gap is ledger 182, and it is not
-pursued in this release.
+**The official score: 143 of 160 generated mutants killed (89.4 %), and 26 of 26
+named.** The seed, 20260930, was pre-registered in commit 31a8db4 and run once at that
+clean commit, after Phase 8's fixes (`docs/audit/mutation_results.json`). It is below
+the 90 % target. The gate is set to the measured floor, 89 % (it was 86 %), and it may
+only rise. Of the 17 survivors, 4 are argued equivalent, 3 are not proven, and 10 are
+real test gaps, logged as ledger 188.
 
-Three runs, labelled:
+All runs, labelled:
 
 | Seed | Commit | Named | Generated | Status |
 |---|---|---|---|---|
-| 20260929 | 02bfdc7 | 26/26 | 139/160 = 86.9 % | **official**: pre-registered, never tuned against |
-| 20260928 | 90c5cf1 | 26/26 | 129/160 = 80.6 % | fresh when run; tests then written against its 31 survivors |
-| 20260927 | 1a47bd4 | 26/26 | 149/160 = 93.1 % | tuned: tests written against its survivors (84.4 % at 4cacbf2) |
+| 20260930 | 31a8db4 | 26/26 | 143/160 = 89.4 % | **official**: pre-registered, never tuned against |
+| 20260929 | 02bfdc7 | 26/26 | 139/160 = 86.9 % | official until Phase 8; tests then written against 9 of its survivors |
+| 20260928 | 90c5cf1 | 26/26 | 129/160 = 80.6 % | fresh when run; tests then written against its survivors |
+| 20260927 | 1a47bd4 | 26/26 | 149/160 = 93.1 % | tuned: tests written against its survivors |
 
 A seed whose survivors have had tests written against them no longer measures the suite.
 Only the official figure does.

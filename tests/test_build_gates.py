@@ -991,16 +991,16 @@ class TestTheMutationGate:
         assert mutation.gate(self._report(mutation, named="stale"))
 
     def test_the_gate_fails_a_generated_score_under_its_floor(self) -> None:
-        # G12: this pinned 144/160 = 90.0 % passing and 143 failing. The floor is now the
-        # measured 0.86 on the official seed (ledger 182): 138/160 = 86.25 % passes, 137
-        # fails, and the floor may not sit below what was measured.
+        # G12: this pinned 144/160 = 90.0 %, then the 0.86 floor of seed 20260929. The
+        # floor is now the measured 0.89 on the Phase 8 official seed 20260930 (ledger
+        # 182): 143/160 = 89.4 % passes, 142 fails. Rise only.
         mutation = _load_mutation()
-        assert mutation.GENERATED_FLOOR == 0.86
-        assert mutation.gate(self._report(mutation, killed=138)) == []
-        assert mutation.gate(self._report(mutation, killed=137))
+        assert mutation.GENERATED_FLOOR == 0.89
+        assert mutation.gate(self._report(mutation, killed=143)) == []
+        assert mutation.gate(self._report(mutation, killed=142))
         report = json.loads(mutation.RESULTS.read_text(encoding="utf-8"))
         assert report["generated_score"] >= mutation.GENERATED_FLOOR
-        assert report["seed"] == mutation.SEED == 20260929
+        assert report["seed"] == mutation.SEED == 20260930
 
     def test_the_committed_results_meet_the_gate(self) -> None:
         mutation = _load_mutation()
@@ -1243,7 +1243,8 @@ class TestThePaper:
 
     def test_the_limitations_are_the_open_ones(self) -> None:
         text = " ".join(self._paper().split())
-        for item in ("ledger 174", "ledger 182", "ledger 183", "@weiland2002", "@itis_v42",
+        # G12: ledger 174 is closed (cited, Phase 8); ledger 188 is the open gap now.
+        for item in ("ledger 182", "ledger 183", "ledger 188", "@weiland2002", "@itis_v42",
                      "@riedy_walter1996", "references 5 and 8", "provisional"):
             assert item in text, item
 

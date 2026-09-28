@@ -17,8 +17,8 @@ seed. The target is 90 % killed, not 100 %, because a generated set contains
 equivalent mutants that no test can kill. Every survivor is listed in the results.
 
 The gate is the measured floor, not the target (ledger 182). The pre-registered official
-seed, 20260929, scored 86.9 % at 02bfdc7, so ``GENERATED_FLOOR`` is 0.86. It can only
-rise. A score is only a measurement of the suite on a seed that no test was written
+seed, 20260930, scored 89.4 % at 31a8db4, so ``GENERATED_FLOOR`` is 0.89 (it was 0.86
+from seed 20260929). It can only rise. A score is only a measurement of the suite on a seed that no test was written
 against: after tests are written from a sample's survivors, pre-register a new seed in a
 commit message before running it.
 
@@ -75,14 +75,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS = REPO_ROOT / "docs" / "audit" / "mutation_results.json"
 
-SEED = 20260929
-"""The official seed, pre-registered in 02bfdc7 and never tuned against. 20260927 and
-20260928 were measured first, and tests were then written against their survivors
-(ledger 181)."""
+SEED = 20260930
+"""The official seed, pre-registered in 31a8db4 and never tuned against (Phase 8).
+20260927, 20260928 and 20260929 were measured first, and tests were then written against
+some of their survivors (ledgers 181, 182)."""
 GENERATED_COUNT = 160
-GENERATED_FLOOR = 0.86
-"""The measured floor: 139/160 = 86.9 % on the official seed at 02bfdc7. The target is
-0.90 (G2), and the gap is ledger 182. Raise this as the score rises; never lower it."""
+GENERATED_FLOOR = 0.89
+"""The measured floor: 143/160 = 89.4 % on the official seed 20260930 at 31a8db4 (was
+0.86 from seed 20260929). The target is 0.90 (G2); the gap is ledger 182 and the real
+survivors are ledger 188. Raise this as the score rises; never lower it."""
 
 SCOPE = (
     "neurostim/safety/*.py",
@@ -305,6 +306,44 @@ JUDGEMENTS: tuple[tuple[str, str, str, str, str], ...] = (
      "builds"),
     ("neurostim/uncertainty.py", "return cls(mean - k * sd, mean + k * sd)", "+", "-",
      "the non-finite-mean branch: mean +/- k*sd is the same infinity or NaN either way"),
+    # Survivors of seed 20260930 (Phase 8, the results of record).
+    ("neurostim/models/strength_duration.py",
+     "self.chronaxie_ci95_us is None or self.rheobase_se_uA", "or", "and",
+     "every path that withholds the interval also withholds the rheobase SE, so the two "
+     "are None together"),
+    ("neurostim/safety/compliance.py", "and protocol.return_phase_width_us > 0.0", ">", ">=",
+     "the width comparison: a zero-width return phase draws no current"),
+    ("neurostim/safety/water_window.py", "if available_V <= 0:  # pragma", "<=", "<",
+     "unreachable, as its pragma says: every material's window straddles zero"),
+    ("neurostim/safety/water_window.py", "net_dc_current_uA >= 0.0 else", ">=", ">",
+     "at exactly zero net DC nothing drifts, so which branch the offset is timed on is "
+     "never read"),
+    ("neurostim/safety/_limits.py", "PLATEAU_ALLOWANCE = 4", "4", "8",
+     "NOT proven equivalent: the allowance is read only on the descend-across-plateau "
+     "path, which no suite back-solve reaches"),
+    ("neurostim/safety/assessment.py", "        <= limit_uC_cm2,\n", "<=", "<",
+     "NOT proven equivalent: a one-float boundary of the chronic ceiling's predicate"),
+    ("neurostim/safety/compliance.py", "self.utilisation > CAUTION_UTILISATION", ">", ">=",
+     "NOT proven equivalent: differs only at exactly 80 % utilisation"),
+    ("neurostim/models/vta.py", "PYRAMIDAL_CHRONAXIE_RANGE_MS = (0.1, 0.4)", "0.1", "0.2",
+     "REAL gap (ledger 188): the constant is not pinned against Tehovnik et al. 2006 Fig. 1B"),
+    ("neurostim/safety/assessment.py", "if drift.train_duty_cycle == 1.0", "==", "!=",
+     "REAL gap (ledger 188): the drift summary's train wording is not tested"),
+    ("neurostim/safety/assessment.py", "margin=threshold / charge_nC", "/", "*",
+     "REAL gap (ledger 188): the microelectrode check's margin value is not tested"),
+    ("neurostim/safety/assessment.py", "margin=result.max_current_uA / result.current_uA",
+     "/", "*", "REAL gap (ledger 188): the compliance check's margin value is not tested"),
+    ("neurostim/safety/current_density.py",
+     "self.average_A_per_cm2 / DBS_CLINICAL_REFERENCE_A_PER_CM2", "/", "*",
+     "REAL gap (ledger 188): the 'for scale' ratio to the DBS reference is not tested"),
+    ("neurostim/safety/envelope.py", "hours = protocol.train_duration_s / 3600.0", "3600.0",
+     "7200.0", "REAL gap (ledger 188): the envelope's duration in hours is not tested"),
+    ("neurostim/safety/envelope.py", "protocol.train_duty_cycle < 0.95", "<", "<=",
+     "REAL gap (ledger 188): the train-duty edge at 0.95 is not tested"),
+    ("neurostim/uncertainty.py", "if self.low < 0:\n            raise ValueError(f\"sqrt",
+     "<", "<=", "REAL gap (ledger 188): sqrt of an interval starting at 0 is not tested"),
+    ("neurostim/units.py", '"nm2": 1e-14', "1e-14", "2e-14",
+     "REAL gap (ledger 188): the nm^2 area conversion is not tested"),
 )
 
 
