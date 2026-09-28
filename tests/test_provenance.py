@@ -673,8 +673,9 @@ class TestTheDigestCoversEveryConditionAndOldRecordsStillVerify:
         record = audit.record(self._calc())
         # G12, changed at C4b.1 (ledger 155): record() now writes version 3, which keeps
         # version 2's conditions and adds the answer and the model constants. G12 again
-        # (C5.0, ledger 160): version 4 adds the interval and the by-kind table.
-        assert record.payload_version == 4
+        # (C5.0, ledger 160): version 4 adds the interval and the by-kind table. G12 again
+        # (C8b.4, ledger 195): version 5 hashes version 4's payload with numbers as floats.
+        assert record.payload_version == 5
         assert set(record.constants_v2) == self.V2_FIELDS
         assert "constants_v2" in record.payload()
         assert record.digest_matches
@@ -751,8 +752,9 @@ class TestTheDigestCoversTheAnswerAndTheModel:
 
         rec = audit.record(self._pt500_in_vivo())
         body = rec.payload()
-        # G12 (C5.0, ledger 160): version 4.
-        assert rec.payload_version == 4
+        # G12 (C5.0, ledger 160): version 4. G12 (C8b.4, ledger 195): version 5, the
+        # same payload with its numbers hashed as floats.
+        assert rec.payload_version == 5
         answer = body["answer"]
         # G12 (C4b.2, ledger 156): 112.84456370652995 at 8.7x, 107.71174812307864 at 35/3.84.
         assert answer["limiting_current_uA"] == 107.71174812307864
@@ -1016,3 +1018,37 @@ class TestTheVersionHasOneSource:
         assert neurostim.__version__ == importlib.metadata.version("neurostim-safety")
         source = (Path(neurostim.__file__)).read_text()
         assert '__version__ = "' not in source
+
+
+class TestTheDigestIgnoresHowANumberWasTyped:
+    """Ledger 195 (Phase 8 review m4). StimProtocol(40, 100, 130, 2) with compliance_V=7
+    and the same calculation typed as floats gave different digests. Payload version 5
+    canonicalises every number to a float before hashing; records of versions 1-4 keep
+    their own rule, so they still verify."""
+
+    def test_int_and_float_inputs_give_one_digest(self):
+        from neurostim import RingElectrode, audit
+
+        as_ints = SafetyCalculator(
+            RingElectrode(330, 215, "SS316LVM"), StimProtocol(40, 100, 130, 2), compliance_V=7
+        )
+        as_floats = SafetyCalculator(
+            RingElectrode(330.0, 215.0, "SS316LVM"), StimProtocol(40.0, 100.0, 130.0, 2.0),
+            compliance_V=7.0,
+        )
+        a, b = audit.record(as_ints), audit.record(as_floats)
+        assert a.payload_version == b.payload_version == 5
+        assert a.digest == b.digest and a.digest_matches and b.digest_matches
+        # Version 4 keeps hashing the numbers as typed, so a stored version 4 digest
+        # still verifies against a record rebuilt at version 4.
+        a4, b4 = audit.record(as_ints, payload_version=4), audit.record(as_floats, payload_version=4)
+        assert a4.digest != b4.digest and a4.digest_matches and b4.digest_matches
+
+    def test_an_old_record_still_verifies(self):
+        from pathlib import Path
+
+        from neurostim import audit
+
+        text = (Path(__file__).parent / "fixtures" / "audit_c89fdf4_pt500_in_vivo.json").read_text()
+        old = audit.load(text)
+        assert old.payload_version < 5 and old.digest_matches

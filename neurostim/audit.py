@@ -105,8 +105,17 @@ class AuditRecord:
         return body
 
     def compute_digest(self) -> str:
-        """SHA-256 over the canonicalised payload."""
-        canonical = json.dumps(self.payload(), sort_keys=True, separators=(",", ":"))
+        """SHA-256 over the canonicalised payload.
+
+        From version 5 every number is hashed as a float, so ``StimProtocol(40, 100, 130,
+        2)`` and ``StimProtocol(40.0, 100.0, 130.0, 2.0)`` give one digest (ledger 195);
+        they used to give two, and the printed digests of identical calculations differed.
+        Earlier versions hash the numbers as typed, so their stored digests still verify.
+        """
+        payload = self.payload()
+        if self.payload_version >= 5:
+            payload = _numbers_as_floats(payload)
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     @property
@@ -169,9 +178,24 @@ def _diff(path: str, a: Any, b: Any) -> list[str]:
     return [f"{path}: {a!r} -> {b!r}"]
 
 
-PAYLOAD_VERSION = 4
+PAYLOAD_VERSION = 5
 """The payload :func:`record` writes (ledger 77, S-10; version 3, ledger 155; version 4,
-ledger 160)."""
+ledger 160; version 5, ledger 195: the payload of version 4, with its numbers hashed as
+floats)."""
+
+
+def _numbers_as_floats(value: Any) -> Any:
+    """``value`` with every int (not bool) made a float, for a digest that does not
+    depend on how a number was typed (ledger 195)."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return float(value)
+    if isinstance(value, dict):
+        return {k: _numbers_as_floats(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_numbers_as_floats(v) for v in value]
+    return value
 
 MODEL_CONSTANT_MODULES: tuple[str, ...] = (
     "neurostim.data.butterwick2007",

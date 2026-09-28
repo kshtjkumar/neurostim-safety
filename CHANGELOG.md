@@ -135,6 +135,19 @@ A/cm^2", or "diameter 150 um: d^-2 from the large-electrode 0.2751 -> 0.4890 A/c
 - rings whose equal-area diameter is already at least 200 µm do not move (314/216 and
   330/215 µm).
 
+### An audit digest does not depend on how a number was typed
+
+The same calculation entered as `StimProtocol(40, 100, 130, 2)` with `compliance_V=7`,
+and as `40.0, 100.0, 130.0, 2.0` with `7.0`, gave two digests (ledger 195).
+`reproduces` accepted either against the other, but the digest printed on a report,
+which a reader compares by eye, differed for identical inputs. Audit payload version 5
+hashes version 4's payload with every number as a float, so the two now give one
+digest. Records of versions 1-4 keep their own rule, and their stored digests still
+verify.
+
+**Movers:** every newly written record is version 5, so its digest differs from the
+version 4 digest of the same calculation. A stored record is unaffected.
+
 ### The PDF prints the digest on one line
 
 In the report's 8.5 pt body face the digits are the widest hex characters, so a
