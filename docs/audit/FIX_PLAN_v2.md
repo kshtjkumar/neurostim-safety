@@ -1287,7 +1287,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 183 | LOW | — (Phase 7b re-review T1) | open (documented) | Lapicque long-width CIs still under-cover (0.71-0.86) after the √ε cut; documented limitation; a stricter cut is the fix if wanted |
 | 184 | LOW | — (found at C7.5) | open (source choice) | **FIXED** `f810214`; decided by user |
 | 185 | LOW | — (Phase 8, user run) | C8.1a | **FIXED** `5b8bfc0`; C8.1a |
-| 186 | LOW | — (Phase 8, user run) | C8.1b (physics decision pending) | |
+| 186 | LOW | — (Phase 8, user run) | C8.1b (physics decision pending) | **FIXED** `3c32ea6`; C8.1b |
 | 187 | LOW | — (Phase 8, user run) | C8.1c | **FIXED** `92197e5`; C8.1c |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
