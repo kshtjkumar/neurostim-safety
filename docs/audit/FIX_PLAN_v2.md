@@ -1274,7 +1274,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 171 | LOW | — (Phase 6 review R2) | **C7.0** | **FIXED** `447c20c`; warns below the resolved tau |
 | 172 | LOW | — (Phase 6 review R3) | **C7.0** | **FIXED** `e33bbbc`; sqrt and from_mean_sd round outward |
 | 173 | LOW | — (Phase 6 review R4) | C7.3 | **FIXED** `1619d5f`; CITATION wording corrected |
-| 174 | LOW | — (C7.6 mutation survivor) | open | needs the source of the 0.01-0.5 cm^2 range (McCreery/Shannon electrode areas); not pinned until read from the paper |
+| 174 | LOW | — (C7.6 mutation survivor) | open | **FIXED** `f6434a4`; C8.2 |
 | 175 | MED | — (Phase 7 review S1) | C7b.1 | **FIXED** `a389ad7`; C7b.1 |
 | 176 | MED | — (Phase 7 review S2) | C7b.2 | **FIXED** `d6ac5d3`; C7b.2 |
 | 177 | MED | — (Phase 7 review S3) | C7b.3 | **FIXED** `a88efd6`; C7b.3 |
