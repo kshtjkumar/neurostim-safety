@@ -246,10 +246,14 @@ class TestFailCeiling:
         assert ceiling == 20.0
         assert assessment.limiting_current_uA == pytest.approx(ceiling, rel=1e-12)
         assert 141.37166941154072 / ceiling == pytest.approx(7.0686, rel=1e-4)
-        # The two checks that were FAILing at 80 uA while the headline said 141 uA.
+        # The two checks that were FAILing at 80 uA while the headline said 141 uA, and,
+        # since ledger 186 (G12: this set gained a member), Current density too: the
+        # ring is sized at its 330 um outer diameter, so its Butterwick threshold is the
+        # large-electrode 0.2751 A/cm^2, which 0.2829 exceeds. The ceiling is unchanged.
         assert {check.name for check in assessment.failed} == {
             "Microelectrode charge/phase",
             "Chronic degradation",
+            "Current density",
         }
 
     def test_the_oracle_reads_only_the_failed_tuple(self) -> None:

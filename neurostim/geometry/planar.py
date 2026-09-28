@@ -45,10 +45,15 @@ class DiscElectrode(Electrode):
         _check_positive("diameter_um", self.diameter_um)
         _check_environment(self.environment)
 
+    largest_dimension_kind = "diameter"
+
     @property
     def radius_um(self) -> float:
         """Disc radius in micrometres."""
         return self.diameter_um / 2.0
+
+    def _enclosing_radius_um(self) -> float:
+        return self.radius_um
 
     @property
     def area_um2(self) -> float:
@@ -118,6 +123,11 @@ class RingElectrode(Electrode):
         ri = self.inner_diameter_um / 2.0
         return math.pi * (ro**2 - ri**2)
 
+    largest_dimension_kind = "outer diameter"
+
+    def _enclosing_radius_um(self) -> float:
+        return self.outer_diameter_um / 2.0
+
     @property
     def wall_thickness_um(self) -> float:
         """Radial width of the annulus."""
@@ -156,6 +166,11 @@ class RectangularElectrode(Electrode):
     @property
     def area_um2(self) -> float:
         return self.width_um * self.length_um
+
+    largest_dimension_kind = "diagonal"
+
+    def _enclosing_radius_um(self) -> float:
+        return math.hypot(self.width_um, self.length_um) / 2.0
 
     @property
     def aspect_ratio(self) -> float:

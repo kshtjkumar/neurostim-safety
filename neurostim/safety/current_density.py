@@ -298,6 +298,23 @@ class CurrentDensityResult:
         return "\n".join(lines)
 
 
+
+def butterwick_size_um(electrode: Electrode) -> tuple[float, str]:
+    """The size Butterwick's regime is judged at, and what it measures (ledger 186).
+
+    Below 200 um the threshold rises as ``d^-2``, so a larger ``d`` gives the lower,
+    conservative threshold. A non-disc shape has no single diameter; the threshold is
+    the minimum over its equal-area diameter and its
+    :attr:`~neurostim.geometry.base.Electrode.largest_dimension_um`, which is the
+    threshold at the larger of the two. For a disc they are equal. A ring or rectangle
+    takes its outer extent. A sphere takes its equal-area diameter, twice its own.
+    """
+    equal_area = 2.0 * electrode.equivalent_radius_um
+    largest = electrode.largest_dimension_um
+    if largest >= equal_area:
+        return largest, electrode.largest_dimension_kind
+    return equal_area, "equal-area diameter"
+
 def evaluate(
     current_uA: float,
     area_cm2: float,
@@ -305,6 +322,7 @@ def evaluate(
     *,
     recessed: bool = False,
     diameter_um: float | None = None,
+    diameter_kind: str = "diameter",
     n_pulses: int = butterwick2007.PULSE_COUNT_SATURATION,
     return_phase_current_uA: float = 0.0,
     return_phase_width_us: float = 0.0,
@@ -322,7 +340,7 @@ def evaluate(
     """
     applied = average_current_density_A_per_cm2(current_uA, area_cm2)
     comparison = butterwick2007.compare(
-        applied, pulse_width_us, diameter_um, n_pulses=n_pulses
+        applied, pulse_width_us, diameter_um, n_pulses=n_pulses, diameter_kind=diameter_kind
     )
     return_applied = 0.0
     return_comparison = None
@@ -331,7 +349,11 @@ def evaluate(
             return_phase_current_uA, area_cm2
         )
         return_comparison = butterwick2007.compare(
-            return_applied, return_phase_width_us, diameter_um, n_pulses=n_pulses
+            return_applied,
+            return_phase_width_us,
+            diameter_um,
+            n_pulses=n_pulses,
+            diameter_kind=diameter_kind,
         )
     distribution = primary_distribution(electrode)
     if recessed:

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import ClassVar, Literal
 
 from ..units import um2_to_cm2, um_to_m
 
@@ -72,9 +72,31 @@ class Electrode(ABC):
         """Radius of a disc having the same geometric area.
 
         The characteristic length scale of a half-space geometry with no exact closed
-        form, and the one the Butterwick size correction and the field-panel start use.
+        form, and the one the field-panel start uses. The Butterwick size correction takes
+        the larger of its diameter and :attr:`largest_dimension_um` (ledger 186).
         """
         return math.sqrt(self.area_um2 / math.pi)
+
+    @property
+    def largest_dimension_um(self) -> float:
+        """The body's largest linear extent, in um: the diameter of the smallest sphere
+        about its centre that contains it (ledger 186).
+
+        One definition for every shape. It is the Feret (caliper) diameter for a disc,
+        ring, rectangle, sphere, hemisphere, band and flat-tipped microwire, and a slight
+        overestimate for a capped microwire tip. Its use is the Butterwick size regime,
+        where a larger size only lowers the threshold, so overestimating is the
+        conservative side. :func:`neurostim.safety.compliance` measures its overlap guard
+        with the same sphere.
+        """
+        return 2.0 * self._enclosing_radius_um()
+
+    largest_dimension_kind: ClassVar[str] = "largest dimension"
+    """What :attr:`largest_dimension_um` is for this shape, as a detail prints it."""
+
+    def _enclosing_radius_um(self) -> float:
+        """Radius of the smallest sphere about the centre that contains the body."""
+        return self.equivalent_radius_um
 
     @property
     def equivalent_sphere_radius_um(self) -> float:

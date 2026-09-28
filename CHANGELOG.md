@@ -102,6 +102,30 @@ is wrong in the unsafe direction:
 
 Each is detailed in its own entry below.
 
+### Butterwick's size regime uses the larger of two diameters
+
+Below 200 µm, Butterwick's current-density threshold rises as d⁻², so a smaller d raises
+the threshold. The package took d as the equal-area diameter for every shape. A ring
+330/270 µm has an equal-area diameter of 189.7 µm, which raised its threshold from the
+large-electrode 0.2751 to 0.3056 A/cm², although the ring is 330 µm across. The
+threshold is now the minimum over the equal-area diameter and the shape's largest
+dimension (`Electrode.largest_dimension_um`): the diameter for a disc, sphere or
+hemisphere, the outer diameter for a ring, the diagonal for a rectangle, and the
+enclosing-sphere diameter for a band or microwire. In practice that is the threshold at
+the larger of the two. The detail names the diameter used and what it is, with the
+unscaled value: "outer diameter 330 um >= 200 um: large-electrode threshold 0.2751
+A/cm^2", or "diameter 150 um: d^-2 from the large-electrode 0.2751 -> 0.4890 A/cm^2".
+
+**Movers** (10 µA, 200 µs per phase, 130 Hz, 1 s, 10 V):
+- a ring 330/270 µm goes from 0.3056 to 0.2751 A/cm², and its ceiling from 86.43 to 77.79 µA;
+- a 30×40 µm rectangle goes from 7.202 to 4.401 A/cm² (86.43 → 52.82 µA);
+- a 100×300 µm rectangle goes from 0.2880 to 0.2751 A/cm²;
+- in the README worked example (Pt ring 330/270 µm at 80 µA), the Current density
+  check goes from CAUTION (92.6 %) to **FAIL** (0.2829 against 0.2751 A/cm²);
+- no limiting current changes in any of these cases, and no preset moves;
+- rings whose equal-area diameter is already at least 200 µm do not move (314/216 and
+  330/215 µm).
+
 ### The envelope's electrode-area range is cited
 
 `envelope.AREA_RANGE_CM2 = (0.01, 0.5)` cm² had no citation (ledger 174). It is the range

@@ -127,8 +127,6 @@ from typing import Any
 
 from ..data import gabriel1996
 from ..geometry.base import Electrode
-from ..geometry.planar import RectangularElectrode
-from ..geometry.volumetric import CylindricalBandElectrode, MicrowireElectrode
 from ..materials import Material, get_material
 from ..protocol import StimProtocol
 from ..units import charge_uC
@@ -1004,19 +1002,9 @@ def _reach_um(electrode: Electrode) -> float:
 
 
 def _enclosing_radius_um(electrode: Electrode) -> float:
-    """Radius of a sphere about the body's centre that contains all of it, in um."""
-    if isinstance(electrode, RectangularElectrode):
-        return math.hypot(electrode.width_um, electrode.length_um) / 2.0
-    if isinstance(electrode, CylindricalBandElectrode):
-        return math.hypot(electrode.diameter_um / 2.0, electrode.height_um / 2.0)
-    if isinstance(electrode, MicrowireElectrode):
-        radius = electrode.diameter_um / 2.0
-        if electrode.tip_shape == "hemispherical":
-            cap = radius
-        elif electrode.tip_shape == "conical":
-            assert electrode.cone_height_um is not None  # required at construction
-            cap = electrode.cone_height_um
-        else:
-            cap = 0.0
-        return math.hypot(radius, (electrode.exposed_length_um + cap) / 2.0)
-    return max(electrode.dimensions().values(), default=0.0) / 2.0
+    """Radius of a sphere about the body's centre that contains all of it, in um.
+
+    Half of :attr:`~neurostim.geometry.base.Electrode.largest_dimension_um`, the one
+    definition the Butterwick size regime also uses (ledger 186).
+    """
+    return electrode.largest_dimension_um / 2.0

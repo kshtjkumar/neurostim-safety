@@ -582,3 +582,65 @@ class TestOfficialSeedSurvivors:
     def test_an_infinite_mean_with_no_spread(self) -> None:  # uncertainty.py:81
         interval = Interval.from_mean_sd(math.inf, 0.0)
         assert interval.low == math.inf and interval.high == math.inf
+
+
+class TestTheButterwickSizeIsTheLargerOfTwoDiameters:
+    """Ledger 186 (Phase 8, user decision C). Below 200 um Butterwick's threshold rises as
+    d^-2, and a larger d gives a lower threshold. A non-disc shape has no single diameter,
+    so the threshold is the minimum over the equal-area diameter and the largest
+    dimension: the threshold at the larger of the two. The detail names the diameter, its
+    kind and the unscaled large-electrode value."""
+
+    def test_the_largest_dimension_of_each_geometry(self) -> None:
+        from neurostim import (
+            CylindricalBandElectrode,
+            HemisphericalElectrode,
+            MicrowireElectrode,
+            RectangularElectrode,
+            RingElectrode,
+            SphericalElectrode,
+        )
+
+        assert DiscElectrode(150.0, "Pt").largest_dimension_um == 150.0
+        assert RingElectrode(330.0, 270.0, "Pt").largest_dimension_um == 330.0
+        assert RectangularElectrode(30.0, 40.0, "Pt").largest_dimension_um == pytest.approx(50.0)
+        assert CylindricalBandElectrode(1270.0, 1500.0, "PtIr").largest_dimension_um == (
+            pytest.approx(math.hypot(1270.0, 1500.0))
+        )
+        assert MicrowireElectrode(50.0, 120.0, "flat").largest_dimension_um == pytest.approx(
+            math.hypot(50.0, 120.0)
+        )
+        assert MicrowireElectrode(50.0, 120.0, "hemispherical").largest_dimension_um == (
+            pytest.approx(math.hypot(50.0, 145.0))
+        )
+        assert SphericalElectrode(100.0, "Pt").largest_dimension_um == 100.0
+        assert HemisphericalElectrode(100.0, "Pt").largest_dimension_um == 100.0
+
+    @staticmethod
+    def _density(electrode, current: float = 40.0):
+        assessment = SafetyCalculator(electrode, StimProtocol(current, 200.0, 130.0, 1.0)).assess()
+        return next(c for c in assessment.checks if c.name == "Current density")
+
+    def test_the_users_ring_is_in_the_large_electrode_regime(self) -> None:
+        from neurostim import RingElectrode
+        from neurostim.data import butterwick2007 as bw
+
+        check = self._density(RingElectrode(330.0, 270.0, "SS316LVM"))
+        large = bw.threshold_A_per_cm2(200.0, None)
+        assert f"threshold   {large:.4f}" in check.detail  # 0.2751, not the 0.3056 of before
+        assert "outer diameter 330 um >= 200 um: large-electrode threshold 0.2751 A/cm^2" in check.detail
+
+    def test_a_small_disc_scales_from_the_large_electrode_value(self) -> None:
+        check = self._density(DiscElectrode(150.0, "Pt"), current=10.0)
+        assert "diameter 150 um: d^-2 from the large-electrode 0.2751 -> 0.4890 A/cm^2" in check.detail
+
+    def test_a_sphere_uses_its_larger_equal_area_diameter(self) -> None:
+        from neurostim import SphericalElectrode
+        from neurostim.data import butterwick2007 as bw
+
+        sphere = SphericalElectrode(100.0, "Pt")
+        d_eq = 2.0 * sphere.equivalent_radius_um  # 200 um: the disc of the same area
+        check = self._density(sphere, current=10.0)
+        expected = bw.threshold_A_per_cm2(200.0, d_eq)
+        assert d_eq == pytest.approx(200.0) and f"{expected:.4f}"[:5] in check.detail
+        assert "equal-area diameter 200 um" in check.detail

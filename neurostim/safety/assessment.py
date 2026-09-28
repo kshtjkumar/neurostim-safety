@@ -2100,11 +2100,13 @@ class SafetyCalculator:
             if math.isinf(self.p.n_pulses)
             else max(1, int(self.p.n_pulses))
         )
+        size_um, size_kind = jd_mod.butterwick_size_um(self.e)
         jd_result = jd_mod.evaluate(
             self.p.current_uA,
             self.e.area_cm2,
             self.p.pulse_width_us,
-            diameter_um=2.0 * self.e.equivalent_radius_um,
+            diameter_um=size_um,
+            diameter_kind=size_kind,
             n_pulses=n_pulses,
             return_phase_current_uA=self.p.return_phase_current_uA,
             return_phase_width_us=self.p.return_phase_width_us,

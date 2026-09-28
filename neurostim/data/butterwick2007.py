@@ -260,6 +260,36 @@ class ThresholdComparison:
     n_pulses: int
     tissue: str
     regime: str
+    diameter_kind: str = "diameter"
+    """What ``diameter_um`` measures: the shape's diameter, outer diameter, diagonal or
+    largest dimension, or its equal-area diameter when that is the larger (ledger 186)."""
+
+    @property
+    def large_electrode_A_per_cm2(self) -> float:
+        """The threshold before any d^-2 scaling: the large-electrode value at this pulse
+        width, saturated below 200 um as :func:`threshold_A_per_cm2` uses it there."""
+        small = self.diameter_um is not None and self.diameter_um < CONSTANT_CURRENT_BELOW_UM
+        return threshold_A_per_cm2(
+            self.pulse_width_us,
+            None,
+            n_pulses=PULSE_COUNT_SATURATION if small else self.n_pulses,
+            tissue="cam" if self.tissue == "cam" else "retina",
+        )
+
+    def size_line(self) -> str:
+        """Which diameter set the size regime, and the value it scaled from (ledger 186)."""
+        from ..safety._limits import format_limit
+
+        if self.diameter_um is None:
+            return ""
+        large = format_limit(self.large_electrode_A_per_cm2)
+        size = f"{self.diameter_kind} {self.diameter_um:.4g} um"
+        if self.diameter_um >= CONSTANT_CURRENT_BELOW_UM:
+            return f"  size        {size} >= 200 um: large-electrode threshold {large} A/cm^2"
+        return (
+            f"  size        {size}: d^-2 from the large-electrode {large} -> "
+            f"{format_limit(self.threshold_A_per_cm2)} A/cm^2"
+        )
 
     @property
     def utilisation(self) -> float:
@@ -317,6 +347,7 @@ class ThresholdComparison:
                 f"({self.utilisation * 100:.1f} % used, {self.margin:.2f}x margin)",
                 f"  conditions  {self.pulse_width_us:g} us, {self.n_pulses} pulses, "
                 f"{self.regime}",
+                *([self.size_line()] if self.diameter_um is not None else []),
                 *regime_lines,
                 f"  source      Butterwick et al. 2007, {PREPARATION};"
                 f"\n              applying it to other tissue is an extrapolation "
@@ -332,6 +363,7 @@ def compare(
     *,
     n_pulses: int = PULSE_COUNT_SATURATION,
     tissue: Tissue = "retina",
+    diameter_kind: str = "diameter",
 ) -> ThresholdComparison:
     """Compare an applied current density against the threshold."""
     return ThresholdComparison(
@@ -348,4 +380,5 @@ def compare(
             if diameter_um is None
             else size_regime(diameter_um)
         ),
+        diameter_kind=diameter_kind,
     )

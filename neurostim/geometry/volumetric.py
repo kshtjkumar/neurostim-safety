@@ -61,6 +61,9 @@ class CylindricalBandElectrode(Electrode):
         """
         return super().access_resistance_ohm(sigma_S_per_m)
 
+    def _enclosing_radius_um(self) -> float:
+        return math.hypot(self.diameter_um / 2.0, self.height_um / 2.0)
+
     @property
     def aspect_ratio(self) -> float:
         """Height divided by diameter."""
@@ -138,6 +141,18 @@ class MicrowireElectrode(Electrode):
         """Wire radius in micrometres."""
         return self.diameter_um / 2.0
 
+    def _enclosing_radius_um(self) -> float:
+        # The exposed shaft plus its tip cap: r for a hemispherical tip, the cone height
+        # for a conical one, nothing for a flat end.
+        if self.tip_shape == "hemispherical":
+            cap = self.radius_um
+        elif self.tip_shape == "conical":
+            assert self.cone_height_um is not None  # required at construction
+            cap = self.cone_height_um
+        else:
+            cap = 0.0
+        return math.hypot(self.radius_um, (self.exposed_length_um + cap) / 2.0)
+
     @property
     def _bare_flat_tip(self) -> bool:
         return self.tip_shape == "flat" and self.exposed_length_um == 0.0
@@ -206,10 +221,15 @@ class SphericalElectrode(Electrode):
     def __post_init__(self) -> None:
         _check_positive("diameter_um", self.diameter_um)
 
+    largest_dimension_kind = "diameter"
+
     @property
     def radius_um(self) -> float:
         """Sphere radius in micrometres."""
         return self.diameter_um / 2.0
+
+    def _enclosing_radius_um(self) -> float:
+        return self.radius_um
 
     @property
     def area_um2(self) -> float:
@@ -246,10 +266,15 @@ class HemisphericalElectrode(Electrode):
     def __post_init__(self) -> None:
         _check_positive("diameter_um", self.diameter_um)
 
+    largest_dimension_kind = "diameter"
+
     @property
     def radius_um(self) -> float:
         """Hemisphere radius in micrometres."""
         return self.diameter_um / 2.0
+
+    def _enclosing_radius_um(self) -> float:
+        return self.radius_um
 
     @property
     def area_um2(self) -> float:
