@@ -991,13 +991,14 @@ class TestTheMutationGate:
         assert mutation.gate(self._report(mutation, named="stale"))
 
     def test_the_gate_fails_a_generated_score_under_its_floor(self) -> None:
-        # G12: this pinned 144/160 = 90.0 %, then the 0.86 floor of seed 20260929. The
-        # floor is now the measured 0.89 on the Phase 8 official seed 20260930 (ledger
-        # 182): 143/160 = 89.4 % passes, 142 fails. Rise only.
+        # G12: this pinned 144/160 = 90.0 %, then the 0.86 floor of seed 20260929, then
+        # 0.89 from seed 20260930's 143/160. That 143 counted 4 mutants killed only by the
+        # harness's own judgement-staleness test (ledger 190); the corrected score of
+        # record is 139/160 = 86.9 %, so the measured floor is 0.86: 138 passes, 137 fails.
         mutation = _load_mutation()
-        assert mutation.GENERATED_FLOOR == 0.89
-        assert mutation.gate(self._report(mutation, killed=143)) == []
-        assert mutation.gate(self._report(mutation, killed=142))
+        assert mutation.GENERATED_FLOOR == 0.86
+        assert mutation.gate(self._report(mutation, killed=138)) == []
+        assert mutation.gate(self._report(mutation, killed=137))
         report = json.loads(mutation.RESULTS.read_text(encoding="utf-8"))
         assert report["generated_score"] >= mutation.GENERATED_FLOOR
         assert report["seed"] == mutation.SEED == 20260930
@@ -1285,3 +1286,12 @@ class TestPulseWidthIsPerPhase:
         labels = [w.text() for w in window.findChildren(QLabel)]
         assert "Pulse width per phase (us)" in labels
         assert "leading phase" in window.pulse_width.toolTip()
+
+
+def test_the_mutation_run_does_not_count_its_own_harness_tests_as_kills() -> None:
+    """Ledger 190. The harness's own tests read its metadata; a mutant at a judged site
+    fails them without touching the arithmetic. They are deselected in every run."""
+    mutation = _load_mutation()
+    assert "tests/test_build_gates.py::TestTheMutationGate" in mutation.HARNESS_TESTS
+    source = MUTATION.read_text(encoding="utf-8")
+    assert 'for test in HARNESS_TESTS for arg in ("--deselect", test)' in source

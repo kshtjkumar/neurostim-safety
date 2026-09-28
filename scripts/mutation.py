@@ -17,8 +17,10 @@ seed. The target is 90 % killed, not 100 %, because a generated set contains
 equivalent mutants that no test can kill. Every survivor is listed in the results.
 
 The gate is the measured floor, not the target (ledger 182). The pre-registered official
-seed, 20260930, scored 89.4 % at 31a8db4, so ``GENERATED_FLOOR`` is 0.89 (it was 0.86
-from seed 20260929). It can only rise. A score is only a measurement of the suite on a seed that no test was written
+seed, 20260930, scored 139/160 = 86.9 % at 31a8db4, so ``GENERATED_FLOOR`` is 0.86. The
+run first reported 143/160 and the floor was raised to 0.89 on it, but 4 of those kills
+were the harness's own tests failing (ledger 190, ``HARNESS_TESTS``); the corrected
+record carries a ``corrections`` field. The floor rises only with a measured score. A score is only a measurement of the suite on a seed that no test was written
 against: after tests are written from a sample's survivors, pre-register a new seed in a
 commit message before running it.
 
@@ -80,10 +82,13 @@ SEED = 20260930
 20260927, 20260928 and 20260929 were measured first, and tests were then written against
 some of their survivors (ledgers 181, 182)."""
 GENERATED_COUNT = 160
-GENERATED_FLOOR = 0.89
-"""The measured floor: 143/160 = 89.4 % on the official seed 20260930 at 31a8db4 (was
-0.86 from seed 20260929). The target is 0.90 (G2); the gap is ledger 182 and the real
-survivors are ledger 188. Raise this as the score rises; never lower it."""
+GENERATED_FLOOR = 0.86
+"""The measured floor: 139/160 = 86.9 % on the official seed 20260930 at 31a8db4. It was
+set to 0.89 on a first count of 143/160 that credited 4 kills to the harness's own
+judgement-staleness test (ledger 190); this is the correction, not a lowering of a
+measured score. The target is 0.90 (G2); the gap is ledger 182 and the real survivors are
+ledger 188. Seed 20260930 is now used: tests have been written against its survivors, so
+the next measurement needs a new seed pre-registered in a commit message."""
 
 SCOPE = (
     "neurostim/safety/*.py",
@@ -584,11 +589,14 @@ def _related_tests(work: Path, path: str) -> list[str]:
     )
 
 
-_OWN_RESULTS_TEST = (
-    "tests/test_build_gates.py::TestTheMutationGate::test_the_committed_results_meet_the_gate"
-)
-"""Deselected inside the workspace: it checks this script's own output, which the run is
-producing, so it cannot be part of the suite the mutants are measured against."""
+HARNESS_TESTS = ("tests/test_build_gates.py::TestTheMutationGate",)
+"""Deselected inside the workspace: the tests of this harness itself.
+
+They read this script's own metadata and output: the results file the run is producing,
+the named anchors, and the site-keyed judgements. A mutant at a judged site or a named
+anchor changes the source text they look up, so they fail, and the run counted that as a
+kill. That is the harness observing its own bookkeeping, not a test of the arithmetic: 4
+of seed 20260930's 143 kills at 31a8db4 were this and nothing else (ledger 190)."""
 
 
 def _pytest(work: Path, targets: list[str], timeout: float) -> tuple[int | None, float]:
@@ -596,7 +604,7 @@ def _pytest(work: Path, targets: list[str], timeout: float) -> tuple[int | None,
     try:
         done = subprocess.run(
             [sys.executable, "-m", "pytest", "-x", "-q", "--tb=no", "-p", "no:cacheprovider",
-             "--deselect", _OWN_RESULTS_TEST, *targets],
+             *(arg for test in HARNESS_TESTS for arg in ("--deselect", test)), *targets],
             cwd=work, env=_env(work), capture_output=True, timeout=timeout, check=False,
         )
         return done.returncode, time.monotonic() - start

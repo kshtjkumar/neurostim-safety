@@ -85,7 +85,8 @@ them. So:
 `scripts/mutation.py` runs mutants against the suite in a temporary copy of the
 repository. There are 26 named mutants taken from the test audit, which must all be
 killed, and 160 generated from the AST with a fixed seed. The generated floor is the
-measured 89 % (seed 20260930), against a 90 % target, and it may only rise. A seed whose survivors you
+measured 86 % (seed 20260930, 139/160), against a 90 % target, and it rises only with a
+measured score. Seed 20260930 is now used. A seed whose survivors you
 have written tests against no longer measures the suite. Pre-register a new seed in a
 commit message before you run it. A full run takes about an hour. It runs on demand and weekly in CI
 (`.github/workflows/mutation.yml`), and its results are committed at

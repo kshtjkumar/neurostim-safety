@@ -7,94 +7,114 @@
  "sites": 851,
  "named_killed": 26,
  "named_total": 26,
- "generated_killed": 143,
+ "generated_killed": 139,
  "generated_total": 160,
- "generated_score": 0.8938,
+ "generated_score": 0.8688,
  "generated_survivors": [
   {
    "id": "G:neurostim/models/strength_duration.py:188:8343",
    "description": "boolean or -> and at line 188",
-   "judged": "not judged"
+   "judged": "every path that withholds the interval also withholds the rheobase SE, so the two are None together"
   },
   {
    "id": "G:neurostim/models/vta.py:79:3214",
    "description": "constant 0.1 -> 0.2 at line 79",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the constant is not pinned against Tehovnik et al. 2006 Fig. 1B"
   },
   {
    "id": "G:neurostim/safety/_limits.py:84:4594",
    "description": "constant 4 -> 8 at line 84",
-   "judged": "not judged"
+   "judged": "NOT proven equivalent: the allowance is read only on the descend-across-plateau path, which no suite back-solve reaches"
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1134:53882",
+   "description": "compare <= -> < at line 1134",
+   "judged": "NOT proven equivalent: the counter ceiling's predicate at exact equality, a one-float boundary no test reaches"
   },
   {
    "id": "G:neurostim/safety/assessment.py:1188:56484",
    "description": "compare <= -> < at line 1188",
-   "judged": "not judged"
+   "judged": "NOT proven equivalent: a one-float boundary of the chronic ceiling's predicate"
+  },
+  {
+   "id": "G:neurostim/safety/assessment.py:1262:59708",
+   "description": "compare >= -> > at line 1262",
+   "judged": "NOT proven equivalent: differs only where the average current density equals the threshold exactly, one float, which moves the settled ceiling by an ulp"
   },
   {
    "id": "G:neurostim/safety/assessment.py:1512:70613",
    "description": "compare == -> != at line 1512",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the drift summary's train wording is not tested"
   },
   {
    "id": "G:neurostim/safety/assessment.py:1675:77724",
    "description": "arithmetic / -> * at line 1675",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the microelectrode check's margin value is not tested"
   },
   {
    "id": "G:neurostim/safety/assessment.py:1689:78287",
    "description": "arithmetic / -> * at line 1689",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the microelectrode check's margin value is not tested"
   },
   {
    "id": "G:neurostim/safety/assessment.py:1927:88996",
    "description": "arithmetic / -> * at line 1927",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the compliance check's margin value is not tested"
+  },
+  {
+   "id": "G:neurostim/safety/compliance.py:502:24741",
+   "description": "compare <= -> < at line 502",
+   "judged": "at equality both branches give cap / active_slope, the same seed"
   },
   {
    "id": "G:neurostim/safety/compliance.py:664:31771",
    "description": "compare > -> >= at line 664",
-   "judged": "not judged"
+   "judged": "NOT proven equivalent: differs only at exactly 80 % utilisation"
   },
   {
    "id": "G:neurostim/safety/compliance.py:839:39937",
    "description": "compare > -> >= at line 839",
-   "judged": "not judged"
+   "judged": "the width comparison: a zero-width return phase draws no current"
   },
   {
    "id": "G:neurostim/safety/current_density.py:236:10996",
    "description": "arithmetic / -> * at line 236",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the 'for scale' ratio to the DBS reference is not tested"
+  },
+  {
+   "id": "G:neurostim/safety/current_density.py:347:16051",
+   "description": "compare > -> >= at line 347",
+   "judged": "the width comparison, as for compliance.py"
   },
   {
    "id": "G:neurostim/safety/envelope.py:263:10892",
    "description": "constant 3600.0 -> 7200.0 at line 263",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the envelope's duration in hours is not tested"
   },
   {
    "id": "G:neurostim/safety/envelope.py:292:11977",
    "description": "compare < -> <= at line 292",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the train-duty edge at 0.95 is not tested"
   },
   {
    "id": "G:neurostim/safety/water_window.py:106:5586",
    "description": "compare <= -> < at line 106",
-   "judged": "not judged"
+   "judged": "unreachable, as its pragma says: every material's window straddles zero"
   },
   {
    "id": "G:neurostim/safety/water_window.py:555:26962",
    "description": "compare >= -> > at line 555",
-   "judged": "not judged"
+   "judged": "at exactly zero net DC nothing drifts, so which branch the offset is timed on is never read"
   },
   {
    "id": "G:neurostim/uncertainty.py:211:8632",
    "description": "compare < -> <= at line 211",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): sqrt of an interval starting at 0 is not tested"
   },
   {
    "id": "G:neurostim/units.py:67:1765",
    "description": "constant 1e-14 -> 2e-14 at line 67",
-   "judged": "not judged"
+   "judged": "REAL gap (ledger 188): the nm^2 area conversion is not tested"
   }
  ],
  "named": [
@@ -923,9 +943,9 @@
    "id": "G:neurostim/safety/assessment.py:1134:53882",
    "path": "neurostim/safety/assessment.py",
    "description": "compare <= -> < at line 1134",
-   "status": "killed",
-   "stage": "related",
-   "exit_code": 1,
+   "status": "survived",
+   "stage": "full suite, harness tests deselected (re-run)",
+   "exit_code": 0,
    "seconds": 90.9
   },
   {
@@ -968,9 +988,9 @@
    "id": "G:neurostim/safety/assessment.py:1262:59708",
    "path": "neurostim/safety/assessment.py",
    "description": "compare >= -> > at line 1262",
-   "status": "killed",
-   "stage": "related",
-   "exit_code": 1,
+   "status": "survived",
+   "stage": "full suite, harness tests deselected (re-run)",
+   "exit_code": 0,
    "seconds": 76.3
   },
   {
@@ -1202,9 +1222,9 @@
    "id": "G:neurostim/safety/compliance.py:502:24741",
    "path": "neurostim/safety/compliance.py",
    "description": "compare <= -> < at line 502",
-   "status": "killed",
-   "stage": "related",
-   "exit_code": 1,
+   "status": "survived",
+   "stage": "full suite, harness tests deselected (re-run)",
+   "exit_code": 0,
    "seconds": 75.7
   },
   {
@@ -1364,9 +1384,9 @@
    "id": "G:neurostim/safety/current_density.py:347:16051",
    "path": "neurostim/safety/current_density.py",
    "description": "compare > -> >= at line 347",
-   "status": "killed",
-   "stage": "full",
-   "exit_code": 1,
+   "status": "survived",
+   "stage": "full suite, harness tests deselected (re-run)",
+   "exit_code": 0,
    "seconds": 306.2
   },
   {
@@ -1774,5 +1794,10 @@
    "exit_code": 1,
    "seconds": 12.0
   }
+ ],
+ "corrections": [
+  "Ledger 190 (Phase 8 review B2): the run deselected only its own results test, so 4 mutants at judged sites were counted as killed when the only failing test was TestTheMutationGate::test_every_judgement_still_names_a_site, which reads the harness's own judgements. Each was re-run at 31a8db4 on the full suite with tests/test_build_gates.py::TestTheMutationGate deselected: 1677 passed for all 4, so they survived. Re-classified here: G:neurostim/safety/assessment.py:1134:53882, G:neurostim/safety/assessment.py:1262:59708, G:neurostim/safety/compliance.py:502:24741, G:neurostim/safety/current_density.py:347:16051. Score of record 143/160 -> 139/160.",
+  "Ledger 194 (Phase 8 review m3): the judged field is regenerated from scripts/mutation.py JUDGEMENTS applied to the 31a8db4 sources; the run itself wrote 'not judged' because the judgements were committed after it (d007772).",
+  "Seed 20260930 has now been used and tests were written against its survivors: a further measurement needs a new seed pre-registered in a commit message before it is run."
  ]
 }

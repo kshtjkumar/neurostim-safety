@@ -244,18 +244,27 @@ ledger 176). It survived only because no test fitted such a design. One now does
 the argument is withdrawn. The envelope's 0.01–0.5 cm² area range has no citation to
 pin it against, and is logged as ledger 174.
 
-**The official score: 143 of 160 generated mutants killed (89.4 %), and 26 of 26
+**The official score: 139 of 160 generated mutants killed (86.9 %), and 26 of 26
 named.** The seed, 20260930, was pre-registered in commit 31a8db4 and run once at that
 clean commit, after Phase 8's fixes (`docs/audit/mutation_results.json`). It is below
-the 90 % target. The gate is set to the measured floor, 89 % (it was 86 %), and it may
-only rise. Of the 17 survivors, 4 are argued equivalent, 3 are not proven, and 10 are
-real test gaps, logged as ledger 188.
+the 90 % target, and the gate is the measured floor, 86 %.
+
+This corrects a first report of 143/160 = 89.4 %, on which the floor had been raised to
+89 % (Phase 8 review B2, ledger 190). Four of those kills were mutants at sites that carry
+a judgement: the mutation changed the text the harness's own judgement-staleness test
+looks up, that test failed, and the run counted it as a kill. The harness now deselects
+its own tests (`HARNESS_TESTS`). The 4 were re-run at 31a8db4 with those tests
+deselected and all survived; the record keeps the run and lists the re-classification in
+a `corrections` field, and each survivor's `judged` field now carries its judgement
+(ledger 194). Of the 21 survivors, 6 are argued equivalent, 5 are not proven, and 10 are
+real test gaps, logged as ledger 188. Tests have since been written against this seed's
+survivors, so a further measurement needs a new seed, pre-registered before it is run.
 
 All runs, labelled:
 
 | Seed | Commit | Named | Generated | Status |
 |---|---|---|---|---|
-| 20260930 | 31a8db4 | 26/26 | 143/160 = 89.4 % | **official**: pre-registered, never tuned against |
+| 20260930 | 31a8db4 | 26/26 | 139/160 = 86.9 % | **official**: pre-registered; first reported as 143/160, corrected (ledger 190); now used |
 | 20260929 | 02bfdc7 | 26/26 | 139/160 = 86.9 % | official until Phase 8; tests then written against 9 of its survivors |
 | 20260928 | 90c5cf1 | 26/26 | 129/160 = 80.6 % | fresh when run; tests then written against its survivors |
 | 20260927 | 1a47bd4 | 26/26 | 149/160 = 93.1 % | tuned: tests written against its survivors |

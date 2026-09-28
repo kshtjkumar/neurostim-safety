@@ -44,6 +44,6 @@ jobs:
         run: python scripts/mutation.py --check-anchors
 
       - name: Run the mutants and enforce the gate
-        # 26 named mutants must all be killed; >= 89 % of 160 generated ones (the measured
+        # 26 named mutants must all be killed; >= 86 % of 160 generated ones (the measured
         # floor on the official seed 20260930; the target is 90 %, ledger 182).
         run: python scripts/mutation.py --workers 2 --output mutation_results.json
