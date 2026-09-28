@@ -1300,9 +1300,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 188 | LOW | — (seed 20260930 survivors) | open | ten real test gaps among the official survivors; listed in the ledger and JUDGEMENTS |
 | 189 | HIGH | — (Phase 8 review) | C8b.1 | **FIXED** `cd86395`; C8b.1 |
 | 190 | HIGH | — (Phase 8 review) | C8b.2 | **FIXED** `de4052e`; C8b.2 |
-| 191 | MED | — (Phase 8 review) | C8b.3 | |
-| 192 | LOW | — (Phase 8 review) | C8b.3 | |
-| 193 | LOW | — (Phase 8 review) | C8b.3 | |
+| 191 | MED | — (Phase 8 review) | C8b.3 | **FIXED** `b77e594`; C8b.3 |
+| 192 | LOW | — (Phase 8 review) | C8b.3 | **FIXED** `b77e594`; C8b.3 |
+| 193 | LOW | — (Phase 8 review) | C8b.3 | **FIXED** `b77e594`; C8b.3 |
 | 194 | LOW | — (Phase 8 review) | C8b.2 | **FIXED** `de4052e`; C8b.2 |
 | 195 | LOW | — (Phase 8 review) | C8b.4 | **FIXED** `2fb74b8`; C8b.4 |
 | 196 | LOW | — (Phase 8 review) | C8b.4 | **FIXED** `bb1a114`; C8b.4 |
