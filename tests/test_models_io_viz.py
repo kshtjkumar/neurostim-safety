@@ -1163,3 +1163,46 @@ class TestALapicqueIntervalBelowEveryWidthIsWithheld:
         assert fit.chronaxie_ci95_us is None
         assert "below the shortest width" in fit.uncertainty_note
         assert "below the shortest width" in fit.describe()
+
+
+class TestTheLapicqueIntervalIsLogScaleWithANarrowDesignCaveat:
+    """Ledger 183, user decision (L). The Lapicque 95 % interval is c * exp(+/- t se / c):
+    positive and asymmetric, as a chronaxie is. Rule A still withholds one lying below
+    every width (judged on the linear interval, as validated). A design whose widths span
+    less than 8x carries a caveat quoting its measured coverage, 0.79-1.00; the grid is
+    scripts/lapicque_coverage.py and its committed output. Weiss is unchanged."""
+
+    WIDTHS = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
+    THRESHOLDS = np.array([82.5, 49.0, 34.6, 25.7, 22.3])
+
+    def test_the_interval_is_the_log_scale_wald_one(self):
+        from scipy.stats import t as student_t
+
+        fit = sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS)
+        c, se = fit.chronaxie_us, fit.chronaxie_se_us
+        assert se is not None and fit.chronaxie_ci95_us is not None
+        half = float(student_t.ppf(0.975, self.WIDTHS.size - 2)) * se / c
+        low, high = fit.chronaxie_ci95_us
+        assert low == pytest.approx(c * math.exp(-half), rel=1e-12)
+        assert high == pytest.approx(c * math.exp(half), rel=1e-12)
+        assert low > 0 and (high - c) > (c - low)  # asymmetric, positive
+
+    def test_weiss_keeps_its_linear_interval(self):
+        from scipy.stats import t as student_t
+
+        fit = sd.fit_weiss(self.WIDTHS, self.THRESHOLDS)
+        assert fit.chronaxie_se_us is not None and fit.chronaxie_ci95_us is not None
+        half = float(student_t.ppf(0.975, self.WIDTHS.size - 2)) * fit.chronaxie_se_us
+        low, high = fit.chronaxie_ci95_us
+        assert low == pytest.approx(fit.chronaxie_us - half, rel=1e-12)
+        assert high == pytest.approx(fit.chronaxie_us + half, rel=1e-12)
+        assert fit.coverage_caveat == ""
+
+    def test_a_narrow_design_carries_the_measured_coverage(self):
+        widths = np.array([50.0, 100.0, 150.0, 200.0])
+        fit = sd.fit_lapicque(widths, np.array([82.0, 50.5, 41.0, 34.8]))
+        assert fit.chronaxie_ci95_us is not None
+        assert "span 4x < 8x" in fit.coverage_caveat and "0.79-1.00" in fit.coverage_caveat
+        assert fit.coverage_caveat in fit.describe()
+        wide = sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS)
+        assert wide.coverage_caveat == "" and "span" not in wide.describe()

@@ -541,6 +541,21 @@ unchanged.
   withholds 0–0.4 % of fits on 50–800, 20–3200 and 50–200 µs designs. It withholds most
   400–3200 µs fits at low noise (100 % at 2 %), because there the true 200 µs chronaxie
   does lie below every width. The full table is in the `StrengthDurationFit` docstring.
+- **The Lapicque interval is log-scale**: c·exp(±t·se/c), positive and asymmetric
+  (ledger 183, user decision L). Two other fixes were tried and rejected, because
+  neither caught the fits that under-cover:
+  - flagging a large relative SE flags the fits that cover;
+  - flagging the residual noise misses the fits whose residual came out small by
+    chance, and those are the ones that under-cover.
+
+  A design whose widths span less than 8× now carries `coverage_caveat`, quoting its
+  measured 0.79–1.00. `scripts/lapicque_coverage.py` measures the whole grid, and its
+  output is committed at `docs/audit/lapicque_coverage.txt`:
+  - every design without the caveat covers ≥ 0.935 at 2–20 % noise;
+  - informative designs are withheld ≤ 0.6 %;
+  - when the upper end would overflow, it is reported as infinite rather than dropped.
+
+  Weiss keeps its linear interval. Fitted values and SEs are unchanged.
 - The fitted values themselves are unchanged.
 - A design with every pulse width equal raises. It used to return a rheobase and a
   chronaxie behind a numpy RankWarning.
