@@ -1294,7 +1294,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 186 | LOW | — (Phase 8, user run) | C8.1b (physics decision pending) | **FIXED** `3c32ea6`; C8.1b |
 | 187 | LOW | — (Phase 8, user run) | C8.1c | **FIXED** `92197e5`; C8.1c |
 | 188 | LOW | — (seed 20260930 survivors) | open | ten real test gaps among the official survivors; listed in the ledger and JUDGEMENTS |
-| 189 | HIGH | — (Phase 8 review) | C8b.1 | |
+| 189 | HIGH | — (Phase 8 review) | C8b.1 | **FIXED** `cd86395`; C8b.1 |
 | 190 | HIGH | — (Phase 8 review) | C8b.2 | |
 | 191 | MED | — (Phase 8 review) | C8b.3 | |
 | 192 | LOW | — (Phase 8 review) | C8b.3 | |
