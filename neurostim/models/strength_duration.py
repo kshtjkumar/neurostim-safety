@@ -133,17 +133,18 @@ class StrengthDurationFit:
     and asymmetric. It is withheld, with :attr:`uncertainty_note` saying so, when the
     linear interval ``c +/- t se`` lies wholly below the shortest width tested: the
     chronaxie is then an extrapolation below the design. A design spanning less than
-    :data:`NARROW_SPAN` (8x) carries :attr:`coverage_caveat`, and so does an interval
-    wider than :data:`VACUOUS_RATIO` (ledger 193). The fit is weighted by threshold
+    :data:`NARROW_SPAN` (8x) carries :attr:`coverage_caveat`. An interval with no finite
+    upper end, or wider than :data:`VACUOUS_RATIO`, is withheld the same way: it does not
+    bound the chronaxie (ledger 193). The fit is weighted by threshold
     (relative error, ledger 191). Coverage of the intervals reported, from
     ``scripts/lapicque_coverage.py`` (600 seeded replicates per cell, rheobase 20 uA, true
     chronaxie 50 / 100 / 200 / 500 us, 2-20 % noise; the range over those 16 cells, cells
-    with fewer than 20 intervals left out; vacuous intervals counted apart and left out;
+    with fewer than 20 intervals left out; withheld intervals are not in the coverage;
     ``docs/audit/lapicque_coverage.txt`` is seed 191, and seed 192 is
     ``docs/audit/lapicque_coverage_seed192.txt``):
 
     ============  ================  ================  =============  ==============
-    widths (us)   seed 191          seed 192          withheld       vacuous
+    widths (us)   seed 191          seed 192          rule A         vacuous
     ============  ================  ================  =============  ==============
     50-800        0.943-0.981       0.943-0.985       0-6 %          0-15 %
     20-3200       0.928-0.962       0.918-0.963       0-1 %          0-1 %
@@ -151,6 +152,9 @@ class StrengthDurationFit:
     400-3200      0.687-1.000       0.699-1.000       0-100 %        0-18 %
     2000-8000 (*) 0.211-1.000       0.145-1.000       32-100 %       0-25 %
     ============  ================  ================  =============  ==============
+
+    The last two columns are the fits withheld, as a share of those accepted, by rule A and
+    as vacuous. Designs of span >= 8 cover 0.69-1.00 over this grid.
 
     (*) span below 8x: the caveat is set. 400-3200 us spans exactly 8x and has no caveat,
     yet covers only about 0.69 at a 50 us chronaxie and 20 % noise, where every width is
@@ -177,10 +181,8 @@ class StrengthDurationFit:
     number of points (ledger 178)."""
     coverage_caveat: str = ""
     """Set when a Lapicque interval is reported on a design whose widths span less than
-    :data:`NARROW_SPAN` fold, where its measured coverage can fall far below nominal at
-    high noise (ledgers 183, 192), or when the interval is wider than
-    :data:`VACUOUS_RATIO` and so does not bound the chronaxie (ledger 193). Empty for
-    Weiss and otherwise."""
+    :data:`NARROW_SPAN` fold, where its measured coverage can be far below nominal
+    (ledgers 183, 192). Empty for Weiss and for wider designs."""
 
     def threshold_uA(self, pulse_width_us: float | np.ndarray):
         """Evaluate the fitted curve."""
@@ -234,17 +236,18 @@ From the validation grid (scripts/lapicque_coverage.py, output committed at
 docs/audit/lapicque_coverage.txt, ledgers 183, 191, 192): over chronaxies 50-500 us and
 2-20 % noise, on seeds 191 and 192, the span-4 designs (50-200 us, and 2-8 ms after rule
 A) cover from below 0.25 to 1.00, so the caveat quotes no floor. Designs of span >= 8
-cover 0.69-1.00; below 0.90 only on 400-3200 us at a 50-100 us chronaxie and 20 % noise,
-where every width is at least 4x the chronaxie. (At seed 183 and a 200 us chronaxie
-alone, unweighted, this read 0.79-1.00 and >= 0.935.) No per-fit statistic did better: a residual-noise flag misses the
+cover 0.69-1.00 (seed 191); below 0.90 only on 400-3200 us at a 50-100 us chronaxie and
+20 % noise, where every width is at least 4x the chronaxie. The span rule is kept (user
+decision b, ledger 191). At seed 183 and a 200 us chronaxie alone, unweighted, this read
+0.79-1.00 and >= 0.935. No per-fit statistic did better: a residual-noise flag misses the
 under-covering fits, whose residual came out small by chance, and se/c > 0.3 flags the
 fits that cover."""
 
 
 VACUOUS_RATIO = 1000.0
 """An interval whose upper end is infinite, or more than this many times its lower end,
-does not bound the chronaxie: it is reported with a caveat saying so, and the validation
-grid counts it apart from the coverage (ledger 193)."""
+does not bound the chronaxie: it is withheld with an :attr:`~StrengthDurationFit.uncertainty_note`,
+and the validation grid counts it apart from the coverage (ledger 193)."""
 
 
 def _log_interval(
@@ -414,23 +417,28 @@ def fit_lapicque(
         # asymmetric, as a chronaxie is, and better calibrated than c +/- t se at the
         # 10-20 % noise the Phase 7b review measured (ledger 183, user decision L).
         interval = _log_interval(chronaxie, chronaxie_se, dof)
-        span = float(w.max() / w.min())
-        if span < NARROW_SPAN:
-            caveat = (
-                f"narrow design (width span {span:.3g}x < {NARROW_SPAN:g}x): measured "
-                f"coverage of this interval on such designs can fall far below nominal "
-                f"at high noise (below 0.25 in the validation grid)"
-            )
+        # An interval with no finite upper end, or one wider than VACUOUS_RATIO, printed
+        # as "95 % CI 0-inf us": it does not bound the chronaxie. Withheld, with the
+        # reason, as rule A is (ledger 193, user decision a).
         if interval is not None and (
             not math.isfinite(interval[1])
             or interval[0] <= 0
             or interval[1] > VACUOUS_RATIO * interval[0]
         ):
-            vacuous = (
-                f"the interval spans more than {VACUOUS_RATIO:g}x, so it does not bound "
-                f"the chronaxie"
+            note = (
+                f"the chronaxie's 95 % interval ({interval[0]:.4g}-{interval[1]:.4g} us) "
+                f"spans more than {VACUOUS_RATIO:g}x, so it does not bound the chronaxie. "
+                f"Include widths near the chronaxie"
             )
-            caveat = f"{caveat}; {vacuous}" if caveat else vacuous
+            rheobase_se = chronaxie_se = None
+            interval = None
+    if interval is not None:
+        span = float(w.max() / w.min())
+        if span < NARROW_SPAN:
+            caveat = (
+                f"narrow design (width span {span:.3g}x < {NARROW_SPAN:g}x): measured "
+                f"coverage of this interval can be far below nominal"
+            )
 
     return StrengthDurationFit(
         model="lapicque",

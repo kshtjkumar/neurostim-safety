@@ -6,11 +6,11 @@ For each design and noise level, draws seeded replicates from a known Lapicque c
 and reports:
 
 - how many fits were accepted;
-- how many of those had their interval withheld (rule A: an interval lying below every
+- how many of those had their interval withheld by rule A (an interval lying below every
   width tested);
 - how many carry the narrow-design caveat (width span below ``NARROW_SPAN``);
-- how many intervals are vacuous (upper end infinite, or more than ``VACUOUS_RATIO`` times
-  the lower): counted here and left out of the coverage (ledger 193);
+- how many were withheld as vacuous (upper end infinite, or more than ``VACUOUS_RATIO``
+  times the lower; ledger 193), counted apart from rule A;
 - the coverage of the intervals still reported: the fraction that contain the true
   chronaxie.
 
@@ -74,12 +74,12 @@ def main(argv: list[str] | None = None) -> int:
                         continue
                 accepted += 1
                 if fit.chronaxie_ci95_us is None:
-                    withheld += 1
+                    if "does not bound the chronaxie" in fit.uncertainty_note:
+                        vacuous += 1
+                    else:
+                        withheld += 1
                     continue
                 low, high = fit.chronaxie_ci95_us
-                if not math.isfinite(high) or low <= 0 or high > sd.VACUOUS_RATIO * low:
-                    vacuous += 1
-                    continue
                 reported += 1
                 caveat += bool(fit.coverage_caveat)
                 covered += low <= chronaxie <= high

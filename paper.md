@@ -101,10 +101,11 @@ published ones, with their known weaknesses:
   - The generated mutation score, 86.9 %, is below its 90 % target (ledger 182), and ten
     of its survivors are untested behaviour (ledger 188).
   - The Lapicque confidence interval is withheld when it lies below every width tested,
-    and carries a caveat on designs spanning less than 8x, where its measured coverage
-    can fall below 0.25 at high noise (ledger 183; measured in ledger 192). A design
-    spanning 8x or more with every width well above the chronaxie can still under-cover
-    (about 0.69 in the validation grid) without a caveat.
+    or when it does not bound the chronaxie, and carries a caveat on designs spanning
+    less than 8x, where its measured coverage can be far below nominal (ledger 183;
+    ledger 192). Designs spanning 8x or more cover 0.69-1.00 over chronaxies 50-500 us
+    and 2-20 % noise in the validation grid, lowest when every width is well above the
+    chronaxie.
   - Three data gaps have no source: TIROF's and SS316LVM's pulse widths, and Ta₂O₅'s
     water window.
 - **Values not verified against their primary source.**

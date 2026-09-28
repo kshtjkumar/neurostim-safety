@@ -176,14 +176,16 @@ Coverage over those 16 cells of each design:
   from 0.211 (seed 191) or 0.145 (seed 192) to 1.000.
 
 The quoted "0.79–1.00" was one seed's value at one chronaxie and does not reproduce
-(ledger 192). The caveat now quotes no floor: coverage "can fall far below nominal at
-high noise (below 0.25 in the validation grid)", which holds on both seeds.
+(ledger 192). The caveat now quotes no floor: "measured coverage of this interval can be
+far below nominal". The span rule is kept (user decision b): designs of span 8× or more
+cover 0.69–1.00 over chronaxies 50–500 µs and 2–20 % noise (seed 191).
 
 An interval whose upper end is infinite, or more than `VACUOUS_RATIO` (1000) times its
 lower end, used to print as "95 % CI 0-inf us" and was counted as covering (ledger 193).
-It is still reported, with a caveat saying it does not bound the chronaxie. The grid
-counts such intervals apart and leaves them out of the coverage: up to 64 % of the
-accepted fits in a 50–200 µs cell.
+It is now withheld, with an `uncertainty_note` saying it does not bound the chronaxie,
+as rule A withholds (user decision a); the SEs go with it. Coverage counts only the
+intervals reported. Up to 64 % of the accepted fits in a 50–200 µs cell are withheld
+this way, up to 15 % on 50–800 µs.
 
 **Movers:** every Lapicque fit's rheobase, chronaxie, SEs and interval. On 50–800 µs at
 5 % noise and a 200 µs chronaxie, the chronaxie moves by a median 6.1 % (at most 27.9 %)
@@ -627,9 +629,10 @@ unchanged.
   A design whose widths span less than 8× now carries `coverage_caveat`, quoting its
   measured 0.79–1.00. `scripts/lapicque_coverage.py` measures the whole grid, and its
   output is committed at `docs/audit/lapicque_coverage.txt`:
-  - every design without the caveat covers ≥ 0.935 at 2–20 % noise. Both figures held
-    only at the one chronaxie simulated, 200 µs; they are corrected in "The Lapicque fit
-    is weighted by threshold" below (ledgers 191, 192);
+  - every design without the caveat covers 0.69–1.00 over chronaxies 50–500 µs and
+    2–20 % noise in the validation grid (seed 191). This entry first said ≥ 0.935, and
+    the caveat 0.79–1.00: both held only at the one chronaxie then simulated, 200 µs
+    (ledgers 191, 192; see "The Lapicque fit is weighted by threshold");
   - informative designs are withheld ≤ 0.6 %;
   - when the upper end would overflow, it is reported as infinite rather than dropped.
 

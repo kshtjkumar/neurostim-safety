@@ -1089,9 +1089,12 @@ class TestAnUnidentifiableChronaxieReportsNoUncertainty:
                 continue
             if fit.chronaxie_ci95_us is None:
                 # G12 (ledger 183): the extrapolation rule withholds too, with its own note.
+                # G12 (ledger 193, user decision a): so does an interval wider than
+                # VACUOUS_RATIO, which does not bound the chronaxie.
                 assert (
                     "not identifiable" in fit.uncertainty_note
                     or "below the shortest width" in fit.uncertainty_note
+                    or "does not bound the chronaxie" in fit.uncertainty_note
                 )
                 continue
             assert fit.chronaxie_se_us is not None and fit.chronaxie_se_us > 0.0
@@ -1152,8 +1155,17 @@ class TestALapicqueIntervalBelowEveryWidthIsWithheld:
     )
     def test_informative_designs_are_not_withheld(self, widths):
         fits = list(self._replicates(np.array(widths), 0.05, 200, 1830))
-        withheld = sum(fit.chronaxie_ci95_us is None for fit in fits)
-        assert withheld <= 0.01 * len(fits)
+        # G12 (ledger 193, user decision a): this counted every withheld interval; the
+        # vacuous rule now withholds some too (4 of 200 on 50-200 us), so rule A is
+        # counted by its own note, and every other withholding must be the vacuous one.
+        withheld = [fit for fit in fits if fit.chronaxie_ci95_us is None]
+        rule_a = sum("below the shortest width" in fit.uncertainty_note for fit in withheld)
+        assert rule_a <= 0.01 * len(fits)
+        assert all(
+            "below the shortest width" in fit.uncertainty_note
+            or "does not bound the chronaxie" in fit.uncertainty_note
+            for fit in withheld
+        )
 
     def test_the_reason_is_stated(self):
         widths = np.array([400.0, 800.0, 1600.0, 3200.0])
@@ -1210,14 +1222,14 @@ class TestTheLapicqueIntervalIsLogScaleWithANarrowDesignCaveat:
         wide = sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS)
         assert wide.coverage_caveat == "" and "span" not in wide.describe()
 
-    def test_an_interval_that_does_not_bound_the_chronaxie_says_so(self):
-        """Ledger 193 (Phase 8 review m2): a "95 % CI 0-inf us" was reported as if it
-        were an interval. One wider than VACUOUS_RATIO now carries a caveat saying it
-        does not bound the chronaxie (20 % noise on 50-800 us, a 200 us chronaxie)."""
+    def test_an_interval_that_does_not_bound_the_chronaxie_is_withheld(self):
+        """Ledger 193 (Phase 8 review m2, user decision a): a "95 % CI 0-inf us" was
+        reported as if it were an interval. One wider than VACUOUS_RATIO is withheld with
+        its reason, as rule A is (20 % noise on 50-800 us, a 200 us chronaxie; its log
+        interval is 0.187-8.3e7 us)."""
         fit = sd.fit_lapicque(self.WIDTHS, np.array([183.36, 77.9, 43.45, 30.2, 10.87]))
-        assert fit.chronaxie_ci95_us is not None
-        low, high = fit.chronaxie_ci95_us
-        assert high > sd.VACUOUS_RATIO * low
-        assert "does not bound the chronaxie" in fit.coverage_caveat
-        assert "narrow design" not in fit.coverage_caveat
-        assert fit.coverage_caveat in fit.describe()
+        assert fit.chronaxie_ci95_us is None
+        assert fit.chronaxie_se_us is None and fit.rheobase_se_uA is None
+        assert "does not bound the chronaxie" in fit.uncertainty_note
+        assert fit.coverage_caveat == ""
+        assert "does not bound the chronaxie" in fit.describe()
