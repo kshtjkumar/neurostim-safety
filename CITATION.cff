@@ -6,9 +6,12 @@ message: >-
   package carries its own citation, retrievable with
   neurostim.bibliography().
 type: software
+# ORCID, repository URL, DOI and release date are intentionally absent: none has been
+# assigned, and none is invented (ledger 180). Add them here when they exist.
 authors:
-  - name: neurostim-safety contributors
-repository-code: https://github.com/example/neurostim-safety
+  - given-names: Kshitij
+    family-names: Kumar
+    affiliation: Indian Institute of Technology Kanpur, India
 abstract: >-
   Electrode safety and stimulation modelling for neural interfaces. Every
   literature-derived constant carries its primary source and the conditions

@@ -1143,3 +1143,27 @@ class TestTheLicenceIsTheOneTheMetadataDeclares:
     def test_the_metadata_agrees(self) -> None:
         assert 'license = { text = "MIT" }' in (REPO_ROOT / "pyproject.toml").read_text()
         assert "\nlicense: MIT\n" in (REPO_ROOT / "CITATION.cff").read_text()
+
+
+class TestTheCitationHasNoPlaceholders:
+    """Ledger 180 (Phase 7 review S6) and G8. CITATION.cff named "neurostim-safety
+    contributors" and a https://github.com/example/ repository. The author is the user's:
+    Kshitij Kumar, Indian Institute of Technology Kanpur. ORCID, repository URL, DOI and
+    release date are intentionally absent -- none exists yet -- rather than invented."""
+
+    @staticmethod
+    def _text() -> str:
+        return (REPO_ROOT / "CITATION.cff").read_text(encoding="utf-8")
+
+    def test_the_author_is_named_with_the_affiliation(self) -> None:
+        text = self._text()
+        assert "  - given-names: Kshitij\n    family-names: Kumar\n" in text
+        assert "    affiliation: Indian Institute of Technology Kanpur, India\n" in text
+
+    def test_no_placeholder_or_invented_identifier_remains(self) -> None:
+        text = self._text()
+        for placeholder in ("contributors", "example", "TODO", "XXXX"):
+            assert placeholder not in text, placeholder
+        keys = {line.split(":")[0] for line in text.splitlines() if line and line[0].isalpha()}
+        assert not keys & {"repository-code", "doi", "date-released", "url"}
+        assert "orcid" not in text.lower() or "intentionally absent" in text

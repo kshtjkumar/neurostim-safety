@@ -108,6 +108,14 @@ The package has always declared MIT in `pyproject.toml` and `CITATION.cff`, and 
 no licence text. `LICENSE` is now the SPDX MIT text, Copyright (c) 2026 Kshitij Kumar.
 `pyproject.toml` names the author.
 
+### CITATION.cff names its author
+
+The file credited "neurostim-safety contributors" at a `github.com/example` repository.
+It now names Kshitij Kumar, Indian Institute of Technology Kanpur, India. The ORCID, the
+repository URL, the DOI and the release date are left out on purpose: none has been
+assigned yet, and the file says so rather than inventing one. It validates against the
+CFF 1.2.0 schema.
+
 ### An API reference, generated from the docstrings
 
 `python scripts/build_api_docs.py` renders every module's docstrings to
