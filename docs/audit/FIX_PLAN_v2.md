@@ -1303,7 +1303,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 193 | LOW | — (Phase 8 review) | C8b.3 | |
 | 194 | LOW | — (Phase 8 review) | C8b.2 | **FIXED** `de4052e`; C8b.2 |
 | 195 | LOW | — (Phase 8 review) | C8b.4 | |
-| 196 | LOW | — (Phase 8 review) | C8b.4 | |
+| 196 | LOW | — (Phase 8 review) | C8b.4 | **FIXED** `bb1a114`; C8b.4 |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
