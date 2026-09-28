@@ -1237,3 +1237,41 @@ class TestThePaper:
         for item in ("ledger 174", "ledger 182", "ledger 183", "@weiland2002", "@itis_v42",
                      "@riedy_walter1996", "references 5 and 8", "provisional"):
             assert item in text, item
+
+
+class TestPulseWidthIsPerPhase:
+    """Ledger 187 (Phase 8, found by running the package). ``pulse_width_us`` is the width
+    of the leading phase; a user read 200 us as the whole biphasic pulse. Every surface a
+    user enters or reads it on says "per phase"."""
+
+    def test_the_protocol_docstring_and_describe(self) -> None:
+        from neurostim import StimProtocol
+
+        assert StimProtocol.__doc__ is not None
+        assert "per phase" in StimProtocol.__doc__.splitlines()[0]
+        assert "40 uA x 200 us per phase @ 130 Hz" in StimProtocol(40, 200, 130, 1).describe()
+
+    def test_the_readme_quick_start(self) -> None:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        assert "StimProtocol(80, 200, 130, 1)       # µA, µs per phase, Hz, s" in readme
+
+    def test_the_pdf_row_and_the_batch_columns(self) -> None:
+        from neurostim.io import report, tabular
+
+        assert '("Pulse width per phase",' in (REPO_ROOT / "neurostim" / "io" / "report.py").read_text()
+        assert report is not None
+        assert tabular.assess_batch.__doc__ is not None
+        assert "``pulse_width_us`` is per phase" in " ".join(tabular.assess_batch.__doc__.split())
+
+    def test_the_gui_label_and_tooltip(self) -> None:
+        pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PyQt6.QtWidgets import QApplication, QLabel
+
+        from neurostim.gui.app import SafetyWindow
+
+        _app = QApplication.instance() or QApplication([])
+        window = SafetyWindow()
+        labels = [w.text() for w in window.findChildren(QLabel)]
+        assert "Pulse width per phase (us)" in labels
+        assert "leading phase" in window.pulse_width.toolTip()

@@ -31,11 +31,14 @@ Python ≥ 3.10. Core dependencies: numpy, scipy, matplotlib, pandas.
 from neurostim import RingElectrode, StimProtocol, SafetyCalculator
 
 electrode = RingElectrode(330, 270, "Pt")       # outer µm, inner µm, material
-protocol  = StimProtocol(80, 200, 130, 1)       # µA, µs, Hz, s
+protocol  = StimProtocol(80, 200, 130, 1)       # µA, µs per phase, Hz, s
 calc = SafetyCalculator(electrode, protocol, compliance_V=10.0)
 
 print(calc.describe())
 ```
+
+The pulse width is **per phase**: the width of the leading phase alone. A symmetric
+biphasic pulse of 200 µs per phase lasts 400 µs plus any interphase gap.
 
 <!-- BEGIN GENERATED: quickstart-transcript -->
 

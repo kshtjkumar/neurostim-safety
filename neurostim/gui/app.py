@@ -228,7 +228,11 @@ class SafetyWindow(QMainWindow):
         # a form input for it and it had none (ledger 107).
         self.train_duty = _spin(0.001, 1.0, DEFAULT_TRAIN_DUTY_CYCLE, decimals=3)
         p_form.addRow("Amplitude (uA)", self.current)
-        p_form.addRow("Pulse width (us)", self.pulse_width)
+        self.pulse_width.setToolTip(
+            "Width of one phase, per phase: the leading phase alone (the stimulating one), not "
+            "the whole biphasic pulse. The return phase follows from the return-phase ratio."
+        )
+        p_form.addRow("Pulse width per phase (us)", self.pulse_width)
         p_form.addRow("Frequency (Hz)", self.frequency)
         p_form.addRow("Train duration (s)", self.train)
         p_form.addRow("Waveform", self.waveform)

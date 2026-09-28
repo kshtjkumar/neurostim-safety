@@ -562,7 +562,7 @@ def build_report(
             [
                 ("Waveform", f"{p.waveform}, {p.leading_polarity}-first"),
                 ("Amplitude", f"{p.current_uA:g} &micro;A"),
-                ("Pulse width", f"{p.pulse_width_us:g} &micro;s"),
+                ("Pulse width per phase", f"{p.pulse_width_us:g} &micro;s"),
                 ("Frequency", f"{p.frequency_hz:g} Hz"),
                 (
                     "Train",

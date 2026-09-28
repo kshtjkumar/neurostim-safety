@@ -102,6 +102,19 @@ is wrong in the unsafe direction:
 
 Each is detailed in its own entry below.
 
+### The pulse width says it is per phase
+
+`pulse_width_us` has always been the width of the leading phase alone. A user read "200
+µs" as the whole biphasic pulse. Every surface where the value is entered or read now
+says "per phase":
+- the `StimProtocol` docstring (its first line and the parameter);
+- `describe()` ("40 uA x 200 us per phase @ 130 Hz");
+- the PDF protocol row ("Pulse width per phase");
+- the GUI field ("Pulse width per phase (us)"), with a tooltip;
+- the batch documentation;
+- the README quick start.
+No number moves.
+
 ### The compliance detail says the check's verdict
 
 Take a `RingElectrode(330, 270, "SS316LVM")` at 40 µA, 200 µs per phase and 130 Hz, with

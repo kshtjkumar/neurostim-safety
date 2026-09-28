@@ -63,7 +63,7 @@ cancellation can accumulate.
 
 @dataclass(frozen=True)
 class StimProtocol:
-    """A pulse train specification.
+    """A pulse train specification; ``pulse_width_us`` is per phase, not per whole pulse.
 
     Parameters
     ----------
@@ -71,7 +71,9 @@ class StimProtocol:
         Amplitude of the leading (stimulating) phase, in microamperes. Always given as
         a positive magnitude; ``anodic_first`` carries the polarity.
     pulse_width_us:
-        Width of the leading phase, in microseconds.
+        Width of the leading phase alone, in microseconds: **per phase**. A symmetric
+        biphasic pulse of 200 us per phase lasts 400 us plus any interphase gap. The
+        return phase's width follows from ``return_phase_ratio`` (ledger 187).
     frequency_hz:
         Pulse repetition rate within a train.
     train_duration_s:
@@ -395,7 +397,7 @@ class StimProtocol:
         )
         lines = [
             f"{self.waveform} {self.leading_polarity}-first, "
-            f"{self.current_uA:g} uA x {self.pulse_width_us:g} us @ "
+            f"{self.current_uA:g} uA x {self.pulse_width_us:g} us per phase @ "
             f"{self.frequency_hz:g} Hz, train {train}",
             f"  charge/phase:   {self.charge_per_phase_uC:.4g} uC",
             f"  duty cycle:     {self.duty_cycle * 100:.2f} % (within each period)",

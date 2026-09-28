@@ -148,6 +148,9 @@ def assess_batch(
     ``stop_on_error`` is set -- a sweep of 200 currents should not be lost because one
     of them was mistyped.
 
+    ``pulse_width_us`` is per phase: the width of the leading phase alone, as in
+    :class:`~neurostim.protocol.StimProtocol` (ledger 187).
+
     A counter electrode is given by the same electrode columns prefixed ``counter_``
     (``counter_shape``, ``counter_diameter_um``, ``counter_material``, ...) plus
     ``counter_separation_um``; blank cells mean none (ledger 126).
