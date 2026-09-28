@@ -116,6 +116,13 @@ repository URL, the DOI and the release date are left out on purpose: none has b
 assigned yet, and the file says so rather than inventing one. It validates against the
 CFF 1.2.0 schema.
 
+### A code of conduct
+
+`CODE_OF_CONDUCT.md` is the Contributor Covenant 2.1, verbatim except for its one
+placeholder. Reports go to the project maintainer, Kshitij Kumar. No address is given for
+now; community and JOSS practice prefer a reachable one, and it will be added.
+`CONTRIBUTING.md` points to the code.
+
 ### An API reference, generated from the docstrings
 
 `python scripts/build_api_docs.py` renders every module's docstrings to

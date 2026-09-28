@@ -107,3 +107,8 @@ too long for every push, so they are run by hand before a release:
    from the installed metadata, and a test asserts all three agree.
 4. Give the release a CHANGELOG section.
 5. Run every gate above.
+
+## Conduct
+
+Participation in this project is governed by `CODE_OF_CONDUCT.md` (Contributor Covenant
+2.1). Reports go to the project maintainer, Kshitij Kumar.

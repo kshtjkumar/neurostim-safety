@@ -1167,3 +1167,19 @@ class TestTheCitationHasNoPlaceholders:
         keys = {line.split(":")[0] for line in text.splitlines() if line and line[0].isalpha()}
         assert not keys & {"repository-code", "doi", "date-released", "url"}
         assert "orcid" not in text.lower() or "intentionally absent" in text
+
+
+class TestTheCodeOfConductNamesItsContact:
+    """C7.5. The Contributor Covenant 2.1, with its one placeholder filled by the user's
+    choice of contact: the project maintainer, Kshitij Kumar, as a named person with no
+    address (JOSS and community practice prefer a reachable address; to be added)."""
+
+    def test_the_covenant_is_present_and_complete(self) -> None:
+        text = (REPO_ROOT / "CODE_OF_CONDUCT.md").read_text(encoding="utf-8")
+        assert text.lstrip().startswith("# Contributor Covenant Code of Conduct")
+        assert "version 2.1" in text
+        assert "[INSERT" not in text
+        assert "the project maintainer, Kshitij Kumar" in text
+
+    def test_contributing_points_to_it(self) -> None:
+        assert "CODE_OF_CONDUCT.md" in (REPO_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
