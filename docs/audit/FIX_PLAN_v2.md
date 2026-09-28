@@ -1286,7 +1286,7 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 184 | LOW | — (found at C7.5) | open (source choice) | **FIXED** `f810214`; decided by user |
 | 185 | LOW | — (Phase 8, user run) | C8.1a | **FIXED** `5b8bfc0`; C8.1a |
 | 186 | LOW | — (Phase 8, user run) | C8.1b (physics decision pending) | |
-| 187 | LOW | — (Phase 8, user run) | C8.1c | |
+| 187 | LOW | — (Phase 8, user run) | C8.1c | **FIXED** `92197e5`; C8.1c |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
