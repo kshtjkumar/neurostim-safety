@@ -732,3 +732,35 @@ class TestTheCounterMatchesTheActiveGeometry:
         for shape, (_, fields) in SHAPES.items():
             window.shape_combo.setCurrentText(shape)
             assert list(window._counter_widgets) == [name for name, *_ in fields], shape
+
+
+@pytest.mark.parametrize("worst", ["", "0" * 64])
+def test_the_pdf_prints_the_digest_on_one_line(tmp_path, monkeypatch, worst):
+    """Ledger 196 (Phase 8 review m5): the 64-hex digest wrapped onto a second line, so a
+    copied hash was broken. In 8.5 pt Helvetica the digits are the widest hex glyphs, so
+    only a digit-heavy digest wrapped; "0" * 64 is the worst case, forced in by replacing
+    the record's digest, beside the real one."""
+    import dataclasses
+    import shutil
+    import subprocess
+
+    if shutil.which("pdftotext") is None:
+        pytest.skip("pdftotext (poppler) not available")
+    from neurostim import RingElectrode, SafetyCalculator, StimProtocol, audit
+    from neurostim.io.report import build_report
+
+    if worst:
+        real = audit.record
+        monkeypatch.setattr(
+            audit, "record", lambda *a, **k: dataclasses.replace(real(*a, **k), digest=worst)
+        )
+    calc = SafetyCalculator(
+        RingElectrode(330.0, 215.0, "SS316LVM"), StimProtocol(40.0, 100.0, 130.0, 2.0),
+        compliance_V=7.0,
+    )
+    digest = audit.record(calc).digest
+    out = build_report(calc, tmp_path / "r.pdf")
+    text = subprocess.run(
+        ["pdftotext", "-layout", str(out), "-"], capture_output=True, text=True, check=True
+    ).stdout
+    assert any(digest in line for line in text.splitlines())

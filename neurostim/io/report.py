@@ -179,7 +179,7 @@ def _styles() -> dict[str, ParagraphStyle]:
 
 
 def _kv_table(
-    rows: list[tuple[str, str]], styles, widths=(58 * mm, 108 * mm)
+    rows: list[tuple[str, str]], styles, widths=(58 * mm, 108 * mm), mono=frozenset()
 ) -> Table:
     """Two-column table whose value cells are Paragraphs, not raw strings.
 
@@ -189,9 +189,14 @@ def _kv_table(
     row truncated mid-word at "on 0.016 cm^2, geo". Wrapping the value in a Paragraph
     fixes both. The key column stays a plain string so the table-level bold FONTNAME
     still applies to it.
+
+    Values of the keys in ``mono`` are set in the monospace style. The 64-hex digest
+    needs it: in the 8.5 pt body face a digit-heavy digest ran past the value column and
+    its last characters wrapped, so a copied hash was broken (ledger 196). Courier 7.4 pt
+    is 64 x 0.6 x 7.4 = 284 pt for any digest, inside the 294 pt the cell leaves.
     """
     table = Table(
-        [[k, Paragraph(v, styles["body"])] for k, v in rows],
+        [[k, Paragraph(v, styles["mono" if k in mono else "body"])] for k, v in rows],
         colWidths=list(widths),
         hAlign="LEFT",
     )
@@ -585,7 +590,7 @@ def build_report(
     story.append(Paragraph("Settings", styles["h2"]))
     story.append(_kv_table(_settings_rows(calc), styles))
     story.append(Paragraph("Reproducibility", styles["h2"]))
-    story.append(_kv_table(_reproducibility_rows(calc), styles))
+    story.append(_kv_table(_reproducibility_rows(calc), styles, mono={"Digest"}))
 
     story.append(Paragraph("Safety checks", styles["h2"]))
     story.append(_checks_table(assessment, styles))

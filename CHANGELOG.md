@@ -102,7 +102,7 @@ is wrong in the unsafe direction:
 
 Each is detailed in its own entry below.
 
-### Butterwick's size regime uses the larger of two diameters
+### Butterwick's threshold is the lower of the two diameters' thresholds
 
 Below 200 µm, Butterwick's current-density threshold rises as d⁻², so a smaller d raises
 the threshold. The package took d as the equal-area diameter for every shape. A ring
@@ -134,6 +134,13 @@ A/cm^2", or "diameter 150 um: d^-2 from the large-electrode 0.2751 -> 0.4890 A/c
   325.7 → 68.23 µA;
 - rings whose equal-area diameter is already at least 200 µm do not move (314/216 and
   330/215 µm).
+
+### The PDF prints the digest on one line
+
+In the report's 8.5 pt body face the digits are the widest hex characters, so a
+digit-heavy digest ran past the value column and its last characters wrapped onto a
+second line, and a copied hash was broken (ledger 196). The digest is now set in
+Courier 7.4 pt, which fits any 64-character digest. No number moves.
 
 ### The envelope's electrode-area range is cited
 
