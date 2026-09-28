@@ -4193,3 +4193,45 @@ class TestTheCautionGatesHaveTwoSides:
         assert utilisation == pytest.approx(0.7) and status is Status.PASS
         utilisation, status = self._compliance(required / 0.9)
         assert utilisation == pytest.approx(0.9) and status is Status.CAUTION
+
+
+class TestTheComplianceDetailSaysTheCheckStatus:
+    """Ledger 185 (Phase 8, found by running the package). RingElectrode(330, 270,
+    "SS316LVM") at 40 uA / 200 us / 130 Hz with 10 V was a CAUTION check whose detail
+    ended "available 10.000 V -> PASS": the detail judged only the voltage, the check
+    also the monopolar budget. The detail's verdict word is the check's status in every
+    branch."""
+
+    @staticmethod
+    def _cases():
+        from neurostim import RingElectrode
+
+        ring = RingElectrode(330.0, 270.0, "SS316LVM")
+        disc = DiscElectrode(500.0, "Pt")
+        counter = {"counter_electrode": DiscElectrode(900.0, "Pt"), "counter_separation_um": 20000.0}
+        continuous = StimProtocol(80.0, 200.0, 130.0, math.inf, charge_recovery_ratio=0.9)
+        return [
+            ("monopolar CAUTION", ring, StimProtocol(40.0, 200.0, 130.0, 1.0), {"compliance_V": 10.0}),
+            ("counter PASS", disc, StimProtocol(100.0, 200.0, 50.0, 1.0), {"compliance_V": 10.0, **counter}),
+            ("counter CAUTION", disc, StimProtocol(100.0, 200.0, 50.0, 1.0), {"compliance_V": 0.6, **counter}),
+            ("FAIL", disc, StimProtocol(100.0, 200.0, 50.0, 1.0), {"compliance_V": 0.3}),
+            ("unbounded", disc, continuous, {"compliance_V": 10.0, **counter}),
+        ]
+
+    def test_every_branch(self):
+        seen = set()
+        for label, electrode, protocol, settings in self._cases():
+            assessment = SafetyCalculator(electrode, protocol, **settings).assess()
+            check = next(c for c in assessment.checks if c.name == "Compliance voltage")
+            line = next(
+                row for row in check.detail.splitlines() if row.lstrip().startswith("available")
+            )
+            assert line.endswith(f"-> {check.status.value}"), (label, check.status, line)
+            seen.add(check.status.value)
+        assert seen == {"PASS", "CAUTION", "FAIL"}, seen
+
+    def test_the_result_on_its_own_says_the_same(self):
+        for label, electrode, protocol, settings in self._cases():
+            assessment = SafetyCalculator(electrode, protocol, **settings).assess()
+            check = next(c for c in assessment.checks if c.name == "Compliance voltage")
+            assert assessment.compliance.describe() == check.detail, label

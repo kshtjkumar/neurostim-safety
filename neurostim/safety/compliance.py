@@ -141,6 +141,10 @@ from .water_window import (
     validate_resting_potential_V,
 )
 
+CAUTION_UTILISATION = 0.8
+"""Fraction of the compliance above which a passing requirement is CAUTION. The same
+figure as the Compliance voltage check's gate in :mod:`neurostim.safety.assessment`; a
+test holds the two to one verdict."""
 
 def _volts(value_V: float) -> str:
     """A voltage for a detail line, or ``"unbounded"`` for an infinite one (ledger 143)."""
@@ -626,8 +630,7 @@ class ComplianceResult:
         if self.available_V is None:
             lines.append("  available     not specified -> check NOT EVALUATED")
         else:
-            verdict = "PASS" if self.passes else "INSUFFICIENT"
-            lines.append(f"  available     {available_text} V -> {verdict}")
+            lines.append(f"  available     {available_text} V -> {self.verdict}")
             if math.isfinite(self.required_V):
                 lines.append(
                     f"  headroom      {self.headroom_V:+.3f} V "
@@ -645,6 +648,24 @@ class ComplianceResult:
                     f"than commanded"
                 )
         return "\n".join(lines)
+
+    @property
+    def verdict(self) -> str:
+        """The Compliance voltage check's status, as the detail prints it (ledger 185).
+
+        FAIL when the requirement exceeds the compliance; CAUTION when it fits but uses
+        more than :data:`CAUTION_UTILISATION` of it, or when no counter electrode was
+        modelled (the monopolar budget under-estimates a two-terminal pair); PASS
+        otherwise. The detail used to judge the voltage alone, and printed "-> PASS"
+        under a CAUTION check.
+        """
+        if self.available_V is None:
+            return "NOT EVALUATED"
+        if not self.passes:
+            return "FAIL"
+        if self.utilisation > CAUTION_UTILISATION or not self.counter_modelled:
+            return "CAUTION"
+        return "PASS"
 
     @property
     def unbounded_reason(self) -> str:

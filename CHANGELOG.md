@@ -102,6 +102,15 @@ is wrong in the unsafe direction:
 
 Each is detailed in its own entry below.
 
+### The compliance detail says the check's verdict
+
+Take a `RingElectrode(330, 270, "SS316LVM")` at 40 µA, 200 µs per phase and 130 Hz, with
+10 V of compliance. Its Compliance voltage check was CAUTION, because a monopolar budget
+is assumed, but its detail ended "available 10.000 V -> PASS". The detail had judged the
+voltage alone. `ComplianceResult.verdict` now gives the check's own verdict: FAIL, or
+CAUTION (above 80 % of the compliance, or no counter electrode), or PASS. The detail
+prints it in every branch, and "INSUFFICIENT" becomes "FAIL". No number moves.
+
 ### A LICENSE file
 
 The package has always declared MIT in `pyproject.toml` and `CITATION.cff`, and shipped
