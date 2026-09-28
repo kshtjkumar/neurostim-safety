@@ -523,3 +523,62 @@ class TestFreshSeedSurvivors:
 
     def test_touching_intervals_overlap_from_either_side(self) -> None:  # uncertainty.py:121
         assert Interval(1.0, 2.0).overlaps(Interval(0.0, 1.0))
+
+
+class TestOfficialSeedSurvivors:
+    """Ledger 182 (Phase 8, item 4). The survivors of the official seed 20260929 outside
+    strength_duration.py, which item 3 edits. Each test names its site at 02bfdc7 and is
+    checked red under that mutant; the rest are argued in scripts/mutation.py."""
+
+    def test_the_recovery_line_needs_a_partial_biphasic_recovery(self) -> None:  # protocol.py:417
+        assert "charge recovery:" not in StimProtocol(100.0, 200.0, 50.0, 1.0).describe()
+        assert "charge recovery:" in StimProtocol(
+            100.0, 200.0, 50.0, 1.0, charge_recovery_ratio=0.9
+        ).describe()
+
+    def test_a_cap_equal_to_the_checks_does_not_bind(self) -> None:  # assessment.py:568
+        # Ta2O5, 100 um, monophasic: the biphasic cap and the protocol's own ceiling are
+        # both the 4 nC/phase microelectrode ceiling, 20 uA at 200 us.
+        assessment = SafetyCalculator(
+            DiscElectrode(100.0, "Ta2O5"), StimProtocol(10.0, 200.0, 130.0, 1.0, waveform="monophasic")
+        ).assess()
+        assert assessment.biphasic_ceiling_uA == pytest.approx(20.0)
+        assert assessment.biphasic_ceiling_uA == assessment._check_ceiling_uA
+        assert not assessment.monotonicity_capped
+
+    def test_the_cic_current_is_the_last_float_that_passes(self) -> None:  # charge.py:101
+        from neurostim.units import charge_uC
+
+        current = charge.cic_max_current_uA("Pt", 0.001, 200.0)
+        limit = get_material("Pt").cic_uC_cm2("conservative", None)
+        assert charge.charge_density_uC_cm2(charge_uC(current, 200.0), 0.001) <= limit
+        above = math.nextafter(current, math.inf)
+        assert charge.charge_density_uC_cm2(charge_uC(above, 200.0), 0.001) > limit
+
+    def test_the_no_amplitude_line_only_when_the_ceiling_is_zero(self) -> None:  # compliance.py:636
+        result = SafetyCalculator(
+            DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 50.0, 1.0), compliance_V=10.0
+        ).assess().compliance
+        assert result.max_current_uA > 0.0
+        assert "no amplitude of this protocol" not in result.describe()
+
+    @pytest.mark.parametrize("lead", [-1.0, math.nan, math.inf])
+    def test_a_lead_resistance_must_be_finite_and_non_negative(self, lead: float) -> None:  # compliance.py:698
+        from neurostim.safety import compliance
+
+        with pytest.raises(ValueError, match="lead_resistance_ohm"):
+            compliance.evaluate(
+                DiscElectrode(500.0, "Pt"), StimProtocol(100.0, 200.0, 50.0, 1.0),
+                lead_resistance_ohm=lead,
+            )
+
+    def test_exactly_twice_the_reference_is_not_outside(self) -> None:  # envelope.py:107
+        excursion = envelope.Excursion(
+            parameter="pulse width", value=800.0, reference=400.0, units="us", direction="unknown"
+        )
+        assert excursion.fold == 2.0 and not excursion.outside
+        assert replace(excursion, value=801.0).outside
+
+    def test_an_infinite_mean_with_no_spread(self) -> None:  # uncertainty.py:81
+        interval = Interval.from_mean_sd(math.inf, 0.0)
+        assert interval.low == math.inf and interval.high == math.inf
