@@ -1127,3 +1127,19 @@ class TestTheApiReferenceBuilds:
         pyproject = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         assert '"pdoc==' in pyproject
         assert "docs/api/" in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+
+
+class TestTheLicenceIsTheOneTheMetadataDeclares:
+    """C7.1 (packaging, CRITICAL). pyproject and CITATION have always said MIT; there was
+    no LICENSE file. Holder and year are the user's: Kshitij Kumar, 2026."""
+
+    def test_the_mit_licence_is_present_with_its_holder(self) -> None:
+        text = (REPO_ROOT / "LICENSE").read_text(encoding="utf-8")
+        assert text.startswith("MIT License\n\nCopyright (c) 2026 Kshitij Kumar\n")
+        assert "Permission is hereby granted, free of charge" in text
+        assert 'THE SOFTWARE IS PROVIDED "AS IS"' in text
+        assert "<year>" not in text and "<copyright holders>" not in text
+
+    def test_the_metadata_agrees(self) -> None:
+        assert 'license = { text = "MIT" }' in (REPO_ROOT / "pyproject.toml").read_text()
+        assert "\nlicense: MIT\n" in (REPO_ROOT / "CITATION.cff").read_text()

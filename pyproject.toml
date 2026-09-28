@@ -9,6 +9,7 @@ description = "Electrode safety and stimulation modelling for neural interfaces,
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [{ name = "Kshitij Kumar" }]
 keywords = [
     "neurostimulation",
     "electrode",

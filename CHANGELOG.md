@@ -102,6 +102,12 @@ is wrong in the unsafe direction:
 
 Each is detailed in its own entry below.
 
+### A LICENSE file
+
+The package has always declared MIT in `pyproject.toml` and `CITATION.cff`, and shipped
+no licence text. `LICENSE` is now the SPDX MIT text, Copyright (c) 2026 Kshitij Kumar.
+`pyproject.toml` names the author.
+
 ### An API reference, generated from the docstrings
 
 `python scripts/build_api_docs.py` renders every module's docstrings to

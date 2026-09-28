@@ -398,4 +398,4 @@ because a hand-written list here fell eleven sources behind the code.
 
 ## Licence
 
-MIT.
+MIT, in `LICENSE`. Copyright (c) 2026 Kshitij Kumar, Indian Institute of Technology Kanpur.
