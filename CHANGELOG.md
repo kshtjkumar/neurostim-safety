@@ -155,6 +155,43 @@ digit-heavy digest ran past the value column and its last characters wrapped ont
 second line, and a copied hash was broken (ledger 196). The digest is now set in
 Courier 7.4 pt, which fits any 64-character digest. No number moves.
 
+### The Lapicque fit is weighted by threshold, and its coverage is measured across chronaxies
+
+The coverage figures of ledger 183 held only at the one chronaxie the grid simulated,
+200 µs (Phase 8 review M1, ledger 191). At a 50 µs chronaxie, widths 20–3200 µs covered
+0.832 at 20 % noise, with no caveat. Threshold noise is proportional to the threshold,
+so the unweighted fit over-weighted the short widths and its covariance assumed the
+wrong error model. `fit_lapicque` now weights each point by its threshold (relative
+error). The grid now spans chronaxies 50, 100, 200 and 500 µs, and was run on two seeds,
+191 (`docs/audit/lapicque_coverage.txt`) and 192 (`lapicque_coverage_seed192.txt`).
+Coverage over those 16 cells of each design:
+
+- 50–800 µs 0.943–0.985 and 20–3200 µs 0.918–0.963 (20–3200 at 50 µs, 20 %: 0.832 →
+  0.928);
+- 400–3200 µs 0.687–1.000. It spans exactly 8× and carries no caveat, but covers only
+  about 0.69 at a 50 µs chronaxie and 20 % noise, where every width is at least 8× the
+  chronaxie. This is not a weighting effect (unweighted, 0.687), and it is not fixed
+  here: spread the widths across the chronaxie;
+- the narrow designs, which carry the caveat: 50–200 µs 0.725–0.988, and 2000–8000 µs
+  from 0.211 (seed 191) or 0.145 (seed 192) to 1.000.
+
+The quoted "0.79–1.00" was one seed's value at one chronaxie and does not reproduce
+(ledger 192). The caveat now quotes no floor: coverage "can fall far below nominal at
+high noise (below 0.25 in the validation grid)", which holds on both seeds.
+
+An interval whose upper end is infinite, or more than `VACUOUS_RATIO` (1000) times its
+lower end, used to print as "95 % CI 0-inf us" and was counted as covering (ledger 193).
+It is still reported, with a caveat saying it does not bound the chronaxie. The grid
+counts such intervals apart and leaves them out of the coverage: up to 64 % of the
+accepted fits in a 50–200 µs cell.
+
+**Movers:** every Lapicque fit's rheobase, chronaxie, SEs and interval. On 50–800 µs at
+5 % noise and a 200 µs chronaxie, the chronaxie moves by a median 6.1 % (at most 27.9 %)
+and the rheobase by a median 4.1 % (at most 22.8 %) over 600 seeded replicates. On the
+test data 50–800 µs, thresholds 82.5 / 49.0 / 34.6 / 25.7 / 22.3 µA: chronaxie 102.46 →
+109.86 µs, rheobase 23.88 → 23.09 µA, 95 % CI 81.8–128.3 → 86.4–139.8 µs. Weiss is
+unchanged.
+
 ### The envelope's electrode-area range is cited
 
 `envelope.AREA_RANGE_CM2 = (0.01, 0.5)` cm² had no citation (ledger 174). It is the range
@@ -590,7 +627,9 @@ unchanged.
   A design whose widths span less than 8× now carries `coverage_caveat`, quoting its
   measured 0.79–1.00. `scripts/lapicque_coverage.py` measures the whole grid, and its
   output is committed at `docs/audit/lapicque_coverage.txt`:
-  - every design without the caveat covers ≥ 0.935 at 2–20 % noise;
+  - every design without the caveat covers ≥ 0.935 at 2–20 % noise. Both figures held
+    only at the one chronaxie simulated, 200 µs; they are corrected in "The Lapicque fit
+    is weighted by threshold" below (ledgers 191, 192);
   - informative designs are withheld ≤ 0.6 %;
   - when the upper end would overflow, it is reported as infinite rather than dropped.
 

@@ -1169,7 +1169,7 @@ class TestTheLapicqueIntervalIsLogScaleWithANarrowDesignCaveat:
     """Ledger 183, user decision (L). The Lapicque 95 % interval is c * exp(+/- t se / c):
     positive and asymmetric, as a chronaxie is. Rule A still withholds one lying below
     every width (judged on the linear interval, as validated). A design whose widths span
-    less than 8x carries a caveat quoting its measured coverage, 0.79-1.00; the grid is
+    less than 8x carries a caveat on its measured coverage; the grid is
     scripts/lapicque_coverage.py and its committed output. Weiss is unchanged."""
 
     WIDTHS = np.array([50.0, 100.0, 200.0, 400.0, 800.0])
@@ -1202,7 +1202,22 @@ class TestTheLapicqueIntervalIsLogScaleWithANarrowDesignCaveat:
         widths = np.array([50.0, 100.0, 150.0, 200.0])
         fit = sd.fit_lapicque(widths, np.array([82.0, 50.5, 41.0, 34.8]))
         assert fit.chronaxie_ci95_us is not None
-        assert "span 4x < 8x" in fit.coverage_caveat and "0.79-1.00" in fit.coverage_caveat
+        # G12 (C8b.3, ledger 192): this pinned the quoted "0.79-1.00", one seed's value at
+        # one chronaxie that did not reproduce; the caveat now quotes no floor.
+        assert "span 4x < 8x" in fit.coverage_caveat
+        assert "far below nominal" in fit.coverage_caveat
         assert fit.coverage_caveat in fit.describe()
         wide = sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS)
         assert wide.coverage_caveat == "" and "span" not in wide.describe()
+
+    def test_an_interval_that_does_not_bound_the_chronaxie_says_so(self):
+        """Ledger 193 (Phase 8 review m2): a "95 % CI 0-inf us" was reported as if it
+        were an interval. One wider than VACUOUS_RATIO now carries a caveat saying it
+        does not bound the chronaxie (20 % noise on 50-800 us, a 200 us chronaxie)."""
+        fit = sd.fit_lapicque(self.WIDTHS, np.array([183.36, 77.9, 43.45, 30.2, 10.87]))
+        assert fit.chronaxie_ci95_us is not None
+        low, high = fit.chronaxie_ci95_us
+        assert high > sd.VACUOUS_RATIO * low
+        assert "does not bound the chronaxie" in fit.coverage_caveat
+        assert "narrow design" not in fit.coverage_caveat
+        assert fit.coverage_caveat in fit.describe()

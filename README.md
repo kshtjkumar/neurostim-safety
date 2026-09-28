@@ -139,7 +139,8 @@ Plus models, each documenting its own validity range:
   95 % interval on the chronaxie (calibrated for Weiss; Lapicque's can under-cover on
   designs whose widths do not span the chronaxie, and is withheld, with the reason, when
   every width is far above it or the whole interval lies below the shortest width; the
-  Lapicque interval is log-scale, and a design spanning under 8x carries a coverage caveat)
+  Lapicque fit is weighted by threshold and its interval is log-scale; a design spanning
+  under 8x, or an interval spanning over 1000x, carries a coverage caveat)
 - **VTA** — current–distance activation radius (the weakest model here; read its docstring)
 
 Geometries: disc, ring, rectangle, cylindrical band, microwire (flat/hemispherical/conical

@@ -82,12 +82,14 @@ class TestReportedValuesAreTheirDefinitions:
         thresholds = np.array([82.0, 50.0, 34.0, 26.0, 22.0])
         fit = sd.fit_lapicque(widths, thresholds)
         # An independent curve_fit from the converged point: its covariance at the same
-        # optimum gives tau's SE directly.
+        # optimum gives tau's SE directly. G12 (C8b.3, ledger 191): the fit is weighted by
+        # threshold (relative error), so the independent one is too.
         _, pcov = curve_fit(
             lambda w, r, t: r / (1.0 - np.exp(-w / t)),
             widths,
             thresholds,
             p0=[fit.rheobase_uA, fit.membrane_tau_us],
+            sigma=thresholds,
         )
         assert fit.chronaxie_se_us == pytest.approx(
             math.log(2.0) * math.sqrt(pcov[1, 1]), rel=1e-3
@@ -233,17 +235,23 @@ class TestALapicqueFitCanNeedMoreThanTwentyEvaluations:
     evaluations at the default. The generated mutant ``* -> /`` leaves it 20, and survived
     because no test fitted a design that needs more. This one does: at ``max_iter=2``
     (the same 20) curve_fit gives up. The default must converge to the least-squares
-    minimum, checked against an independent ``least_squares`` solve from another start."""
+    minimum, checked against an independent ``least_squares`` solve from another start.
+
+    G12 (C8b.3, ledger 191): the fit is now weighted by threshold, and the weighted fit of
+    the old data converges within 20 evaluations, so the premise no longer held. These
+    thresholds (20 % noise on a 1563 us tau, seed 176) need more than 20 weighted, and the
+    independent solve minimises the same relative residual."""
 
     WIDTHS = np.array([50.0, 100.0, 200.0, 400.0, 800.0, 1600.0])
-    THRESHOLDS = np.array([114.739, 66.021, 42.949, 30.284, 16.124, 13.143])
+    THRESHOLDS = np.array([669.473, 298.506, 203.124, 104.063, 44.998, 34.287])
 
     def test_the_default_converges_to_the_minimum(self) -> None:
         from scipy.optimize import least_squares
 
         fit = sd.fit_lapicque(self.WIDTHS, self.THRESHOLDS)
         independent = least_squares(
-            lambda p: p[0] / (1.0 - np.exp(-self.WIDTHS / p[1])) - self.THRESHOLDS,
+            lambda p: (p[0] / (1.0 - np.exp(-self.WIDTHS / p[1])) - self.THRESHOLDS)
+            / self.THRESHOLDS,
             x0=[10.0, 1000.0],
             bounds=([1e-9, 1e-9], [np.inf, np.inf]),
             xtol=1e-14, ftol=1e-14, gtol=1e-14, max_nfev=100_000,

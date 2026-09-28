@@ -102,7 +102,9 @@ published ones, with their known weaknesses:
     of its survivors are untested behaviour (ledger 188).
   - The Lapicque confidence interval is withheld when it lies below every width tested,
     and carries a caveat on designs spanning less than 8x, where its measured coverage
-    is 0.79-1.00 (ledger 183).
+    can fall below 0.25 at high noise (ledger 183; measured in ledger 192). A design
+    spanning 8x or more with every width well above the chronaxie can still under-cover
+    (about 0.69 in the validation grid) without a caveat.
   - Three data gaps have no source: TIROF's and SS316LVM's pulse widths, and Ta₂O₅'s
     water window.
 - **Values not verified against their primary source.**
