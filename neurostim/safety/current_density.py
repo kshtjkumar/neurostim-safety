@@ -299,21 +299,42 @@ class CurrentDensityResult:
 
 
 
-def butterwick_size_um(electrode: Electrode) -> tuple[float, str]:
-    """The size Butterwick's regime is judged at, and what it measures (ledger 186).
+def butterwick_size_candidates(electrode: Electrode) -> tuple[tuple[float, str], ...]:
+    """The sizes Butterwick's threshold is evaluated at, each with what it measures.
 
-    Below 200 um the threshold rises as ``d^-2``, so a larger ``d`` gives the lower,
-    conservative threshold. A non-disc shape has no single diameter; the threshold is
-    the minimum over its equal-area diameter and its
-    :attr:`~neurostim.geometry.base.Electrode.largest_dimension_um`, which is the
-    threshold at the larger of the two. For a disc they are equal. A ring or rectangle
-    takes its outer extent. A sphere takes its equal-area diameter, twice its own.
+    A non-disc shape has no single diameter, so the threshold is the **minimum** of the
+    full threshold at its equal-area diameter and at its
+    :attr:`~neurostim.geometry.base.Electrode.largest_dimension_um` (ledgers 186, 189). Both
+    are computed completely, including the single-pulse relief, which is gated on size
+    (none below 200 um, ledger 154). Judging the size at the larger diameter alone
+    switched that relief on for rings and rectangles under 50 pulses and raised their
+    threshold up to 7x. A disc's two sizes coincide and give one candidate.
     """
     equal_area = 2.0 * electrode.equivalent_radius_um
     largest = electrode.largest_dimension_um
-    if largest >= equal_area:
-        return largest, electrode.largest_dimension_kind
-    return equal_area, "equal-area diameter"
+    candidates = [(equal_area, "equal-area diameter")]
+    if abs(largest - equal_area) > 1e-9 * max(largest, equal_area):
+        candidates.append((largest, electrode.largest_dimension_kind))
+    else:
+        candidates = [(largest, electrode.largest_dimension_kind)]
+    return tuple(candidates)
+
+
+def _lowest_comparison(
+    applied: float,
+    pulse_width_us: float,
+    candidates: tuple[tuple[float | None, str], ...],
+    n_pulses: int,
+) -> butterwick2007.ThresholdComparison:
+    """The comparison at whichever candidate size gives the lowest threshold."""
+    comparisons = [
+        butterwick2007.compare(
+            applied, pulse_width_us, size, n_pulses=n_pulses, diameter_kind=kind
+        )
+        for size, kind in candidates
+    ]
+    return min(comparisons, key=lambda c: c.threshold_A_per_cm2)
+
 
 def evaluate(
     current_uA: float,
@@ -323,6 +344,7 @@ def evaluate(
     recessed: bool = False,
     diameter_um: float | None = None,
     diameter_kind: str = "diameter",
+    size_candidates: tuple[tuple[float, str], ...] | None = None,
     n_pulses: int = butterwick2007.PULSE_COUNT_SATURATION,
     return_phase_current_uA: float = 0.0,
     return_phase_width_us: float = 0.0,
@@ -339,21 +361,20 @@ def evaluate(
     moves no number the threshold comparison uses. ``None`` reports the disc's, as before.
     """
     applied = average_current_density_A_per_cm2(current_uA, area_cm2)
-    comparison = butterwick2007.compare(
-        applied, pulse_width_us, diameter_um, n_pulses=n_pulses, diameter_kind=diameter_kind
+    # ``size_candidates`` (from :func:`butterwick_size_candidates`) takes precedence over a
+    # single ``diameter_um``: the threshold is the lowest over them (ledger 189).
+    candidates: tuple[tuple[float | None, str], ...] = size_candidates or (
+        (diameter_um, diameter_kind),
     )
+    comparison = _lowest_comparison(applied, pulse_width_us, candidates, n_pulses)
     return_applied = 0.0
     return_comparison = None
     if return_phase_current_uA > 0.0 and return_phase_width_us > 0.0:
         return_applied = average_current_density_A_per_cm2(
             return_phase_current_uA, area_cm2
         )
-        return_comparison = butterwick2007.compare(
-            return_applied,
-            return_phase_width_us,
-            diameter_um,
-            n_pulses=n_pulses,
-            diameter_kind=diameter_kind,
+        return_comparison = _lowest_comparison(
+            return_applied, return_phase_width_us, candidates, n_pulses
         )
     distribution = primary_distribution(electrode)
     if recessed:

@@ -588,8 +588,9 @@ class TestTheButterwickSizeIsTheLargerOfTwoDiameters:
     """Ledger 186 (Phase 8, user decision C). Below 200 um Butterwick's threshold rises as
     d^-2, and a larger d gives a lower threshold. A non-disc shape has no single diameter,
     so the threshold is the minimum over the equal-area diameter and the largest
-    dimension: the threshold at the larger of the two. The detail names the diameter, its
-    kind and the unscaled large-electrode value."""
+    dimension, each computed in full (ledger 189; G12: this said "the threshold at the
+    larger of the two", which is not the minimum below 50 pulses). The detail names the
+    diameter, its kind and the unscaled large-electrode value."""
 
     def test_the_largest_dimension_of_each_geometry(self) -> None:
         from neurostim import (
@@ -660,3 +661,58 @@ class TestOfficialSeedStrengthDurationSurvivors:
     def test_a_non_positive_rheobase_is_refused(self, bad: float) -> None:  # sd:370
         with pytest.raises(ValueError, match="rheobase_uA"):
             sd.lapicque_threshold_uA(100.0, bad, 200.0)
+
+
+class TestTheButterwickThresholdIsTheMinimumOverBothDiameters:
+    """Ledger 189 (Phase 8 review B1). 186 judged the size at the larger diameter. The
+    single-pulse relief is gated on size (none below 200 um, ledger 154), so for fewer than
+    50 pulses a ring or rectangle whose largest dimension crossed 200 um gained up to 7x of
+    relief: the review found 163 of 1728 limiting currents raised. The threshold is now
+    literally the minimum of the full threshold (relief gate included) at the equal-area
+    diameter and at the largest dimension, so it can never exceed the pre-186 value."""
+
+    @staticmethod
+    def _geometries():
+        from neurostim import (
+            CylindricalBandElectrode,
+            MicrowireElectrode,
+            RectangularElectrode,
+            RingElectrode,
+        )
+
+        return [
+            RingElectrode(330.0, 270.0, "Pt"), RingElectrode(250.0, 200.0, "Pt"),
+            RingElectrode(210.0, 126.0, "Pt"), RingElectrode(500.0, 300.0, "Pt"),
+            RectangularElectrode(190.0, 60.0, "Pt"), RectangularElectrode(150.0, 120.0, "Pt"),
+            RectangularElectrode(30.0, 40.0, "Pt"),
+            CylindricalBandElectrode(100.0, 150.0, "PtIr"), CylindricalBandElectrode(1270.0, 1500.0, "PtIr"),
+            MicrowireElectrode(50.0, 120.0, "flat"), MicrowireElectrode(25.0, 0.0, "hemispherical"),
+        ]
+
+    def test_never_above_the_equal_area_threshold(self) -> None:
+        from neurostim.data import butterwick2007 as bw
+        from neurostim.safety import current_density as jd
+
+        for electrode in self._geometries():
+            d_eq = 2.0 * electrode.equivalent_radius_um
+            for n in (1, 2, 10, 49, 50, 130):
+                for pw in (10.0, 100.0, 200.0, 1000.0):
+                    result = jd.evaluate(
+                        10.0, electrode.area_cm2, pw, n_pulses=n,
+                        size_candidates=jd.butterwick_size_candidates(electrode),
+                    )
+                    pre = bw.threshold_A_per_cm2(pw, d_eq, n_pulses=n)
+                    assert result.threshold is not None
+                    both = min(pre, bw.threshold_A_per_cm2(pw, electrode.largest_dimension_um, n_pulses=n))
+                    assert result.threshold.threshold_A_per_cm2 == both <= pre, (electrode, n, pw)
+
+    def test_the_reviewers_ring_keeps_its_single_pulse_ceiling(self) -> None:
+        from neurostim import RingElectrode
+
+        # Pt ring 330/270, 80 uA, 100 us, one pulse: 117.48 uA before 186, 740 after it.
+        assessment = SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"), StimProtocol(80.0, 100.0, 130.0, 1.0 / 130.0)
+        ).assess()
+        check = next(c for c in assessment.checks if c.name == "Current density")
+        assert check.ceiling_uA == pytest.approx(117.48, rel=1e-4)
+        assert "equal-area diameter 189.7 um" in check.detail

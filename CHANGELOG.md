@@ -111,8 +111,12 @@ large-electrode 0.2751 to 0.3056 A/cm², although the ring is 330 µm across. Th
 threshold is now the minimum over the equal-area diameter and the shape's largest
 dimension (`Electrode.largest_dimension_um`): the diameter for a disc, sphere or
 hemisphere, the outer diameter for a ring, the diagonal for a rectangle, and the
-enclosing-sphere diameter for a band or microwire. In practice that is the threshold at
-the larger of the two. The detail names the diameter used and what it is, with the
+enclosing-sphere diameter for a band or microwire. Both thresholds are computed in full
+and the lower is taken (ledger 189). The first version took the threshold at the larger
+diameter alone. That is the same thing at 50 or more pulses, but not below 50: the
+single-pulse relief is withheld below 200 µm (ledger 154), so moving the size across
+200 µm switched the relief on. It raised a ring's single-pulse ceiling up to 7×, and 163
+of 1728 limiting currents in the Phase 8 review grid. The detail names the diameter used and what it is, with the
 unscaled value: "outer diameter 330 um >= 200 um: large-electrode threshold 0.2751
 A/cm^2", or "diameter 150 um: d^-2 from the large-electrode 0.2751 -> 0.4890 A/cm^2".
 
@@ -122,7 +126,12 @@ A/cm^2", or "diameter 150 um: d^-2 from the large-electrode 0.2751 -> 0.4890 A/c
 - a 100×300 µm rectangle goes from 0.2880 to 0.2751 A/cm²;
 - in the README worked example (Pt ring 330/270 µm at 80 µA), the Current density
   check goes from CAUTION (92.6 %) to **FAIL** (0.2829 against 0.2751 A/cm²);
-- no limiting current changes in any of these cases, and no preset moves;
+- no limiting current changes in these saturated (130-pulse) cases, and no preset moves;
+- over a 1296-case grid (ring and rectangle outer size 150–500 µm, all 9 materials,
+  10/100/1000 µs, 1/5/20/130 pulses at 50 Hz), compared with the release before 186
+  (cda2133): **no limiting current and no current-density ceiling rises**. 199 limiting
+  currents and 513 ceilings fall. The largest fall is a Pt ring 210/189 µm at 10 µs:
+  325.7 → 68.23 µA;
 - rings whose equal-area diameter is already at least 200 µm do not move (314/216 and
   330/215 µm).
 
