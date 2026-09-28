@@ -1183,3 +1183,57 @@ class TestTheCodeOfConductNamesItsContact:
 
     def test_contributing_points_to_it(self) -> None:
         assert "CODE_OF_CONDUCT.md" in (REPO_ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+
+
+class TestThePaper:
+    """C7.5. The JOSS paper: the author block the user gave, a bibliography of exactly the
+    sources cited (each with a DOI, verified before it was written), and the limitations
+    the record holds open. ORCID, repository URL and DOI are intentionally absent."""
+
+    @staticmethod
+    def _paper() -> str:
+        return (REPO_ROOT / "paper.md").read_text(encoding="utf-8")
+
+    @staticmethod
+    def _bib_keys() -> set[str]:
+        import re
+
+        bib = (REPO_ROOT / "paper.bib").read_text(encoding="utf-8")
+        return set(re.findall(r"^@\w+\{([^,]+),", bib, flags=re.M))
+
+    def test_the_front_matter(self) -> None:
+        front = self._paper().split("---")[1]
+        assert "  - name: Kshitij Kumar\n    affiliation: 1\n    corresponding: true\n" in front
+        assert "  - name: Indian Institute of Technology Kanpur, India\n    index: 1\n" in front
+        assert "bibliography: paper.bib" in front
+        assert "orcid" not in front.lower()
+
+    def test_the_bibliography_is_exactly_what_is_cited(self) -> None:
+        import re
+
+        cited = set(re.findall(r"@([A-Za-z][\w]*)", self._paper().split("---", 2)[2]))
+        assert cited == self._bib_keys()
+
+    def test_every_entry_has_a_doi(self) -> None:
+        import re
+
+        bib = (REPO_ROOT / "paper.bib").read_text(encoding="utf-8")
+        entries = re.split(r"\n(?=@)", bib.strip())
+        entries = [e for e in entries if e.startswith("@")]
+        assert len(entries) == len(self._bib_keys())
+        for entry in entries:
+            assert re.search(r"doi\s*=\s*\{10\.\d{4,}/", entry), entry.splitlines()[0]
+
+    def test_the_sections_and_length(self) -> None:
+        import re
+
+        body = self._paper().split("---", 2)[2]
+        for heading in ("# Summary", "# Statement of need", "# Limitations", "# References"):
+            assert heading in body, heading
+        assert 250 <= len(re.findall(r"\b\w+\b", body)) <= 1000  # JOSS's guidance
+
+    def test_the_limitations_are_the_open_ones(self) -> None:
+        text = " ".join(self._paper().split())
+        for item in ("ledger 174", "ledger 182", "ledger 183", "@weiland2002", "@itis_v42",
+                     "@riedy_walter1996", "references 5 and 8", "provisional"):
+            assert item in text, item

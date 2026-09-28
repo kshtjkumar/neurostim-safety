@@ -123,6 +123,23 @@ placeholder. Reports go to the project maintainer, Kshitij Kumar. No address is 
 now; community and JOSS practice prefer a reachable one, and it will be added.
 `CONTRIBUTING.md` points to the code.
 
+### A JOSS paper
+
+`paper.md` and `paper.bib` describe the package, how it was verified, and what is still
+open:
+- the provisional flags;
+- ledgers 174, 182 and 183;
+- the three data gaps;
+- the values not verified against their primary source: titanium nitride's limit
+  (Weiland et al. 2002, taken through Cogan's table), the IT'IS database attribution,
+  and Riedy & Walter's references 5 and 8.
+
+The bibliography holds exactly the 14 sources the paper cites. Each DOI was resolved and
+checked against its Crossref or DataCite record. That check found the package's IT'IS
+citation disagreeing with the record its DOI resolves to; this is ledger 184. The paper
+names Kshitij Kumar, Indian Institute of Technology Kanpur, as sole and corresponding
+author. It gives no ORCID, repository or DOI, because none is assigned.
+
 ### An API reference, generated from the docstrings
 
 `python scripts/build_api_docs.py` renders every module's docstrings to
