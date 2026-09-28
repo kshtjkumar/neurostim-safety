@@ -758,7 +758,10 @@ REFERENCES: dict[str, Reference] = {
             "Values read from materialparameterdatabasecurrent20250821.xls, the "
             "release current at 2026-08. Each entry carries an average, standard "
             "deviation, sample size and range aggregated over the primary "
-            "literature, which is why it is preferred here over single-paper values."
+            "literature, which is why it is preferred here over single-paper values. "
+            "The DOI's registry (DataCite) record lists the author as IT'IS Foundation "
+            "and the year as 2024 ('Tissue Properties Database V4.2'); this attribution, "
+            "Hasgall et al. 2025, V4.2, is kept by the maintainer's decision (ledger 184)."
         ),
     ),
     "pennes1948": _ref(

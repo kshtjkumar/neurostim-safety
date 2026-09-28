@@ -136,7 +136,9 @@ open:
 
 The bibliography holds exactly the 14 sources the paper cites. Each DOI was resolved and
 checked against its Crossref or DataCite record. That check found the package's IT'IS
-citation disagreeing with the record its DOI resolves to; this is ledger 184. The paper
+citation, Hasgall et al. 2025, disagreeing with the record its DOI resolves to, IT'IS
+Foundation 2024 (ledger 184). The maintainer decided to keep Hasgall et al. 2025, V4.2.
+The package and the paper now cite it the same way, and each notes the registry record. The paper
 names Kshitij Kumar, Indian Institute of Technology Kanpur, as sole and corresponding
 author. It gives no ORCID, repository or DOI, because none is assigned.
 

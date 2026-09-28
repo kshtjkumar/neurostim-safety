@@ -107,9 +107,9 @@ published ones, with their known weaknesses:
 - **Values not verified against their primary source.**
   - Titanium nitride's charge-injection limit is Cogan's table value; its underlying
     measurement [@weiland2002] was not read from the paper.
-  - The tissue thermal properties come from the IT'IS database [@itis_v42]. The
-    package's citation of that database (authors and year) differs from the record its
-    DOI resolves to.
+  - The tissue thermal properties come from the IT'IS database [@itis_v42], cited as
+    Hasgall et al. (2025). The record its DOI resolves to lists the IT'IS Foundation,
+    2024.
   - Two limits for 316LVM stainless steel rest on sources that @riedy_walter1996 cite as
     their references 5 and 8, which were not read. They are recorded as cited through
     that paper.
