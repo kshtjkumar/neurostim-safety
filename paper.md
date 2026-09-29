@@ -40,7 +40,7 @@ counter electrode adds a tenth check. The number is floored, so the amplitude pr
 passes the checks it names. The package refuses to print a number when no amplitude is
 safe, for example for a waveform that recovers no charge.
 
-Every constant carries its primary source and the conditions it was measured under:
+Every constant carries its source and the conditions it was measured under:
 pulse width, polarity, electrolyte and area. Those conditions follow the value into
 every report. A ceiling taken outside them is flagged as provisional, not silently
 applied. A published range, such as the spread of a material's limit or of Shannon's
@@ -62,8 +62,8 @@ polarity or medium they depend on. A limit measured in saline at 200 µs need no
 tissue at 50 µs; in vivo, platinum's charge-injection capacity is several-fold lower
 [@leung2015]. Tissue and electrode limits can bind in either order, depending on
 electrode size [@cogan2016]. Without a tool, these limits have to be recomputed by hand,
-one at a time. The package gives one reproducible calculation in which every number can
-be traced to a page of a paper.
+one at a time. The package gives one reproducible calculation in which every constant can
+be traced to its source, with gaps listed under Limitations.
 
 Each report carries the package version, every setting, and a SHA-256 digest of the
 inputs, constants and answer. A report can therefore be regenerated and checked.
@@ -79,7 +79,7 @@ repository (`CODE_MISTAKES_LOG.md`, `docs/audit/`). The test suite checks:
   verdicts;
 - models against closed forms and independent finite-difference solutions.
 
-Continuous integration gates branch-point coverage (84.8 %), type checking of the
+Continuous integration gates branch-point coverage (85.8 %), type checking of the
 package and its tests, a provenance audit, and a byte-for-byte check of the README's
 generated transcript. A mutation harness kills all 26 named mutants recovered from the
 audit, and 85.6 % of 160 generated mutants on a seed registered before it was run.
@@ -125,7 +125,7 @@ and Claude Opus 5.5, run through the Claude Code command-line tool) carried out 
 pre-publication audit and most of the subsequent changes: it read the package and its
 primary sources, logged the defects in `CODE_MISTAKES_LOG.md`, planned and wrote the
 fixes, wrote most of the test suite, the mutation harness and the continuous-integration
-configuration, independently reviewed each phase of changes, and drafted the
+configuration, reviewed each phase in separate AI sessions, and drafted the
 documentation and this manuscript. Every AI-assisted commit carries a `Co-Authored-By:
 Claude` trailer, and the audit trail (`docs/audit/`) records each finding, decision and
 review. Modelling and source choices that the literature did not settle were made by the

@@ -25,7 +25,7 @@ it. From an electrode's geometry and material and a protocol's current, pulse wi
 rate, train and charge recovery, it evaluates nine established tissue-damage,
 electrochemical and instrument limits and reports the highest current at which none of
 them fails, or refuses to report one when no current is safe. Every constant carries its
-primary source and the conditions it was measured under, and those conditions travel
+source and the conditions it was measured under, and those conditions travel
 into every report, flagging a limit applied outside them as provisional. Text, PDF,
 JSON, CSV, figure and desktop outputs are provided.
 
@@ -55,8 +55,8 @@ limits. Tissue limits describe the charge that damages neurons, most prominently
 Shannon criterion fitted to McCreery's cat-cortex data [1, 2]. Electrode limits describe
 the charge an electrode can inject reversibly before irreversible Faradaic reactions,
 gas evolution or dissolution begin [3, 4]. Which family binds depends on electrode size
-[5]: large clinical contacts are usually limited by the tissue, microelectrodes by the
-electrode or by a charge-per-phase threshold that the Shannon criterion does not
+[5]: large and small electrodes can be limited by different mechanisms, and
+microelectrodes by a charge-per-phase threshold that the Shannon criterion does not
 capture.
 
 These limits are scattered across the electrochemistry and neurophysiology literature
@@ -69,8 +69,8 @@ measured under without noticing. [AUTHOR: add one or two sentences on why this m
 in your own work — e.g. the rodent motor-cortex microstimulation and MER experiments —
 and what you did before writing the package.]
 
-`neurostim-safety` performs this calculation once, reproducibly, with every number
-traceable to a page of a paper. A user describes the electrode and the protocol; the
+`neurostim-safety` performs this calculation once, reproducibly, with every constant
+traceable to its source; the few values without a primary source are listed openly. A user describes the electrode and the protocol; the
 package evaluates every applicable limit, reports which one binds and at what current,
 and states explicitly when a limit is applied outside the conditions it was measured
 under. The intended users are experimenters designing stimulation protocols, engineers
@@ -103,7 +103,8 @@ recovery.
 *Safety core.* Nine checks are evaluated for every assessment: the Shannon criterion
 [1]; the material charge-injection limit [3, 4]; the water window, including the DC drift
 of an incompletely recovered train; the validated envelope of the data behind the
-Shannon fit; current density against an electroporation threshold [8, 9]; the
+Shannon fit; current density against an electroporation threshold [8], with a clinical DBS
+reference density from [9]; the
 microelectrode charge-per-phase threshold [5]; chronic degradation; charge balance
 [10]; and the stimulator's compliance voltage, optionally with a counter electrode, which
 adds a tenth check on the counter's own charge injection. Each check returns a status,
@@ -205,12 +206,12 @@ experience:]
   rather than assumed; reports record inputs, constants and a digest so that a methods
   section's safety argument can be regenerated.
 - **Correctness and verification**: the package was audited before release, and the
-  full record of findings, fixes and independent reviews is in the repository. The test
+  full record of findings, fixes and AI-assisted review passes is in the repository. The test
   suite (≈1,700 tests) checks constants against their sources, reproduces published
   results from published inputs (for example, the Pennes model gives a 0.83 K peak rise
   for the drive of Elwassif et al. [11] against their finite-element 0.82 K), checks the
   headline limit against an independent search, and is gated in continuous integration
-  on branch coverage (84.8 %) and mutation testing (85.6 % of pre-registered generated
+  on branch coverage (85.8 %) and mutation testing (85.6 % of pre-registered generated
   mutants killed).
 - **Use**: [AUTHOR: your own studies using it (rodent motor-cortex stimulation, MER
   datasets), collaborators or labs using it, any talks or preprints. If the package is
@@ -241,7 +242,7 @@ relationships that could have appeared to influence the work reported in this pa
 [AUTHOR: must be truthful and specific. Suggested wording, edit to match what you did:]
 During the preparation of this work the author used Claude (Anthropic; Claude Opus 5 and
 Opus 5.5, via Claude Code) to audit and repair the software, to write most of its test
-suite and continuous-integration configuration, to review each change independently, and
+suite and continuous-integration configuration, to review each change in separate AI review sessions, and
 to produce an initial draft of this manuscript and its figures. The author substantially
 rewrote the manuscript, made the modelling and source decisions recorded in the
 repository, and reviewed and validated the code and text. After using this tool, the
