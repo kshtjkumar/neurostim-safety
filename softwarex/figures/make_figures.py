@@ -40,6 +40,7 @@ def save(fig, name: str) -> None:
     fig.savefig(OUT / f"{name}.pdf", bbox_inches="tight")
     fig.savefig(OUT / f"{name}.tiff", dpi=600, bbox_inches="tight",
                 pil_kwargs={"compression": "tiff_lzw"})
+    fig.savefig(OUT / f"{name}.png", dpi=300, bbox_inches="tight")  # for the .docx/.pdf
     plt.close(fig)
 
 
@@ -124,4 +125,4 @@ def figure_2() -> None:
 if __name__ == "__main__":
     figure_1()
     figure_2()
-    print("written:", sorted(p.name for p in OUT.iterdir() if p.suffix in {".svg", ".pdf", ".tiff"}))
+    print("written:", sorted(p.name for p in OUT.iterdir() if p.suffix in {".svg", ".pdf", ".tiff", ".png"}))

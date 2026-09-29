@@ -12,7 +12,9 @@ figures/figure2_dbs3389_summary.* (max 6 allowed).
 # neurostim-safety: electrode and tissue safety limits for neural stimulation, each traced to its source
 
 Kshitij Kumar
+
 Indian Institute of Technology Kanpur, India
+
 [AUTHOR: postal address and e-mail for the author line, as the template asks]
 
 ## Abstract
@@ -25,7 +27,7 @@ electrochemical and instrument limits and reports the highest current at which n
 them fails, or refuses to report one when no current is safe. Every constant carries its
 primary source and the conditions it was measured under, and those conditions travel
 into every report, flagging a limit applied outside them as provisional. Text, PDF,
-JSON, CSV, figure and desktop outputs are provided. (≈100 words)
+JSON, CSV, figure and desktop outputs are provided.
 
 ## Keywords
 
