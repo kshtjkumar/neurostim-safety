@@ -36,7 +36,7 @@ Shannon criterion; Python
 
 | Nr | Code metadata description | Metadata |
 |---|---|---|
-| C1 | Current code version | v0.16.0 [AUTHOR: create the GitHub release/tag v0.16.0 before submitting] |
+| C1 | Current code version | v0.16.0 (https://github.com/kshtjkumar/neurostim-safety/releases/tag/v0.16.0) |
 | C2 | Permanent link to code/repository used for this code version | https://github.com/kshtjkumar/neurostim-safety |
 | C3 | Legal code license | MIT License |
 | C4 | Code versioning system used | git |

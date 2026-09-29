@@ -28,7 +28,7 @@ submitted. Submission site: https://www.editorialmanager.com/softx
       breach. AI assistance with the **code** must also be described in detail
       (Elsevier asks for this in a methods-type section; the declaration in the draft
       covers it, so expand if needed).
-- [ ] **Tag the release**: C1 says v0.16.0. Create the GitHub release/tag `v0.16.0`
+- [x] **Tag the release**: done — https://github.com/kshtjkumar/neurostim-safety/releases/tag/v0.16.0
       (I can do this when you say so).
 - [ ] **Archive on Zenodo** (recommended): connect the repo to Zenodo, publish the
       v0.16.0 release, and cite the DOI as reference [12].
