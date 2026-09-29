@@ -1310,6 +1310,8 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 197 | LOW | — (Phase 8b review n1) | open | known limitation, unscheduled: stale Lapicque coverage sentences in two docstrings; MINOR after the final review, so logged not fixed (user rule, Phase 8b) |
 | 198 | LOW | — (Phase 8b review n2, pre-existing) | open | known limitation, unscheduled: numpy scalar inputs crash audit.record/build_report and assess(); loud, never a wrong number; MINOR after the final review, so logged not fixed |
 | 199 | LOW | — (Phase 8b review n3) | open | known limitation, unscheduled: the uncertainty.py:81 'equivalent' judgements are false at k*sd overflow (unreachable from safety paths; score unaffected); MINOR after the final review, so logged not fixed |
+| 200 | MEDIUM | — (first GitHub CI run) | post-publication | fit_weiss intercept refused within float resolution; fit_lapicque seeding kept for that case |
+| 201 | LOW | — (first GitHub CI runs) | post-publication | CI environment: xvfb, numpy pin for mypy, rcParams cast, full-history checkout, Arial on Linux |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING

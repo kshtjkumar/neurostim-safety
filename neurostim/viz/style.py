@@ -22,6 +22,7 @@ file it wrote.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -70,7 +71,7 @@ CATEGORICAL = (
 )
 """Colour-blind-safe categorical sequence for material or geometry comparisons."""
 
-RC_PARAMS = {
+RC_PARAMS: dict[str, Any] = {
     "font.family": "sans-serif",
     "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans", "sans-serif"],
     "svg.fonttype": "none",
@@ -117,7 +118,8 @@ RC_PARAMS = {
 
 def apply_style() -> None:
     """Apply the publication rcParams globally."""
-    mpl.rcParams.update(RC_PARAMS)
+    # cast: matplotlib >= 3.11 types rcParams keys as a Literal of every known name.
+    mpl.rcParams.update(cast(Any, RC_PARAMS))
 
 
 def figure(

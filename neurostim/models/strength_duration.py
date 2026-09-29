@@ -58,6 +58,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
+INTERCEPT_RESOLUTION = math.sqrt(np.finfo(float).eps)
+"""Fraction of the largest threshold charge below which a Weiss intercept is float rounding.
+
+A fitted intercept at or below it is a chronaxie indistinguishable from zero and is refused
+like a negative one (the platform-dependent sign of an exactly-zero intercept, found when CI
+first ran on Linux builds of numpy 2.5)."""
+
 
 def lapicque_threshold_uA(
     pulse_width_us: float | np.ndarray,
@@ -316,7 +323,11 @@ def fit_weiss(
     # A non-positive intercept is a non-positive chronaxie, which no nerve has; the fit
     # used to return it (-60 us for a design generated at -60 us) with tau = nan
     # (ledger 33).
-    if intercept <= 0:
+    # Compared against float resolution, not exact zero: thresholds exactly proportional
+    # to 1/W give an intercept of 0 in exact arithmetic, which least squares returns as
+    # +-1e-16-ish depending on the BLAS build -- a chronaxie indistinguishable from zero
+    # must be refused on every platform, not accepted on some.
+    if intercept <= INTERCEPT_RESOLUTION * float(np.max(np.abs(charge))):
         raise ValueError(
             f"fitted chronaxie is non-positive ({intercept / slope:.4g} us); the data do "
             f"not follow a Weiss strength-duration relationship"
@@ -369,7 +380,20 @@ def fit_lapicque(
 
     w = np.asarray(pulse_widths_us, dtype=float)
     i = np.asarray(thresholds_uA, dtype=float)
-    seed = fit_weiss(w, i)
+    try:
+        seed = fit_weiss(w, i)
+        seed_rheobase, seed_tau = seed.rheobase_uA, seed.membrane_tau_us
+    except ValueError as exc:
+        if "chronaxie is non-positive" not in str(exc):
+            raise  # a rank-deficient design or a non-positive rheobase: not seedable
+        # Weiss refuses an intercept within float rounding of zero (thresholds flat in
+        # 1/W). That is still a valid Lapicque input -- the chronaxie is then reported as
+        # not identifiable -- so seed from a vanishing time constant instead. A clearly
+        # negative intercept or rheobase is re-raised, as before.
+        slope, intercept = np.polyfit(w, i * w, 1)
+        if slope <= 0 or intercept < -INTERCEPT_RESOLUTION * float(np.max(np.abs(i * w))):
+            raise
+        seed_rheobase, seed_tau = float(slope), float(np.min(w)) * INTERCEPT_RESOLUTION
 
     def model(width, rheobase, tau):
         return rheobase / (1.0 - np.exp(-width / tau))
@@ -378,7 +402,7 @@ def fit_lapicque(
         model,
         w,
         i,
-        p0=[seed.rheobase_uA, seed.membrane_tau_us],
+        p0=[seed_rheobase, seed_tau],
         bounds=([1e-12, 1e-12], [np.inf, np.inf]),
         maxfev=max_iter * 10,
         # Relative weighting: threshold noise is proportional to the threshold, so the
