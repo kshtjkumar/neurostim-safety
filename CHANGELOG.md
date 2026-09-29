@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.16.0 — unreleased: the limiting current was 7.07x too high
+## 0.16.0 — 2026-09-29: the limiting current was 7.07x too high
 
 Phases 1-4 of the audit fixes. The version is a minor bump because, before 1.0, a minor
 bump is where incompatible changes go, and these are incompatible:
