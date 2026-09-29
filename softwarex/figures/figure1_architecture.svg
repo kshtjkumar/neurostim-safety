@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="533.140157pt" height="235.502362pt" viewBox="0 0 533.140157 235.502362" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-09-29T13:30:51.824249</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.8, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 235.502362 
+L 533.140157 235.502362 
+L 533.140157 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 15.499843 136.765984 
+L 107.835591 136.765984 
+Q 114.060472 136.765984 114.060472 134.112756 
+L 114.060472 17.370709 
+Q 114.060472 14.71748 107.835591 14.71748 
+L 15.499843 14.71748 
+Q 9.274961 14.71748 9.274961 17.370709 
+L 9.274961 134.112756 
+Q 9.274961 136.765984 15.499843 136.765984 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #eef1f4; stroke: #5b6770; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 145.184882 136.765984 
+L 268.645039 136.765984 
+Q 274.869921 136.765984 274.869921 134.112756 
+L 274.869921 17.370709 
+Q 274.869921 14.71748 268.645039 14.71748 
+L 145.184882 14.71748 
+Q 138.96 14.71748 138.96 17.370709 
+L 138.96 134.112756 
+Q 138.96 136.765984 145.184882 136.765984 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #dce9f5; stroke: #2f5f8a; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 305.994331 136.765984 
+L 398.330079 136.765984 
+Q 404.554961 136.765984 404.554961 134.112756 
+L 404.554961 17.370709 
+Q 404.554961 14.71748 398.330079 14.71748 
+L 305.994331 14.71748 
+Q 299.769449 14.71748 299.769449 17.370709 
+L 299.769449 134.112756 
+Q 299.769449 136.765984 305.994331 136.765984 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #fbe9d7; stroke: #b0651e; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 430.491969 136.765984 
+L 517.640315 136.765984 
+Q 523.865197 136.765984 523.865197 134.112756 
+L 523.865197 17.370709 
+Q 523.865197 14.71748 517.640315 14.71748 
+L 430.491969 14.71748 
+Q 424.267087 14.71748 424.267087 17.370709 
+L 424.267087 134.112756 
+Q 424.267087 136.765984 430.491969 136.765984 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #eef1f4; stroke: #5b6770; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 62.186457 222.995906 
+L 470.953701 222.995906 
+Q 477.178583 222.995906 477.178583 220.342677 
+L 477.178583 163.298268 
+Q 477.178583 160.645039 470.953701 160.645039 
+L 62.186457 160.645039 
+Q 55.961575 160.645039 55.961575 163.298268 
+L 55.961575 220.342677 
+Q 55.961575 222.995906 62.186457 222.995906 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #f3f0f7; stroke: #6b5b8a; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 112.950298 75.741732 
+Q 126.510651 75.741732 139.176577 75.741732 
+" clip-path="url(#pc0b17a4084)" style="fill: none; stroke: #444444; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 135.976577 74.141732 
+L 139.176577 75.741732 
+L 135.976577 77.341732 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #444444; stroke: #444444; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 273.759746 75.741732 
+Q 287.3201 75.741732 299.986026 75.741732 
+" clip-path="url(#pc0b17a4084)" style="fill: none; stroke: #444444; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 296.786026 74.141732 
+L 299.986026 75.741732 
+L 296.786026 77.341732 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #444444; stroke: #444444; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 403.440353 75.741732 
+Q 414.409065 75.741732 424.483351 75.741732 
+" clip-path="url(#pc0b17a4084)" style="fill: none; stroke: #444444; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 421.283351 74.141732 
+L 424.483351 75.741732 
+L 421.283351 77.341732 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #444444; stroke: #444444; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 206.914961 159.973311 
+Q 206.914961 148.705129 206.914961 138.331373 
+" clip-path="url(#pc0b17a4084)" style="fill: none; stroke: #6b5b8a; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 205.314961 141.531373 
+L 206.914961 138.331373 
+L 208.514961 141.531373 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #6b5b8a; stroke: #6b5b8a; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 352.162205 159.973311 
+Q 352.162205 148.705129 352.162205 138.331373 
+" clip-path="url(#pc0b17a4084)" style="fill: none; stroke: #6b5b8a; stroke-width: 0.8; stroke-linecap: round"/>
+    <path d="M 350.562205 141.531373 
+L 352.162205 138.331373 
+L 353.762205 141.531373 
+z
+" clip-path="url(#pc0b17a4084)" style="fill: #6b5b8a; stroke: #6b5b8a; stroke-width: 0.8; stroke-linecap: round"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 7.5px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #5b6770" x="61.667717" y="29.151037" transform="rotate(-0 61.667717 29.151037)">Inputs</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(34.789748 39.275639)">Electrode geometry</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(23.769248 46.673644)">(disc, ring, band, microwire,</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(27.899029 54.071648)">rectangle, sphere, array)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(32.725342 61.469653)">Material (9 built in, or</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(31.004357 68.867658)">a user-measured CIC)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(29.79342 76.163653)">Protocol: current, pulse</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(24.105888 83.386992)">width per phase, rate, train,</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(32.089842 90.610331)">duty, charge recovery</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(24.16692 98.008336)">Settings: medium, k, policy,</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(20.314201 105.304331)">compliance, counter electrode</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 7.5px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #2f5f8a" x="206.914961" y="29.242443" transform="rotate(-0 206.914961 29.242443)">Safety core: 9 checks</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(182.617742 39.275639)">Shannon criterion</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(166.774804 46.498978)">Material charge-injection limit</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(171.461133 53.896983)">Water window (+ DC drift)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(168.885226 61.294987)">Validated envelope of the fit</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(162.464836 68.620336)">Current density (electroporation)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(166.940461 76.018341)">Microelectrode charge/phase</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(178.998976 83.416345)">Chronic degradation</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(185.028961 90.81435)">Charge balance</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(179.690179 98.212355)">Compliance voltage</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(169.266429 105.610359)">(+ counter charge injection)</text>
+   </g>
+   <g id="text_5">
+    <text style="font-weight: 700; font-size: 7.5px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #b0651e" x="352.162205" y="29.151037" transform="rotate(-0 352.162205 29.151037)">Result</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(314.084033 39.275639)">Limiting current: the highest</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(316.669142 46.571634)">amplitude no limit-bearing</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(317.185002 53.86763)">check fails, floored so the</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(323.729877 61.090969)">printed value passes</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(317.873783 68.314308)">Interval across published</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(310.118455 75.639656)">ranges (Shannon k, CIC band)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(308.524377 82.935652)">PROVISIONAL / INCOMPLETE</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(345.614423 90.261)">flags</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(320.457923 97.659005)">or a refusal naming the</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(314.941861 105.057009)">check when nothing is safe</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 7.5px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #5b6770" x="474.066142" y="29.242443" transform="rotate(-0 474.066142 29.242443)">Outputs</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(440.134704 39.351202)">Text summary (describe)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(439.783532 46.647197)">PDF report with methods</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(451.31747 53.870536)">and bibliography</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(445.896345 61.166531)">JSON + audit record</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(437.88236 68.49188)">(SHA-256 digest of inputs,</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(442.879173 75.889884)">constants and answer)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(441.499189 83.287889)">Batch CSV and sweeps</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(439.793704 90.613237)">Figures (SVG/PDF/TIFF)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(444.782282 98.016473)">Desktop GUI (PyQt6)</text>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 7.5px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; text-anchor: middle; fill: #6b5b8a" x="266.570079" y="175.170002" transform="rotate(-0 266.570079 175.170002)">Supporting layers</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(65.561235 185.278761)">Literature data modules: every constant carries its primary source, page and measurement conditions (pulse width, polarity, electrolyte, area basis)</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(89.449157 192.676765)">Models: Pennes bioheat (steady and transient), access resistance, strength-duration fits with intervals, current-distance activation</text>
+    <text style="font-size: 6.2px; font-family: 'Arial', 'Helvetica', 'DejaVu Sans', sans-serif; fill: #222222" transform="translate(142.582672 200.07477)">Uncertainty: outward-rounded interval arithmetic   |   FEM import for external field solutions</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pc0b17a4084">
+   <rect x="7.2" y="7.2" width="518.740157" height="221.102362"/>
+  </clipPath>
+ </defs>
+</svg>
