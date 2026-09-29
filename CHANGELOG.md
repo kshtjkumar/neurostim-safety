@@ -22,17 +22,6 @@ applies from publication on.
 0.15.0. All three now say 0.16.0, and `__version__` is read from the installed
 distribution, which `pyproject.toml` writes, so there is one place to change it.
 
-### Found by the first CI runs on GitHub (ledgers 200, 201)
-
-- `fit_weiss` refused a non-positive chronaxie only at an intercept of exactly 0, so
-  thresholds flat in 1/W were refused on one BLAS build and accepted with a ~5e-11 us
-  chronaxie on another. Intercepts within float resolution are now refused everywhere;
-  `fit_lapicque` still fits that case and reports the chronaxie as not identifiable.
-- CI: GUI tests under `xvfb-run`, full-history checkouts for the ledger tests, Arial on
-  Linux runners, numpy pinned for the type check, and an rcParams cast for matplotlib
-  3.11's stricter stubs. The suite passes on the locally validated versions and on the
-  latest numpy 2.5.3, scipy 1.18.1, matplotlib 3.11.2 and pandas 3.0.6.
-
 ### Recall notice: reports from 0.15.0 and every earlier release
 
 **Do not rely on a limiting current from a report made by 0.15.0 or any earlier release.
@@ -120,6 +109,17 @@ is wrong in the unsafe direction:
     discs".
 
 Each is detailed in its own entry below.
+
+### Found by the first CI runs on GitHub (ledgers 200, 201)
+
+- `fit_weiss` refused a non-positive chronaxie only at an intercept of exactly 0, so
+  thresholds flat in 1/W were refused on one BLAS build and accepted with a ~5e-11 us
+  chronaxie on another. Intercepts within float resolution are now refused everywhere;
+  `fit_lapicque` still fits that case and reports the chronaxie as not identifiable.
+- CI: GUI tests under `xvfb-run`, full-history checkouts for the ledger tests, Arial on
+  Linux runners, numpy pinned for the type check, and an rcParams cast for matplotlib
+  3.11's stricter stubs. The suite passes on the locally validated versions and on the
+  latest numpy 2.5.3, scipy 1.18.1, matplotlib 3.11.2 and pandas 3.0.6.
 
 ### Butterwick's threshold is the lower of the two diameters' thresholds
 
