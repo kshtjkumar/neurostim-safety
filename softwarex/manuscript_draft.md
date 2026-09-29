@@ -77,12 +77,22 @@ under. The intended users are experimenters designing stimulation protocols, eng
 choosing electrode materials and sizes, and reviewers checking the safety argument of a
 methods section.
 
-Related work. [AUTHOR: verify and complete. Suggested starting points: finite-element
-environments (COMSOL, Sim4Life) model fields and heating but do not encode the
-literature's damage and charge-injection limits; DBS toolboxes such as Lead-DBS and
-OSS-DBS estimate volumes of tissue activated rather than safety limits; published
-calculators and spreadsheets typically quote one limit per material without its
-measurement conditions. State what, to your knowledge, does not exist.]
+Related work. Open-source DBS tools model where current goes rather than whether it is
+safe: Lead-DBS localizes and reconstructs implanted electrodes and models stimulation
+volumes [13, 14], OSS-DBS computes electric fields and neural activation with automated
+volume-conductor models [15], and FastField approximates DBS fields and volumes of tissue
+activated quickly by superposition [16]; none of their primary publications describes
+charge-density, charge-injection or tissue-damage limits. The commercial platform
+Sim4Life does assess neurostimulation safety, for example tissue heating and the Shannon
+criterion in a vagus-nerve stimulator design study [17], and general finite-element
+environments such as COMSOL can be used to compute fields and heating, but neither is an
+open, source-traced implementation of the limits themselves. Closest in aim,
+Vatsyayan and Dayeh [18] developed a model predicting electrochemical safety limits in
+vivo from electrode geometry, separation, material and stimulation paradigm; it is
+published as a model, not as reusable software. Cisnal et al. [19] automate the
+measurement of an electrode's charge-injection capacity, a value that `neurostim-safety`
+can take as a user-measured input. [AUTHOR: check each characterisation against the
+cited papers and add any tool you know of.]
 
 ## 2. Software description
 
@@ -283,5 +293,29 @@ stimulation induced temperature changes, in: Proc. 28th Annu. Int. Conf. IEEE EM
 2006, pp. 3580–3583. https://doi.org/10.1109/IEMBS.2006.259425
 [12] [AUTHOR: software citation — the Zenodo DOI of the v0.16.0 release, once archived]
 
-[AUTHOR: every reference above was taken from the package's paper.bib; check author
+[13] A. Horn, A.A. Kühn, Lead-DBS: a toolbox for deep brain stimulation electrode
+localizations and visualizations, NeuroImage 107 (2015) 127–135.
+https://doi.org/10.1016/j.neuroimage.2014.12.002
+[14] C. Neudorfer, K. Butenko, S. Oxenford, N. Rajamani, J. Achtzehn, L. Goede, et al.,
+Lead-DBS v3.0: mapping deep brain stimulation effects to local anatomy and global
+networks, NeuroImage 268 (2023) 119862. https://doi.org/10.1016/j.neuroimage.2023.119862
+[15] K. Butenko, C. Bahls, M. Schröder, R. Köhling, U. van Rienen, OSS-DBS: open-source
+simulation platform for deep brain stimulation with a comprehensive automated modeling,
+PLoS Comput. Biol. 16 (2020) e1008023. https://doi.org/10.1371/journal.pcbi.1008023
+[16] M. Baniasadi, D. Proverbio, J. Gonçalves, F. Hertel, A. Husch, FastField: an
+open-source toolbox for efficient approximation of deep brain stimulation electric
+fields, NeuroImage 223 (2020) 117330. https://doi.org/10.1016/j.neuroimage.2020.117330
+[17] ZMT Zurich MedTech / IT'IS Foundation, In silico vagus nerve stimulator: design,
+optimization, and safety evidence generation (Sim4Life application note).
+https://sim4life.swiss/in-silico-vagus-nerve-stimulator-design-optimization
+[AUTHOR: prefer a peer-reviewed Sim4Life publication if you can find one]
+[18] R. Vatsyayan, S.A. Dayeh, A universal model of electrochemical safety limits in vivo
+for electrophysiological stimulation, Front. Neurosci. 16 (2022) 972252.
+https://doi.org/10.3389/fnins.2022.972252
+[19] A. Cisnal, J.-C. Fraile, J. Pérez-Turiel, V. Muñoz-Martinez, C. Müller, F.R. Ihmig, A
+measurement setup and automated calculation method to determine the charge injection
+capacity of implantable microelectrodes, Sensors 18 (2018) 4152.
+https://doi.org/10.3390/s18124152
+
+[AUTHOR: references [1]-[11] are from the package's paper.bib and [13]-[19] were checked against Crossref and the papers' abstracts; check author
 lists, volumes and pages against each paper before submitting.]
