@@ -29,7 +29,6 @@ submitted. Submission site: https://www.editorialmanager.com/softx
       (Elsevier asks for this in a methods-type section; the declaration in the draft
       covers it, so expand if needed).
 - [x] **Tag the release**: done — https://github.com/kshtjkumar/neurostim-safety/releases/tag/v0.16.0
-      (I can do this when you say so).
 - [ ] **Archive on Zenodo** (recommended): connect the repo to Zenodo, publish the
       v0.16.0 release, and cite the DOI as reference [12].
 - [ ] **Licence file**: the template asks for "Licence.txt". The repo has `LICENSE`
