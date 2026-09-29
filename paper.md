@@ -82,7 +82,7 @@ repository (`CODE_MISTAKES_LOG.md`, `docs/audit/`). The test suite checks:
 Continuous integration gates branch-point coverage (84.8 %), type checking of the
 package and its tests, a provenance audit, and a byte-for-byte check of the README's
 generated transcript. A mutation harness kills all 26 named mutants recovered from the
-audit, and 86.9 % of 160 generated mutants on a seed registered before it was run.
+audit, and 85.6 % of 160 generated mutants on a seed registered before it was run.
 
 # Limitations
 
@@ -98,7 +98,7 @@ published ones, with their known weaknesses:
   - A limit whose in-vivo derating was never measured at the requested pulse width is
     marked provisional.
 - **Open gaps in the record.**
-  - The generated mutation score, 86.9 %, is below its 90 % target (ledger 182), and ten
+  - The generated mutation score, 85.6 %, is below its 90 % target (ledger 182), and ten
     of its survivors are untested behaviour (ledger 188).
   - The Lapicque confidence interval is withheld when it lies below every width tested,
     or when it does not bound the chronaxie, and carries a caveat on designs spanning

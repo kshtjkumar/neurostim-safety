@@ -17,10 +17,11 @@ seed. The target is 90 % killed, not 100 %, because a generated set contains
 equivalent mutants that no test can kill. Every survivor is listed in the results.
 
 The gate is the measured floor, not the target (ledger 182). The pre-registered official
-seed, 20260930, scored 139/160 = 86.9 % at 31a8db4, so ``GENERATED_FLOOR`` is 0.86. The
-run first reported 143/160 and the floor was raised to 0.89 on it, but 4 of those kills
-were the harness's own tests failing (ledger 190, ``HARNESS_TESTS``); the corrected
-record carries a ``corrections`` field. The floor rises only with a measured score. A score is only a measurement of the suite on a seed that no test was written
+seed, 20260930, scored 137/160 = 85.6 % at 31a8db4, so ``GENERATED_FLOOR`` is 0.85. The
+run first reported 143/160 and the floor was raised to 0.89 on it, but 6 of those kills
+were the harness's own tests failing (ledger 190, ``HARNESS_TESTS``); the record is a
+full re-run of the same sample on the same code with those tests deselected, and carries
+a ``corrections`` field. The floor rises only with a measured score. A score is only a measurement of the suite on a seed that no test was written
 against: after tests are written from a sample's survivors, pre-register a new seed in a
 commit message before running it.
 
@@ -82,11 +83,12 @@ SEED = 20260930
 20260927, 20260928 and 20260929 were measured first, and tests were then written against
 some of their survivors (ledgers 181, 182)."""
 GENERATED_COUNT = 160
-GENERATED_FLOOR = 0.86
-"""The measured floor: 139/160 = 86.9 % on the official seed 20260930 at 31a8db4. It was
-set to 0.89 on a first count of 143/160 that credited 4 kills to the harness's own
-judgement-staleness test (ledger 190); this is the correction, not a lowering of a
-measured score. The target is 0.90 (G2); the gap is ledger 182 and the real survivors are
+GENERATED_FLOOR = 0.85
+"""The measured floor: 137/160 = 85.6 % on the official seed 20260930 at 31a8db4, from a
+full re-run with the harness's own tests deselected. It was set to 0.89 on a first count
+of 143/160 that credited 6 kills to those tests (ledger 190), then to 0.86 on a
+reconstruction that re-ran only 4 of them; this is the measurement, not a lowering of
+one. The target is 0.90 (G2); the gap is ledger 182 and the real survivors are
 ledger 188. Seed 20260930 is now used: tests have been written against its survivors, so
 the next measurement needs a new seed pre-registered in a commit message."""
 
@@ -301,6 +303,8 @@ JUDGEMENTS: tuple[tuple[str, str, str, str, str], ...] = (
      "NOT proven equivalent: the same plateau"),
     ("neurostim/safety/shannon.py", "math.log(10.0) / 2.0", "/", "*",
      "NOT proven equivalent: the same plateau"),
+    ("neurostim/safety/shannon.py", "math.log(10.0) / 2.0", "2.0", "4.0",
+     "NOT proven equivalent: the same plateau (seed 20260930 full re-run, ledger 190)"),
     ("neurostim/safety/shannon.py", "charge_per_phase_uC / area_cm2)),", "/", "*",
      "NOT proven equivalent: the same plateau (its larger-log term)"),
     ("neurostim/safety/shannon.py", "_metric_plateau_uC(max_charge, area_cm2) / (", "/", "*",
@@ -311,6 +315,10 @@ JUDGEMENTS: tuple[tuple[str, str, str, str, str], ...] = (
      "builds"),
     ("neurostim/uncertainty.py", "return cls(mean - k * sd, mean + k * sd)", "+", "-",
      "the non-finite-mean branch: mean +/- k*sd is the same infinity or NaN either way"),
+    ("neurostim/uncertainty.py", "return cls(mean - k * sd, mean + k * sd)", "-", "+",
+     "the non-finite-mean branch again: sd and k are checked finite above, so k*sd is "
+     "finite and mean -/+ k*sd is the same infinity or NaN (seed 20260930 full re-run, "
+     "ledger 190)"),
     # Survivors of seed 20260930 (Phase 8, the results of record).
     ("neurostim/models/strength_duration.py",
      "self.chronaxie_ci95_us is None or self.rheobase_se_uA", "or", "and",
@@ -595,7 +603,7 @@ HARNESS_TESTS = ("tests/test_build_gates.py::TestTheMutationGate",)
 They read this script's own metadata and output: the results file the run is producing,
 the named anchors, and the site-keyed judgements. A mutant at a judged site or a named
 anchor changes the source text they look up, so they fail, and the run counted that as a
-kill. That is the harness observing its own bookkeeping, not a test of the arithmetic: 4
+kill. That is the harness observing its own bookkeeping, not a test of the arithmetic: 6
 of seed 20260930's 143 kills at 31a8db4 were this and nothing else (ledger 190)."""
 
 

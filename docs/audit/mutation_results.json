@@ -1,15 +1,18 @@
 {
  "head": "31a8db4",
- "uncommitted_paths": [],
- "measured": "commit 31a8db4 exactly",
- "date": "2026-09-28",
+ "uncommitted_paths": [
+  "papers_stim_calc_ref",
+  "scripts/mutation.py"
+ ],
+ "measured": "commit 31a8db4's package and tests exactly, run by the harness of de4052e (scripts/mutation.py swapped in, in a local clone); papers_stim_calc_ref is a symlink to the reference papers, ignored in the main tree",
+ "date": "2026-09-29",
  "seed": 20260930,
  "sites": 851,
  "named_killed": 26,
  "named_total": 26,
- "generated_killed": 139,
+ "generated_killed": 137,
  "generated_total": 160,
- "generated_score": 0.8688,
+ "generated_score": 0.8562,
  "generated_survivors": [
   {
    "id": "G:neurostim/models/strength_duration.py:188:8343",
@@ -97,6 +100,11 @@
    "judged": "REAL gap (ledger 188): the train-duty edge at 0.95 is not tested"
   },
   {
+   "id": "G:neurostim/safety/shannon.py:273:11387",
+   "description": "constant 2.0 -> 4.0 at line 273",
+   "judged": "NOT proven equivalent: the same plateau (seed 20260930 full re-run, ledger 190)"
+  },
+  {
    "id": "G:neurostim/safety/water_window.py:106:5586",
    "description": "compare <= -> < at line 106",
    "judged": "unreachable, as its pragma says: every material's window straddles zero"
@@ -105,6 +113,11 @@
    "id": "G:neurostim/safety/water_window.py:555:26962",
    "description": "compare >= -> > at line 555",
    "judged": "at exactly zero net DC nothing drifts, so which branch the offset is timed on is never read"
+  },
+  {
+   "id": "G:neurostim/uncertainty.py:81:3811",
+   "description": "arithmetic - -> + at line 81",
+   "judged": "the non-finite-mean branch again: sd and k are checked finite above, so k*sd is finite and mean -/+ k*sd is the same infinity or NaN (seed 20260930 full re-run, ledger 190)"
   },
   {
    "id": "G:neurostim/uncertainty.py:211:8632",
@@ -125,7 +138,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 298.8
+   "seconds": 248.6
   },
   {
    "id": "C2",
@@ -134,7 +147,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 108.7
+   "seconds": 367.1
   },
   {
    "id": "C4",
@@ -143,7 +156,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 35.7
+   "seconds": 24.2
   },
   {
    "id": "P1",
@@ -152,7 +165,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 107.6
+   "seconds": 321.4
   },
   {
    "id": "P3",
@@ -161,7 +174,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 107.2
+   "seconds": 354.9
   },
   {
    "id": "A2",
@@ -170,7 +183,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 36.8
+   "seconds": 20.3
   },
   {
    "id": "A3",
@@ -179,7 +192,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 96.3
+   "seconds": 488.2
   },
   {
    "id": "A4",
@@ -188,7 +201,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 95.3
+   "seconds": 505.5
   },
   {
    "id": "A5",
@@ -197,7 +210,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 108.4
+   "seconds": 516.5
   },
   {
    "id": "M1",
@@ -206,7 +219,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 108.2
+   "seconds": 328.8
   },
   {
    "id": "M4",
@@ -215,7 +228,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 119.6
+   "seconds": 115.4
   },
   {
    "id": "M5",
@@ -224,7 +237,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 117.2
+   "seconds": 110.0
   },
   {
    "id": "M10",
@@ -233,7 +246,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 97.9
+   "seconds": 221.7
   },
   {
    "id": "S1",
@@ -242,7 +255,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 15.3
+   "seconds": 15.4
   },
   {
    "id": "S2",
@@ -251,7 +264,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 15.2
+   "seconds": 18.5
   },
   {
    "id": "C1",
@@ -260,7 +273,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 29.0
+   "seconds": 32.0
   },
   {
    "id": "C3",
@@ -269,7 +282,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 80.6
+   "seconds": 124.1
   },
   {
    "id": "J1",
@@ -278,7 +291,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 20.4
+   "seconds": 21.0
   },
   {
    "id": "J2",
@@ -287,7 +300,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 21.3
+   "seconds": 21.4
   },
   {
    "id": "W1",
@@ -296,7 +309,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.8
+   "seconds": 14.6
   },
   {
    "id": "W3",
@@ -305,7 +318,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 15.9
+   "seconds": 12.2
   },
   {
    "id": "M3",
@@ -314,7 +327,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 75.1
+   "seconds": 235.6
   },
   {
    "id": "M6",
@@ -323,7 +336,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 49.3
+   "seconds": 54.8
   },
   {
    "id": "M7",
@@ -332,7 +345,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 42.2
+   "seconds": 35.7
   },
   {
    "id": "M8",
@@ -341,7 +354,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 40.9
+   "seconds": 34.3
   },
   {
    "id": "M9",
@@ -350,7 +363,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 62.8
+   "seconds": 100.0
   }
  ],
  "generated": [
@@ -361,7 +374,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 70.1
+   "seconds": 242.2
   },
   {
    "id": "G:neurostim/models/field.py:104:4573",
@@ -370,7 +383,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 257.2
+   "seconds": 236.7
   },
   {
    "id": "G:neurostim/models/field.py:104:4575",
@@ -379,7 +392,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 256.5
+   "seconds": 268.9
   },
   {
    "id": "G:neurostim/models/field.py:122:5223",
@@ -388,7 +401,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 314.1
+   "seconds": 305.5
   },
   {
    "id": "G:neurostim/models/field.py:122:5228",
@@ -397,7 +410,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 314.5
+   "seconds": 293.1
   },
   {
    "id": "G:neurostim/models/field.py:129:5570",
@@ -406,7 +419,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 348.5
+   "seconds": 294.7
   },
   {
    "id": "G:neurostim/models/field.py:144:6102",
@@ -415,7 +428,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 346.1
+   "seconds": 269.4
   },
   {
    "id": "G:neurostim/models/field.py:148:6231",
@@ -424,7 +437,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 96.8
+   "seconds": 258.3
   },
   {
    "id": "G:neurostim/models/field.py:148:6262",
@@ -433,7 +446,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 96.4
+   "seconds": 245.9
   },
   {
    "id": "G:neurostim/models/field.py:160:6653",
@@ -442,7 +455,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 328.0
+   "seconds": 245.2
   },
   {
    "id": "G:neurostim/models/field.py:164:6888",
@@ -451,7 +464,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 29.5
+   "seconds": 18.5
   },
   {
    "id": "G:neurostim/models/field.py:167:7056",
@@ -460,7 +473,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 282.0
+   "seconds": 216.3
   },
   {
    "id": "G:neurostim/models/field.py:168:7099",
@@ -469,7 +482,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 282.7
+   "seconds": 209.4
   },
   {
    "id": "G:neurostim/models/field.py:252:9922",
@@ -478,7 +491,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 271.8
+   "seconds": 208.8
   },
   {
    "id": "G:neurostim/models/field.py:257:10136",
@@ -487,7 +500,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 258.0
+   "seconds": 216.5
   },
   {
    "id": "G:neurostim/models/strength_duration.py:71:2759",
@@ -496,7 +509,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 123.8
+   "seconds": 92.7
   },
   {
    "id": "G:neurostim/models/strength_duration.py:88:3436",
@@ -505,7 +518,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 112.7
+   "seconds": 96.7
   },
   {
    "id": "G:neurostim/models/strength_duration.py:101:3890",
@@ -514,7 +527,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 122.2
+   "seconds": 107.9
   },
   {
    "id": "G:neurostim/models/strength_duration.py:103:3982",
@@ -523,7 +536,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 67.8
+   "seconds": 236.9
   },
   {
    "id": "G:neurostim/models/strength_duration.py:178:7948",
@@ -532,7 +545,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 120.8
+   "seconds": 116.4
   },
   {
    "id": "G:neurostim/models/strength_duration.py:188:8343",
@@ -541,7 +554,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 670.5
+   "seconds": 771.5
   },
   {
    "id": "G:neurostim/models/strength_duration.py:240:10567",
@@ -550,7 +563,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 173.3
+   "seconds": 167.7
   },
   {
    "id": "G:neurostim/models/strength_duration.py:257:11227",
@@ -559,7 +572,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 171.5
+   "seconds": 172.5
   },
   {
    "id": "G:neurostim/models/strength_duration.py:288:12513",
@@ -568,7 +581,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 15.7
+   "seconds": 9.5
   },
   {
    "id": "G:neurostim/models/strength_duration.py:305:13315",
@@ -577,7 +590,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 191.6
+   "seconds": 176.6
   },
   {
    "id": "G:neurostim/models/strength_duration.py:313:13676",
@@ -586,7 +599,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 180.8
+   "seconds": 174.1
   },
   {
    "id": "G:neurostim/models/strength_duration.py:319:13958",
@@ -595,7 +608,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 180.6
+   "seconds": 181.4
   },
   {
    "id": "G:neurostim/models/strength_duration.py:354:15041",
@@ -604,7 +617,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 15.9
+   "seconds": 14.3
   },
   {
    "id": "G:neurostim/models/strength_duration.py:368:15580",
@@ -613,7 +626,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 14.1
+   "seconds": 14.0
   },
   {
    "id": "G:neurostim/models/vta.py:62:2389",
@@ -622,7 +635,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.9
+   "seconds": 27.4
   },
   {
    "id": "G:neurostim/models/vta.py:79:3214",
@@ -631,7 +644,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 569.8
+   "seconds": 603.7
   },
   {
    "id": "G:neurostim/models/vta.py:87:3590",
@@ -640,7 +653,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 32.9
+   "seconds": 13.2
   },
   {
    "id": "G:neurostim/models/vta.py:133:5380",
@@ -649,7 +662,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 17.4
+   "seconds": 14.4
   },
   {
    "id": "G:neurostim/models/vta.py:136:5533",
@@ -658,7 +671,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 10.8
+   "seconds": 9.5
   },
   {
    "id": "G:neurostim/models/vta.py:146:6055",
@@ -667,7 +680,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 13.6
+   "seconds": 12.2
   },
   {
    "id": "G:neurostim/models/vta.py:152:6387",
@@ -676,7 +689,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 91.9
+   "seconds": 90.2
   },
   {
    "id": "G:neurostim/models/vta.py:152:6392",
@@ -685,7 +698,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 102.5
+   "seconds": 96.8
   },
   {
    "id": "G:neurostim/models/vta.py:197:8144",
@@ -694,7 +707,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.3
+   "seconds": 19.1
   },
   {
    "id": "G:neurostim/protocol.py:151:7969",
@@ -703,7 +716,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 131.7
+   "seconds": 142.9
   },
   {
    "id": "G:neurostim/protocol.py:175:9325",
@@ -712,7 +725,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 2.6
+   "seconds": 2.5
   },
   {
    "id": "G:neurostim/protocol.py:346:17672",
@@ -721,7 +734,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 17.8
+   "seconds": 22.0
   },
   {
    "id": "G:neurostim/protocol.py:384:19343",
@@ -730,7 +743,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 130.5
+   "seconds": 147.4
   },
   {
    "id": "G:neurostim/protocol.py:414:20725",
@@ -739,7 +752,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 28.6
+   "seconds": 20.1
   },
   {
    "id": "G:neurostim/protocol.py:419:20987",
@@ -748,7 +761,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 19.0
+   "seconds": 20.1
   },
   {
    "id": "G:neurostim/safety/_limits.py:60:3498",
@@ -757,7 +770,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 70.1
+   "seconds": 83.0
   },
   {
    "id": "G:neurostim/safety/_limits.py:84:4594",
@@ -766,7 +779,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 519.3
+   "seconds": 480.4
   },
   {
    "id": "G:neurostim/safety/_limits.py:139:7505",
@@ -775,7 +788,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 11.7
+   "seconds": 23.0
   },
   {
    "id": "G:neurostim/safety/_limits.py:183:9162",
@@ -784,7 +797,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 62.9
+   "seconds": 65.8
   },
   {
    "id": "G:neurostim/safety/_limits.py:201:9997",
@@ -793,7 +806,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 60.9
+   "seconds": 56.2
   },
   {
    "id": "G:neurostim/safety/_limits.py:201:10005",
@@ -802,7 +815,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 60.1
+   "seconds": 54.7
   },
   {
    "id": "G:neurostim/safety/_limits.py:202:10036",
@@ -811,7 +824,7 @@
    "status": "timeout",
    "stage": "related",
    "exit_code": null,
-   "seconds": 900.1
+   "seconds": 900.0
   },
   {
    "id": "G:neurostim/safety/_limits.py:202:10053",
@@ -829,7 +842,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 63.1
+   "seconds": 58.2
   },
   {
    "id": "G:neurostim/safety/_limits.py:307:15232",
@@ -838,7 +851,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 9.1
+   "seconds": 8.3
   },
   {
    "id": "G:neurostim/safety/_limits.py:320:15765",
@@ -847,7 +860,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 9.5
+   "seconds": 8.5
   },
   {
    "id": "G:neurostim/safety/_limits.py:391:18877",
@@ -856,7 +869,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 8.9
+   "seconds": 7.9
   },
   {
    "id": "G:neurostim/safety/assessment.py:595:27768",
@@ -865,7 +878,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.5
+   "seconds": 15.7
   },
   {
    "id": "G:neurostim/safety/assessment.py:718:34377",
@@ -874,7 +887,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.0
+   "seconds": 20.0
   },
   {
    "id": "G:neurostim/safety/assessment.py:850:40165",
@@ -883,7 +896,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 424.1
+   "seconds": 342.1
   },
   {
    "id": "G:neurostim/safety/assessment.py:859:40517",
@@ -892,7 +905,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 13.8
+   "seconds": 14.3
   },
   {
    "id": "G:neurostim/safety/assessment.py:957:46055",
@@ -901,7 +914,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 14.9
+   "seconds": 13.0
   },
   {
    "id": "G:neurostim/safety/assessment.py:964:46373",
@@ -910,7 +923,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 143.4
+   "seconds": 108.6
   },
   {
    "id": "G:neurostim/safety/assessment.py:973:46938",
@@ -919,7 +932,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 129.3
+   "seconds": 89.2
   },
   {
    "id": "G:neurostim/safety/assessment.py:1014:48681",
@@ -928,7 +941,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 19.1
+   "seconds": 15.8
   },
   {
    "id": "G:neurostim/safety/assessment.py:1049:50797",
@@ -937,16 +950,16 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 351.9
+   "seconds": 275.1
   },
   {
    "id": "G:neurostim/safety/assessment.py:1134:53882",
    "path": "neurostim/safety/assessment.py",
    "description": "compare <= -> < at line 1134",
    "status": "survived",
-   "stage": "full suite, harness tests deselected (re-run)",
-   "exit_code": 0,
-   "seconds": 90.9
+   "stage": "",
+   "exit_code": null,
+   "seconds": 634.1
   },
   {
    "id": "G:neurostim/safety/assessment.py:1184:56289",
@@ -955,7 +968,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 17.4
+   "seconds": 12.6
   },
   {
    "id": "G:neurostim/safety/assessment.py:1184:56327",
@@ -964,7 +977,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 22.4
+   "seconds": 11.9
   },
   {
    "id": "G:neurostim/safety/assessment.py:1188:56484",
@@ -973,7 +986,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 849.1
+   "seconds": 618.9
   },
   {
    "id": "G:neurostim/safety/assessment.py:1251:59200",
@@ -982,16 +995,16 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 19.8
+   "seconds": 12.7
   },
   {
    "id": "G:neurostim/safety/assessment.py:1262:59708",
    "path": "neurostim/safety/assessment.py",
    "description": "compare >= -> > at line 1262",
    "status": "survived",
-   "stage": "full suite, harness tests deselected (re-run)",
-   "exit_code": 0,
-   "seconds": 76.3
+   "stage": "",
+   "exit_code": null,
+   "seconds": 615.6
   },
   {
    "id": "G:neurostim/safety/assessment.py:1289:60810",
@@ -1000,7 +1013,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 15.5
+   "seconds": 14.4
   },
   {
    "id": "G:neurostim/safety/assessment.py:1291:60941",
@@ -1009,7 +1022,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.0
+   "seconds": 21.8
   },
   {
    "id": "G:neurostim/safety/assessment.py:1358:63663",
@@ -1018,7 +1031,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 309.6
+   "seconds": 246.5
   },
   {
    "id": "G:neurostim/safety/assessment.py:1444:67868",
@@ -1027,7 +1040,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.3
+   "seconds": 13.4
   },
   {
    "id": "G:neurostim/safety/assessment.py:1512:70613",
@@ -1036,7 +1049,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 864.6
+   "seconds": 622.6
   },
   {
    "id": "G:neurostim/safety/assessment.py:1538:71726",
@@ -1045,7 +1058,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 60.5
+   "seconds": 296.9
   },
   {
    "id": "G:neurostim/safety/assessment.py:1675:77724",
@@ -1054,7 +1067,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 890.3
+   "seconds": 649.5
   },
   {
    "id": "G:neurostim/safety/assessment.py:1689:78287",
@@ -1063,7 +1076,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 855.8
+   "seconds": 641.3
   },
   {
    "id": "G:neurostim/safety/assessment.py:1807:83570",
@@ -1072,7 +1085,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 120.6
+   "seconds": 89.5
   },
   {
    "id": "G:neurostim/safety/assessment.py:1811:83718",
@@ -1081,7 +1094,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 21.8
+   "seconds": 12.7
   },
   {
    "id": "G:neurostim/safety/assessment.py:1896:87722",
@@ -1090,7 +1103,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 33.0
+   "seconds": 12.1
   },
   {
    "id": "G:neurostim/safety/assessment.py:1927:88996",
@@ -1099,7 +1112,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 828.8
+   "seconds": 653.1
   },
   {
    "id": "G:neurostim/safety/assessment.py:2273:105052",
@@ -1108,7 +1121,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 23.2
+   "seconds": 13.3
   },
   {
    "id": "G:neurostim/safety/charge.py:53:2377",
@@ -1117,7 +1130,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.4
+   "seconds": 12.5
   },
   {
    "id": "G:neurostim/safety/charge.py:97:4229",
@@ -1126,7 +1139,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.4
+   "seconds": 16.6
   },
   {
    "id": "G:neurostim/safety/charge.py:215:9186",
@@ -1135,7 +1148,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 202.4
+   "seconds": 164.2
   },
   {
    "id": "G:neurostim/safety/charge.py:277:12008",
@@ -1144,7 +1157,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 22.7
+   "seconds": 14.3
   },
   {
    "id": "G:neurostim/safety/charge.py:299:12932",
@@ -1153,7 +1166,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.4
+   "seconds": 14.2
   },
   {
    "id": "G:neurostim/safety/charge.py:309:13416",
@@ -1162,7 +1175,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 76.0
+   "seconds": 89.5
   },
   {
    "id": "G:neurostim/safety/charge.py:349:15518",
@@ -1171,7 +1184,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.3
+   "seconds": 16.7
   },
   {
    "id": "G:neurostim/safety/compliance.py:293:14810",
@@ -1180,7 +1193,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 129.5
+   "seconds": 97.0
   },
   {
    "id": "G:neurostim/safety/compliance.py:390:19216",
@@ -1189,7 +1202,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 18.0
+   "seconds": 15.4
   },
   {
    "id": "G:neurostim/safety/compliance.py:431:21228",
@@ -1198,7 +1211,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.7
+   "seconds": 15.9
   },
   {
    "id": "G:neurostim/safety/compliance.py:463:22915",
@@ -1207,7 +1220,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 31.6
+   "seconds": 15.3
   },
   {
    "id": "G:neurostim/safety/compliance.py:502:24726",
@@ -1216,16 +1229,16 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 115.3
+   "seconds": 94.8
   },
   {
    "id": "G:neurostim/safety/compliance.py:502:24741",
    "path": "neurostim/safety/compliance.py",
    "description": "compare <= -> < at line 502",
    "status": "survived",
-   "stage": "full suite, harness tests deselected (re-run)",
-   "exit_code": 0,
-   "seconds": 75.7
+   "stage": "",
+   "exit_code": null,
+   "seconds": 650.4
   },
   {
    "id": "G:neurostim/safety/compliance.py:545:26525",
@@ -1234,7 +1247,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 14.3
+   "seconds": 12.9
   },
   {
    "id": "G:neurostim/safety/compliance.py:550:26730",
@@ -1243,7 +1256,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 106.8
+   "seconds": 88.4
   },
   {
    "id": "G:neurostim/safety/compliance.py:625:30064",
@@ -1252,7 +1265,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.7
+   "seconds": 13.1
   },
   {
    "id": "G:neurostim/safety/compliance.py:664:31771",
@@ -1261,7 +1274,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 793.2
+   "seconds": 639.1
   },
   {
    "id": "G:neurostim/safety/compliance.py:664:31793",
@@ -1270,7 +1283,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 333.1
+   "seconds": 312.7
   },
   {
    "id": "G:neurostim/safety/compliance.py:717:33997",
@@ -1279,7 +1292,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 14.9
+   "seconds": 12.2
   },
   {
    "id": "G:neurostim/safety/compliance.py:757:35877",
@@ -1288,7 +1301,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 260.1
+   "seconds": 252.2
   },
   {
    "id": "G:neurostim/safety/compliance.py:757:35902",
@@ -1297,7 +1310,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 260.0
+   "seconds": 218.3
   },
   {
    "id": "G:neurostim/safety/compliance.py:758:35999",
@@ -1306,7 +1319,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 273.0
+   "seconds": 216.4
   },
   {
    "id": "G:neurostim/safety/compliance.py:770:36614",
@@ -1315,7 +1328,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 65.8
+   "seconds": 217.7
   },
   {
    "id": "G:neurostim/safety/compliance.py:839:39937",
@@ -1324,7 +1337,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 824.3
+   "seconds": 615.8
   },
   {
    "id": "G:neurostim/safety/compliance.py:968:45507",
@@ -1333,7 +1346,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 297.9
+   "seconds": 226.7
   },
   {
    "id": "G:neurostim/safety/current_density.py:87:4509",
@@ -1342,7 +1355,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 113.2
+   "seconds": 82.1
   },
   {
    "id": "G:neurostim/safety/current_density.py:128:6202",
@@ -1351,7 +1364,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.5
+   "seconds": 10.9
   },
   {
    "id": "G:neurostim/safety/current_density.py:132:6443",
@@ -1360,7 +1373,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.9
+   "seconds": 10.6
   },
   {
    "id": "G:neurostim/safety/current_density.py:218:10318",
@@ -1369,7 +1382,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 19.8
+   "seconds": 10.9
   },
   {
    "id": "G:neurostim/safety/current_density.py:236:10996",
@@ -1378,16 +1391,16 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 649.6
+   "seconds": 475.6
   },
   {
    "id": "G:neurostim/safety/current_density.py:347:16051",
    "path": "neurostim/safety/current_density.py",
    "description": "compare > -> >= at line 347",
    "status": "survived",
-   "stage": "full suite, harness tests deselected (re-run)",
-   "exit_code": 0,
-   "seconds": 306.2
+   "stage": "",
+   "exit_code": null,
+   "seconds": 473.5
   },
   {
    "id": "G:neurostim/safety/envelope.py:78:3979",
@@ -1396,7 +1409,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 49.8
+   "seconds": 39.0
   },
   {
    "id": "G:neurostim/safety/envelope.py:110:5163",
@@ -1405,7 +1418,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 11.2
+   "seconds": 8.2
   },
   {
    "id": "G:neurostim/safety/envelope.py:110:5177",
@@ -1414,7 +1427,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.1
+   "seconds": 8.0
   },
   {
    "id": "G:neurostim/safety/envelope.py:112:5241",
@@ -1423,7 +1436,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 10.8
+   "seconds": 8.8
   },
   {
    "id": "G:neurostim/safety/envelope.py:172:7422",
@@ -1432,7 +1445,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 17.6
+   "seconds": 8.1
   },
   {
    "id": "G:neurostim/safety/envelope.py:222:9500",
@@ -1441,7 +1454,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 9.1
+   "seconds": 9.2
   },
   {
    "id": "G:neurostim/safety/envelope.py:263:10892",
@@ -1450,7 +1463,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 588.8
+   "seconds": 439.6
   },
   {
    "id": "G:neurostim/safety/envelope.py:292:11977",
@@ -1459,7 +1472,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 585.8
+   "seconds": 402.2
   },
   {
    "id": "G:neurostim/safety/shannon.py:78:3163",
@@ -1468,7 +1481,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 62.8
+   "seconds": 37.8
   },
   {
    "id": "G:neurostim/safety/shannon.py:116:4640",
@@ -1477,7 +1490,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 16.2
+   "seconds": 11.0
   },
   {
    "id": "G:neurostim/safety/shannon.py:182:7282",
@@ -1486,7 +1499,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 87.8
+   "seconds": 69.4
   },
   {
    "id": "G:neurostim/safety/shannon.py:205:8298",
@@ -1495,7 +1508,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 14.4
+   "seconds": 10.6
   },
   {
    "id": "G:neurostim/safety/shannon.py:207:8379",
@@ -1504,7 +1517,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.5
+   "seconds": 10.7
   },
   {
    "id": "G:neurostim/safety/shannon.py:251:10255",
@@ -1513,16 +1526,16 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 13.4
+   "seconds": 10.4
   },
   {
    "id": "G:neurostim/safety/shannon.py:273:11387",
    "path": "neurostim/safety/shannon.py",
    "description": "constant 2.0 -> 4.0 at line 273",
-   "status": "killed",
-   "stage": "full",
-   "exit_code": 1,
-   "seconds": 324.4
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 462.6
   },
   {
    "id": "G:neurostim/safety/shannon.py:286:11993",
@@ -1531,7 +1544,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 14.4
+   "seconds": 9.5
   },
   {
    "id": "G:neurostim/safety/shannon.py:348:14288",
@@ -1540,7 +1553,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 214.0
+   "seconds": 145.3
   },
   {
    "id": "G:neurostim/safety/water_window.py:106:5586",
@@ -1549,7 +1562,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 523.9
+   "seconds": 396.5
   },
   {
    "id": "G:neurostim/safety/water_window.py:196:10024",
@@ -1558,7 +1571,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 11.3
+   "seconds": 9.8
   },
   {
    "id": "G:neurostim/safety/water_window.py:301:15106",
@@ -1567,7 +1580,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 10.1
+   "seconds": 9.2
   },
   {
    "id": "G:neurostim/safety/water_window.py:330:16541",
@@ -1576,7 +1589,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 13.4
+   "seconds": 12.0
   },
   {
    "id": "G:neurostim/safety/water_window.py:406:19583",
@@ -1585,7 +1598,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 10.2
+   "seconds": 8.7
   },
   {
    "id": "G:neurostim/safety/water_window.py:511:24941",
@@ -1594,7 +1607,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 9.6
+   "seconds": 8.7
   },
   {
    "id": "G:neurostim/safety/water_window.py:533:26023",
@@ -1603,7 +1616,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 9.9
+   "seconds": 8.6
   },
   {
    "id": "G:neurostim/safety/water_window.py:555:26962",
@@ -1612,7 +1625,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 493.1
+   "seconds": 371.3
   },
   {
    "id": "G:neurostim/safety/water_window.py:615:29655",
@@ -1621,7 +1634,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 10.6
+   "seconds": 8.9
   },
   {
    "id": "G:neurostim/uncertainty.py:58:2702",
@@ -1630,16 +1643,16 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 8.6
+   "seconds": 8.3
   },
   {
    "id": "G:neurostim/uncertainty.py:81:3811",
    "path": "neurostim/uncertainty.py",
    "description": "arithmetic - -> + at line 81",
-   "status": "killed",
-   "stage": "full",
-   "exit_code": 1,
-   "seconds": 139.7
+   "status": "survived",
+   "stage": "",
+   "exit_code": null,
+   "seconds": 327.7
   },
   {
    "id": "G:neurostim/uncertainty.py:81:3815",
@@ -1648,7 +1661,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 8.7
+   "seconds": 6.7
   },
   {
    "id": "G:neurostim/uncertainty.py:93:4221",
@@ -1657,7 +1670,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 72.2
+   "seconds": 53.2
   },
   {
    "id": "G:neurostim/uncertainty.py:98:4328",
@@ -1666,7 +1679,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 71.8
+   "seconds": 54.3
   },
   {
    "id": "G:neurostim/uncertainty.py:113:4807",
@@ -1675,7 +1688,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 72.2
+   "seconds": 53.9
   },
   {
    "id": "G:neurostim/uncertainty.py:121:5088",
@@ -1684,7 +1697,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 8.7
+   "seconds": 6.8
   },
   {
    "id": "G:neurostim/uncertainty.py:165:6673",
@@ -1693,7 +1706,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 8.5
+   "seconds": 6.6
   },
   {
    "id": "G:neurostim/uncertainty.py:180:7202",
@@ -1702,7 +1715,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 70.3
+   "seconds": 52.5
   },
   {
    "id": "G:neurostim/uncertainty.py:196:7938",
@@ -1711,7 +1724,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 73.3
+   "seconds": 52.0
   },
   {
    "id": "G:neurostim/uncertainty.py:211:8632",
@@ -1720,7 +1733,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 414.3
+   "seconds": 260.4
   },
   {
    "id": "G:neurostim/uncertainty.py:218:9130",
@@ -1729,7 +1742,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 95.6
+   "seconds": 54.9
   },
   {
    "id": "G:neurostim/uncertainty.py:265:11302",
@@ -1738,7 +1751,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.0
+   "seconds": 7.3
   },
   {
    "id": "G:neurostim/units.py:41:1392",
@@ -1747,7 +1760,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 79.2
+   "seconds": 44.6
   },
   {
    "id": "G:neurostim/units.py:48:1488",
@@ -1756,7 +1769,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 78.6
+   "seconds": 45.4
   },
   {
    "id": "G:neurostim/units.py:66:1748",
@@ -1765,7 +1778,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 65.2
+   "seconds": 48.5
   },
   {
    "id": "G:neurostim/units.py:67:1765",
@@ -1774,7 +1787,7 @@
    "status": "survived",
    "stage": "",
    "exit_code": null,
-   "seconds": 348.8
+   "seconds": 260.8
   },
   {
    "id": "G:neurostim/units.py:76:1955",
@@ -1783,7 +1796,7 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 63.9
+   "seconds": 45.2
   },
   {
    "id": "G:neurostim/units.py:134:3628",
@@ -1792,12 +1805,12 @@
    "status": "killed",
    "stage": "related",
    "exit_code": 1,
-   "seconds": 12.0
+   "seconds": 8.1
   }
  ],
  "corrections": [
-  "Ledger 190 (Phase 8 review B2): the run deselected only its own results test, so 4 mutants at judged sites were counted as killed when the only failing test was TestTheMutationGate::test_every_judgement_still_names_a_site, which reads the harness's own judgements. Each was re-run at 31a8db4 on the full suite with tests/test_build_gates.py::TestTheMutationGate deselected: 1677 passed for all 4, so they survived. Re-classified here: G:neurostim/safety/assessment.py:1134:53882, G:neurostim/safety/assessment.py:1262:59708, G:neurostim/safety/compliance.py:502:24741, G:neurostim/safety/current_density.py:347:16051. Score of record 143/160 -> 139/160.",
-  "Ledger 194 (Phase 8 review m3): the judged field is regenerated from scripts/mutation.py JUDGEMENTS applied to the 31a8db4 sources; the run itself wrote 'not judged' because the judgements were committed after it (d007772).",
+  "Ledger 190 (Phase 8 review B2): the first run of this seed at 31a8db4 reported 143/160 because it counted failures of the harness's own tests (TestTheMutationGate) as kills. This is the full re-run of the same 160 mutants on the same code with those tests deselected: 137/160. It supersedes the 139/160 reconstruction of de4052e, which re-ran only 4 of the affected mutants; shannon.py:273 and uncertainty.py:81 were harness-only kills too.",
+  "Ledger 194 (m3): judged fields come from JUDGEMENTS applied to the 31a8db4 sources. The judgements for shannon.py:273 (2.0 -> 4.0) and uncertainty.py:81 (- -> +) were added after this run and filled in here.",
   "Seed 20260930 has now been used and tests were written against its survivors: a further measurement needs a new seed pre-registered in a commit message before it is run."
  ]
 }

@@ -993,12 +993,14 @@ class TestTheMutationGate:
     def test_the_gate_fails_a_generated_score_under_its_floor(self) -> None:
         # G12: this pinned 144/160 = 90.0 %, then the 0.86 floor of seed 20260929, then
         # 0.89 from seed 20260930's 143/160. That 143 counted 4 mutants killed only by the
-        # harness's own judgement-staleness test (ledger 190); the corrected score of
-        # record is 139/160 = 86.9 %, so the measured floor is 0.86: 138 passes, 137 fails.
+        # harness's own judgement-staleness test (ledger 190); a reconstruction gave
+        # 139/160 and 0.86. G12 again: the full re-run of the seed with the harness tests
+        # deselected is 137/160 = 85.6 %, so the measured floor is 0.85: 136 passes, 135
+        # fails.
         mutation = _load_mutation()
-        assert mutation.GENERATED_FLOOR == 0.86
-        assert mutation.gate(self._report(mutation, killed=138)) == []
-        assert mutation.gate(self._report(mutation, killed=137))
+        assert mutation.GENERATED_FLOOR == 0.85
+        assert mutation.gate(self._report(mutation, killed=136)) == []
+        assert mutation.gate(self._report(mutation, killed=135))
         report = json.loads(mutation.RESULTS.read_text(encoding="utf-8"))
         assert report["generated_score"] >= mutation.GENERATED_FLOOR
         assert report["seed"] == mutation.SEED == 20260930
