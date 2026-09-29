@@ -1307,6 +1307,9 @@ BLOCKED, PARTIAL or LISTED-ONLY has been repaired; the repair is named in the no
 | 194 | LOW | — (Phase 8 review) | C8b.2 | **FIXED** `de4052e`; C8b.2; full re-run of record `c71d4b8` (C8b.2b) |
 | 195 | LOW | — (Phase 8 review) | C8b.4 | **FIXED** `2fb74b8`; C8b.4 |
 | 196 | LOW | — (Phase 8 review) | C8b.4 | **FIXED** `bb1a114`; C8b.4 |
+| 197 | LOW | — (Phase 8b review n1) | open | known limitation, unscheduled: stale Lapicque coverage sentences in two docstrings; MINOR after the final review, so logged not fixed (user rule, Phase 8b) |
+| 198 | LOW | — (Phase 8b review n2, pre-existing) | open | known limitation, unscheduled: numpy scalar inputs crash audit.record/build_report and assess(); loud, never a wrong number; MINOR after the final review, so logged not fixed |
+| 199 | LOW | — (Phase 8b review n3) | open | known limitation, unscheduled: the uncertainty.py:81 'equivalent' judgements are false at k*sd overflow (unreachable from safety paths; score unaffected); MINOR after the final review, so logged not fixed |
 
 **Merge policy.** The Commit column of `CODE_MISTAKES_LOG.md` records each hash **as made**,
 and the repository's policy — written into that file's header, and repeated in CONTRIBUTING
