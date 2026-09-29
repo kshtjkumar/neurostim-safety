@@ -148,8 +148,30 @@ def plan_entry_numbers(text: str) -> set[int]:
     return numbers
 
 
-def commit_exists(sha: str) -> bool:
-    """Whether ``sha`` names a commit in this repository."""
+HASH_MAP = REPO_ROOT / "docs" / "audit" / "commit_hash_map.txt"
+"""Old -> new commit ids from the one-time history rewrite made before first publication.
+
+The ledger records each fix by the id it had when it was made. Removing the private
+session log and the author's e-mail from the history before it was published changed every
+id, and the ledger's text cannot be rewritten to the new ids without changing them again.
+So a recorded id that does not resolve is looked up here; it passes only if it maps to
+exactly one commit that exists.
+"""
+
+
+def load_hash_map(path: Path = HASH_MAP) -> dict[str, str]:
+    """Full old id -> full new id, from ``path``; empty if the file is absent."""
+    mapping: dict[str, str] = {}
+    if not path.exists():
+        return mapping
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parts = line.split()
+        if len(parts) == 2 and not line.startswith("#"):
+            mapping[parts[0]] = parts[1]
+    return mapping
+
+
+def _object_is_commit(sha: str) -> bool:
     result = subprocess.run(
         ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
         cwd=REPO_ROOT,
@@ -157,6 +179,18 @@ def commit_exists(sha: str) -> bool:
         check=False,
     )
     return result.returncode == 0
+
+
+def commit_exists(sha: str, hash_map: dict[str, str] | None = None) -> bool:
+    """Whether ``sha`` names a commit here, directly or through the rewrite's id map."""
+    if _object_is_commit(sha):
+        return True
+    mapping = load_hash_map() if hash_map is None else hash_map
+    matches = {new for old, new in mapping.items() if old.startswith(sha)}
+    if len(matches) != 1:
+        return False
+    (new,) = matches
+    return set(new) != {"0"} and _object_is_commit(new)
 
 
 FULL, SHALLOW, ABSENT = "full", "shallow", "absent"
@@ -257,7 +291,8 @@ def check(ledger_text: str, plan_text: str) -> Outcome:
             )
         return Outcome(failures, notices)
 
-    unresolved = [row for row in recorded if not commit_exists(row.commit)]
+    hash_map = load_hash_map()
+    unresolved = [row for row in recorded if not commit_exists(row.commit, hash_map)]
     if scope == SHALLOW:
         if unresolved:
             notices.append(

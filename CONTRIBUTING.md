@@ -80,6 +80,10 @@ them. So:
 - do not rebase a branch that has been recorded in the ledger onto the default branch;
 - do not force-push the default branch.
 
+The history was rewritten exactly once, before the repository was first published, to
+remove a private session log and the author's e-mail. Ids recorded before that point
+resolve through `docs/audit/commit_hash_map.txt` (see the 0.16.0 CHANGELOG entry).
+
 ## Mutation testing
 
 `scripts/mutation.py` runs mutants against the suite in a temporary copy of the

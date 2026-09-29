@@ -118,4 +118,22 @@ published ones, with their known weaknesses:
     their references 5 and 8, which were not read. They are recorded as cited through
     that paper.
 
+# AI usage disclosure
+
+Generative AI was used extensively in this work. Claude (Anthropic; models Claude Opus 5
+and Claude Opus 5.5, run through the Claude Code command-line tool) carried out the
+pre-publication audit and most of the subsequent changes: it read the package and its
+primary sources, logged the defects in `CODE_MISTAKES_LOG.md`, planned and wrote the
+fixes, wrote most of the test suite, the mutation harness and the continuous-integration
+configuration, independently reviewed each phase of changes, and drafted the
+documentation and this manuscript. Every AI-assisted commit carries a `Co-Authored-By:
+Claude` trailer, and the audit trail (`docs/audit/`) records each finding, decision and
+review. Modelling and source choices that the literature did not settle were made by the
+author, and are recorded in the fix plan.
+
+<!-- AUTHOR: before submitting, (1) add any other AI tools used during the package's
+initial development, and (2) replace this comment with a statement you can truthfully
+make, e.g. "The author reviewed, modified and validated all AI-generated code,
+documentation and text, and takes full responsibility for the content." -->
+
 # References

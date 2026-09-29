@@ -6,8 +6,9 @@ message: >-
   package carries its own citation, retrievable with
   neurostim.bibliography().
 type: software
-# ORCID, repository URL, DOI and release date are intentionally absent: none has been
-# assigned, and none is invented (ledger 180). Add them here when they exist.
+# ORCID, DOI and release date are intentionally absent: none has been assigned, and
+# none is invented (ledger 180). Add them here when they exist.
+repository-code: https://github.com/kshtjkumar/neurostim-safety
 authors:
   - given-names: Kshitij
     family-names: Kumar

@@ -37,3 +37,6 @@ _history_inprogress.tmp
 # docs/api/ is generated from the docstrings by `python scripts/build_api_docs.py`
 # and is not committed or hosted; CI builds it with every warning an error.
 docs/api/
+
+# private per-folder session log (never published)
+_conversation_history.md

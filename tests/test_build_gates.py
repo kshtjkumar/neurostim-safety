@@ -416,6 +416,22 @@ class TestLedgerGate:
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
+    def test_a_pre_rewrite_id_resolves_through_the_hash_map_only(self, tmp_path: Path) -> None:
+        """The one-time pre-publication rewrite changed every id. A recorded old id passes
+        only if the map sends it to exactly one existing commit; a dropped commit (40
+        zeros), an unmapped id and an ambiguous prefix all fail."""
+        module = _load_ledger_check()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        old = "ab" * 20
+        mapping = {old: head, "cd" * 20: "0" * 40, "ef" + "0" * 38: head, "ef" + "1" * 38: "0" * 40}
+        assert module.commit_exists(old[:7], mapping)
+        assert not module.commit_exists(("cd" * 20)[:7], mapping)
+        assert not module.commit_exists("1234567", mapping)
+        assert not module.commit_exists("ef", mapping)
+        assert module.load_hash_map(), "the committed map is present and parses"
+
     def test_the_committed_ledger_has_uniform_rows(self) -> None:
         module = _load_ledger_check()
         table = module.parse_table(LEDGER.read_text(encoding="utf-8"))
@@ -1177,8 +1193,12 @@ class TestTheCitationHasNoPlaceholders:
         for placeholder in ("contributors", "example", "TODO", "XXXX"):
             assert placeholder not in text, placeholder
         keys = {line.split(":")[0] for line in text.splitlines() if line and line[0].isalpha()}
-        assert not keys & {"repository-code", "doi", "date-released", "url"}
+        assert not keys & {"doi", "date-released", "url"}
         assert "orcid" not in text.lower() or "intentionally absent" in text
+
+    def test_the_repository_is_the_published_one(self) -> None:
+        # Added when the repository was published; the only identifier that now exists.
+        assert "repository-code: https://github.com/kshtjkumar/neurostim-safety\n" in self._text()
 
 
 class TestTheCodeOfConductNamesItsContact:

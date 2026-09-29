@@ -1,6 +1,7 @@
 # neurostim-safety
 
 Electrode safety and stimulation modelling for neural interfaces.
+Source: <https://github.com/kshtjkumar/neurostim-safety>.
 
 Every literature-derived constant in this package carries its primary source **and the
 conditions under which it was measured**. That is the point of the package. A charge

@@ -10,6 +10,14 @@ bump is where incompatible changes go, and these are incompatible:
 - audit records gain a payload version.
 
 1.0.0 would promise a stable interface, and Phases 5-7 still change it.
+
+**History rewritten once, before first publication.** A private session log and the
+author's e-mail address were removed from every commit before the repository was made
+public, which changed every commit id. The ledger and the fix plan record the ids the
+commits had when they were made; `docs/audit/commit_hash_map.txt` maps each to its
+published id, and `scripts/ledger_check.py` resolves recorded ids through it. This was the
+only rewrite; the merge policy in CONTRIBUTING (no squash, no rebase, no force-push)
+applies from publication on.
 `pyproject.toml` and `CITATION.cff` had stayed at 0.13.0 while `__version__` said
 0.15.0. All three now say 0.16.0, and `__version__` is read from the installed
 distribution, which `pyproject.toml` writes, so there is one place to change it.
