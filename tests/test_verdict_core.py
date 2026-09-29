@@ -2674,18 +2674,50 @@ class TestLimitsIncompleteAndByKind:
             compliance_V=10.0,
         )
 
+    @staticmethod
+    def _incomplete_example() -> SafetyCalculator:
+        """The worked example with the chronic threshold dropped from a user-measured Pt,
+        so a limit-bearing check genuinely did not run (ledger 203: the worked example
+        itself is no longer incomplete -- Shannon is skipped there only because the
+        microelectrode check, its regime alternative, governs)."""
+        from neurostim import RingElectrode
+        from neurostim.materials import MATERIALS, with_measured_cic
+
+        return SafetyCalculator(
+            RingElectrode(330.0, 270.0, "Pt"),
+            StimProtocol(80, 200, 130, 1),
+            compliance_V=10.0,
+            material=with_measured_cic(MATERIALS["Pt"], 50, 150, chronic_threshold=None),
+        )
+
     def test_limits_incomplete_is_set_when_a_limit_bearing_check_did_not_run(self):
-        """Not tautological: the premise -- Shannon is NOT_EVALUATED here and Shannon is
+        """Not tautological: the premise -- Chronic degradation is NOT_EVALUATED here and is
         limit-bearing -- is asserted from the assessment and from ``LIMIT_BEARING``
         separately, and the flag is checked against their conjunction."""
         from neurostim.safety import LIMIT_BEARING
 
-        assessment = self._worked_example().assess()
+        assessment = self._incomplete_example().assess()
         skipped = {c.name for c in assessment.not_evaluated}
 
-        assert "Shannon criterion" in skipped
-        assert "Shannon criterion" in LIMIT_BEARING
+        assert "Chronic degradation" in skipped
+        assert "Chronic degradation" in LIMIT_BEARING
         assert assessment.limits_incomplete is True
+
+    def test_a_regime_alternative_skipped_is_not_incomplete(self):
+        """Ledger 203. On the micro ring Shannon is NOT_EVALUATED because the
+        microelectrode charge-per-phase check governs; on a DBS contact the reverse. Neither
+        is a missing limit. Both premises are asserted, not assumed."""
+        from neurostim import get_preset
+
+        micro = self._worked_example().assess()
+        macro = SafetyCalculator(
+            get_preset("dbs_3389").electrode, StimProtocol(3000, 60, 130, 1),
+            compliance_V=10.0, medium="in_vivo",
+        ).assess()
+        assert {c.name for c in micro.not_evaluated} >= {"Shannon criterion"}
+        assert {c.name for c in macro.not_evaluated} >= {"Microelectrode charge/phase"}
+        assert micro.limits_incomplete is False and micro.limits_incomplete_note() == ""
+        assert macro.limits_incomplete is False and macro.limits_incomplete_note() == ""
 
     def test_limits_incomplete_is_clear_when_every_limit_bearing_check_ran(self):
         """The flag must discriminate.
@@ -2762,11 +2794,12 @@ class TestLimitsIncompleteAndByKind:
         """Not tautological: two literal substrings, one naming the check that did not
         run and one carrying a per-kind number, against a rendering that has neither."""
         text = self._worked_example().describe()
+        incomplete = self._incomplete_example().describe()
 
         assert "20.00 uA (Microelectrode charge/phase)" in text
-        assert "Shannon criterion" in text
-        assert "INCOMPLETE" in text
         assert "electrode-chronic 70.68 uA" in text
+        assert "INCOMPLETE" in incomplete
+        assert "(Chronic degradation)" in incomplete
 
     def test_the_json_carries_both(self):
         """Not tautological: the expected keys and one expected value are written out."""
@@ -2776,7 +2809,7 @@ class TestLimitsIncompleteAndByKind:
 
         payload = json.loads(report_to_json(self._worked_example()))
 
-        assert payload["limits_incomplete"] is True
+        assert json.loads(report_to_json(self._incomplete_example()))["limits_incomplete"] is True
         assert payload["limiting_current_by_kind"]["tissue"] == pytest.approx(20.0)
         assert payload["results"]["limiting_current_uA"] == pytest.approx(20.0)
 
@@ -2786,7 +2819,7 @@ class TestLimitsIncompleteAndByKind:
         pytest.importorskip("PyQt6.QtWidgets", exc_type=ImportError)  # ledger 175
         from neurostim.gui.app import headline_text
 
-        calc = self._worked_example()
+        calc = self._incomplete_example()
         text = pdf_text(calc, tmp_path / "incomplete.pdf")
 
         assert "20.00" in text
@@ -4235,3 +4268,25 @@ class TestTheComplianceDetailSaysTheCheckStatus:
             assessment = SafetyCalculator(electrode, protocol, **settings).assess()
             check = next(c for c in assessment.checks if c.name == "Compliance voltage")
             assert assessment.compliance.describe() == check.detail, label
+
+
+class TestTheShannonDetailStatesTheChecksVerdict:
+    """Ledger 202. The Shannon detail's first line printed the metric-only "-> PASS" under
+    a check whose status was CAUTION (outside the validated envelope, fit on discs)."""
+
+    def test_a_caution_check_does_not_say_pass(self):
+        from neurostim import get_preset
+
+        assessment = SafetyCalculator(
+            get_preset("dbs_3389").electrode, StimProtocol(3000, 60, 130, 1),
+            compliance_V=10.0, medium="in_vivo",
+        ).assess()
+        [check] = [c for c in assessment.checks if c.name == "Shannon criterion"]
+        assert check.status is Status.CAUTION
+        assert check.detail.splitlines()[0].endswith("-> CAUTION")
+
+    def test_the_metric_verdict_is_kept_for_a_direct_describe(self):
+        from neurostim.safety import shannon
+
+        result = shannon.evaluate(0.18, 0.0598, 60.0, k=1.5)
+        assert result.describe().splitlines()[0].endswith("-> PASS")

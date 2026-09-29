@@ -361,9 +361,15 @@ class ShannonResult:
         requested = self.charge_per_phase_uC
         return self.max_charge_uC / requested if requested > 0 else math.inf
 
-    def describe(self) -> str:
-        """Multi-line summary."""
-        verdict = "PASS" if self.passes else "EXCEEDS"
+    def describe(self, verdict: str | None = None) -> str:
+        """Multi-line summary.
+
+        ``verdict`` overrides the metric-only PASS/EXCEEDS word, so a caller whose check
+        is CAUTION for reasons outside the metric (envelope, geometry) does not print
+        "-> PASS" under a CAUTION status (ledger 202).
+        """
+        if verdict is None:
+            verdict = "PASS" if self.passes else "EXCEEDS"
         # The threshold as given and the metric on its side of it (ledger 163).
         threshold = format_setting(self.k_threshold)
         applied = format_against(

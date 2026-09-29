@@ -121,6 +121,15 @@ Each is detailed in its own entry below.
   3.11's stricter stubs. The suite passes on the locally validated versions and on the
   latest numpy 2.5.3, scipy 1.18.1, matplotlib 3.11.2 and pandas 3.0.6.
 
+### Two misleading lines in the text output (ledgers 202, 203)
+
+- The Shannon check's detail no longer prints "-> PASS" when the check is CAUTION.
+- "INCOMPLETE: ... the true limit may be lower" no longer appears merely because
+  Shannon is skipped on a microelectrode, or the microelectrode check on a
+  macroelectrode: each is skipped exactly where the other governs. It still appears
+  when a limit-bearing check genuinely did not run. No number changes; the README
+  transcript loses that one line.
+
 ### Butterwick's threshold is the lower of the two diameters' thresholds
 
 Below 200 µm, Butterwick's current-density threshold rises as d⁻², so a smaller d raises

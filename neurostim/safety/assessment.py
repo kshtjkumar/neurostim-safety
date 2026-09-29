@@ -182,6 +182,12 @@ CEILING_INTERVALS: dict[str, CeilingInterval] = {
     "Compliance voltage": _exact_ceiling,
     "Counter charge injection": _counter_charge_ceiling_interval,
 }
+
+REGIME_ALTERNATIVES = {
+    "Shannon criterion": "Microelectrode charge/phase",
+    "Microelectrode charge/phase": "Shannon criterion",
+}
+"""Limit-bearing checks that govern complementary electrode sizes (macro vs micro)."""
 """How each :data:`LIMIT_BEARING` check's ceiling widens over its published range.
 
 A table beside :data:`CHECK_KINDS` for the reason that one is a table, plus one more: the
@@ -580,8 +586,19 @@ class SafetyAssessment:
 
     @property
     def _limit_bearing_not_evaluated(self) -> tuple[str, ...]:
+        # Shannon and the microelectrode charge-per-phase check are regime alternatives
+        # (Cogan et al. 2016): each is NOT_EVALUATED exactly where the other governs. One
+        # skipped while its alternative ran is not a missing limit, so it does not make
+        # the limit incomplete (ledger 203); both skipped still does.
+        evaluated = {c.name for c in self.checks if c.status is not Status.NOT_EVALUATED}
         return tuple(
-            c.name for c in self.not_evaluated if c.name in LIMIT_BEARING
+            c.name
+            for c in self.not_evaluated
+            if c.name in LIMIT_BEARING
+            and not (
+                c.name in REGIME_ALTERNATIVES
+                and REGIME_ALTERNATIVES[c.name] in evaluated
+            )
         )
 
     def limits_incomplete_note(self) -> str:
@@ -1332,9 +1349,11 @@ def _shannon_check(
         )
         if cond:
             extra.append(f"CONDITIONS: {cond}")
-    detail = result.describe()
-    if extra:
-        detail += "\n" + "\n".join(f"  {line}" for line in extra)
+    def _detail(verdict: str | None = None) -> str:
+        text = result.describe(verdict)
+        if extra:
+            text += "\n" + "\n".join(f"  {line}" for line in extra)
+        return text
 
     if not result.passes:
         return Check(
@@ -1345,7 +1364,7 @@ def _shannon_check(
                 f"exceeds the {format_setting(k)} threshold; "
                 f"max {format_limit(result.max_current_uA)} uA"
             ),
-            detail=detail,
+            detail=_detail(),
             margin=result.current_margin,
         )
 
@@ -1380,7 +1399,7 @@ def _shannon_check(
             f"at threshold {format_setting(k)}, "
             f"{result.current_margin:.2f}x headroom{suffix}"
         ),
-        detail=detail,
+        detail=_detail("CAUTION" if status is Status.CAUTION else None),
         margin=result.current_margin,
     )
 
